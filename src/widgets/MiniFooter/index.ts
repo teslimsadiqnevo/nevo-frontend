@@ -1,0 +1,1 @@
+export { MiniFooter } from "./ui/MiniFooter";

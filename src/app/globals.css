@@ -1,26 +1,85 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: "Agile";
+  src:
+    url("/fonts/agile.otf") format("opentype"),
+    url("/fonts/agile.ttf") format("truetype");
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  --indigo: #3b3f6e;
+  --indigo-10: #3B3F6E1A;
+  --indigo-20: #3B3F6E33;
+
+  --parchment: #f7f1e6;
+  --parchment-50: #F7F1E680;
+
+  --lavender: #9a9ccb;
+  --lavender-10: #9a9ccb1a;
+  --lavender-15: #9A9CCB26;
+  --lavender-20: #9a9ccb33;
+
+  --graphite: #2b2b2f;
+  --graphite-5: #2b2b2f0d;
+  --graphite-10: #2B2B2F1A;
+  --graphite-40: #2b2b2f66;
+  --graphite-60: #2b2b2f99;
+  --graphite-70: #2B2B2FB2;
+  --graphite-80: #2b2b2fcc;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-inter: var(--font-inter);
+  --font-agile: "Agile", sans-serif;
+
+  --color-indigo: var(--indigo);
+  --color-indigo-10: var(--indigo-10);
+  --color-indigo-20: var(--indigo-20);
+  --color-parchment: var(--parchment);
+  --color-parchment-50: var(--parchment-50);
+  --color-lavender: var(--lavender);
+  --color-lavender-10: var(--lavender-10);
+  --color-lavender-15: var(--lavender-15);
+  --color-lavender-20: var(--lavender-20);
+  --color-graphite: var(--graphite);
+  --color-graphite-5: var(--graphite-5);
+  --color-graphite-10: var(--graphite-10);
+  --color-graphite-40: var(--graphite-40);
+  --color-graphite-60: var(--graphite-60);
+  --color-graphite-70: var(--graphite-70);
+  --color-graphite-80: var(--graphite-80);
+
+  --text-17px: 17px;
+  --text-28px: 28px;
+  --text-3-4xl: 32px;
+  --text-40px: 40px;
+  --text-44px: 44px;
+  --text-6-5xl: 64px;
+
+  --radius-20px: 20px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
     --background: #0a0a0a;
-    --foreground: #ededed;
+    --foreground: var(--graphite);
+    --color-indigo: var(--indigo);
+    --color-parchment: var(--parchment);
+    --color-lavender: var(--lavender);
+    --color-graphite: var(--graphite);
   }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /* font-family: var(--font-inter), sans-serif; */
 }
