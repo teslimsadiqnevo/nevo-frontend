@@ -37,7 +37,7 @@ export function WaitlistForm({ onSuccess }: { onSuccess: () => void }) {
     return (
         <div className="flex flex-col items-center justify-center min-h-[80vh] h-screen bg-[#4B4B4B] w-full py-10">
             <div className="bg-[#FAF9F6] sm:rounded-3xl px-10 mb-1 py-12 max-w-[480px] w-full shadow-lg flex flex-col items-center">
-                <header className="flex flex-col gap-3 items-center justify-center text-center">
+                <header className="flex flex-col gap-3 md:mb-0 mb-4 items-center justify-center text-center">
                     <h1 className="font-bold text-3-4xl text-graphite leading-tight">Be first to experience<br />Nevo.</h1>
                     <p className="text-graphite-80 leading-relaxed">We&apos;re launching soon. Drop your email and we&apos;ll reach out when you&apos;re up.</p>
                 </header>
