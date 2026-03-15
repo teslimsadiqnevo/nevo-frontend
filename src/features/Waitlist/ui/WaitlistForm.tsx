@@ -66,9 +66,9 @@ export function WaitlistForm({ onSuccess }: { onSuccess: () => void }) {
                     <div className="flex flex-col gap-2">
                         <label className="text-sm font-semibold text-graphite">I am a...</label>
                         <div className="flex gap-3 w-full">
-                            <button type="button" onClick={() => setRole('student')} className={`flex-1 py-3 cursor-pointer rounded-xl font-medium text-sm transition-colors ${role === 'student' ? 'bg-[#FDF3E5] border border-[#E8D8C8] text-graphite' : 'bg-[#F2EDDF] text-graphite-70 hover:bg-[#EAE4D4]'}`}>Student</button>
-                            <button type="button" onClick={() => setRole('teacher')} className={`flex-1 py-3 cursor-pointer rounded-xl font-medium text-sm transition-colors ${role === 'teacher' ? 'bg-[#FDF3E5] border border-[#E8D8C8] text-graphite' : 'bg-[#F2EDDF] text-graphite-70 hover:bg-[#EAE4D4]'}`}>Teacher</button>
-                            <button type="button" onClick={() => setRole('school_admin')} className={`flex-1 py-3 cursor-pointer rounded-xl font-medium text-sm transition-colors ${role === 'school' ? 'bg-[#FDF3E5] border border-[#E8D8C8] text-graphite' : 'bg-[#F2EDDF] text-graphite-70 hover:bg-[#EAE4D4]'}`}>School</button>
+                            <button type="button" onClick={() => setRole(role === 'student' ? '' : 'student')} className={`flex-1 py-3 cursor-pointer rounded-xl font-medium text-sm transition-colors bg-parchment ${role === 'student' ? 'border-2 border-indigo' : 'border border-graphite-10'}`}>Student</button>
+                            <button type="button" onClick={() => setRole(role === 'teacher' ? '' : 'teacher')} className={`flex-1 py-3 cursor-pointer rounded-xl font-medium text-sm transition-colors bg-parchment ${role === 'teacher' ? 'border-2 border-indigo' : 'border border-graphite-10'}`}>Teacher</button>
+                            <button type="button" onClick={() => setRole(role === 'school_admin' ? '' : 'school_admin')} className={`flex-1 py-3 cursor-pointer rounded-xl font-medium text-sm transition-colors bg-parchment ${role === 'school_admin' ? 'border-2 border-indigo' : 'border border-graphite-10'}`}>School</button>
                         </div>
                     </div>
 
