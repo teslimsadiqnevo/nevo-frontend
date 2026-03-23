@@ -1,6 +1,6 @@
 'use client'
 
-import { Input } from "@/widgets";
+import { Input } from "@/shared/ui";
 import { useState } from "react";
 import { joinWaitlist } from "../api/joinWaitlist";
 

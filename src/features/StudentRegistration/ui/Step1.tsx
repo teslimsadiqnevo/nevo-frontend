@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from "react";
-import { Input } from "@/widgets";
-import { Select } from "@/widgets/Input";
+import { Input } from "@/shared/ui";
+import { Select } from "@/shared/ui";
 
 export function Step1({ onNext }: { onNext: () => void }) {
     const [firstName, setFirstName] = useState("");
@@ -20,7 +20,8 @@ export function Step1({ onNext }: { onNext: () => void }) {
 
                 <form className="flex flex-col gap-6" onSubmit={(e) => {
                     e.preventDefault();
-                    console.log(firstName, lastName, age);
+                    sessionStorage.setItem('nevo_registration_data', JSON.stringify({ firstName, lastName, age }));
+                    console.log("Step 1 complete - Data saved to sessionStorage:", { firstName, lastName, age });
                     onNext();
                 }}>
                     <Input label="First Name" placeholder="e.g., Lydia" name="firstName" value={firstName} width={528} type="text" onChange={(e) => setFirstName(e.target.value)} />

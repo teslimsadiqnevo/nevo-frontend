@@ -3,13 +3,17 @@
 import { useState, useRef, ChangeEvent, KeyboardEvent } from "react";
 import { Icon } from "@/shared/ui";
 import QRCode from "react-qr-code";
+import { registerStudent } from "@/features/StudentRegistration/api/registerStudent";
+import { submitAnswers } from "@/features/RegistrationAssessment";
 
-export function Onboarding({ onNext }: { onNext: () => void }) {
+export function Onboarding({ onNext, answers }: { onNext: () => void; answers?: { question_id: number; value: any }[] }) {
     const [pin, setPin] = useState(["", "", "", ""]);
     const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
     const [showQR, setShowQR] = useState(false);
     const [copied, setCopied] = useState(false);
-    const nevoId = "NEVO-7K3P2";
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [errorMsg, setErrorMsg] = useState("");
+    const nevoId = "NEVO-XXXXX";
 
     const copyToClipboard = async () => {
         try {
@@ -36,9 +40,58 @@ export function Onboarding({ onNext }: { onNext: () => void }) {
     };
 
     const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-
         if (e.key === "Backspace" && !pin[index] && index > 0) {
             inputRefs.current[index - 1]?.focus();
+        }
+    };
+
+    const handleSaveAndContinue = async () => {
+        const pinString = pin.join("");
+        if (pinString.length < 4) {
+            setErrorMsg("Please enter a 4-digit PIN.");
+            return;
+        }
+
+        setIsSubmitting(true);
+        setErrorMsg("");
+
+        try {
+            const storedData = sessionStorage.getItem("nevo_registration_data");
+            if (!storedData) {
+                setErrorMsg("Registration data not found. Please start over.");
+                setIsSubmitting(false);
+                return;
+            }
+
+            const { firstName, lastName, age } = JSON.parse(storedData);
+
+            const regRes = await registerStudent({ firstName, lastName, age, pin: pinString });
+            console.log("Registration API Result:", regRes);
+            
+            if (regRes.error) {
+                setErrorMsg(regRes.error);
+                setIsSubmitting(false);
+                return;
+            }
+
+            const token = regRes.data?.token;
+            if (token && answers && answers.length > 0) {
+                console.log("Submitting these answers:", answers);
+                const subRes = await submitAnswers({ answers, token });
+                console.log("Assessment Submission API Result:", subRes);
+                
+                if (subRes.error) {
+                    setErrorMsg(subRes.error);
+                    setIsSubmitting(false);
+                    return;
+                }
+            }
+
+            onNext();
+        } catch (err) {
+            setErrorMsg("An unexpected error occurred.");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -106,11 +159,13 @@ export function Onboarding({ onNext }: { onNext: () => void }) {
                 </div>
 
                 <p className="mt-4 text-sm font-medium text-graphite-60 mb-12">Choose something easy to remember.</p>
+                {errorMsg && <p className="text-red-500 font-medium mb-4">{errorMsg}</p>}
                 <button
-                    onClick={onNext}
-                    className={`w-80 bg-indigo text-white cursor-pointer py-3 text-center rounded-2xl text-lg font-semibold`}
+                    onClick={handleSaveAndContinue}
+                    disabled={isSubmitting}
+                    className={`w-80 bg-indigo text-white cursor-pointer py-3 text-center rounded-2xl text-lg font-semibold ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                    Save and Continue
+                    {isSubmitting ? "Saving..." : "Save and Continue"}
                 </button>
             </div>
         </div>

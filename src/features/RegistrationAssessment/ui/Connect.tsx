@@ -188,7 +188,7 @@ export function Connect() {
 
                 <button
                     disabled={!isComplete}
-                    onClick={() => router.push("/")}
+                    onClick={() => router.push("/dashboard")}
                     className={`w-[320px] py-4 rounded-2xl text-lg font-semibold mb-8 transition-all ${isComplete ? 'bg-indigo text-white cursor-pointer hover:bg-indigo-80' : 'bg-[#9A9BB5] text-white cursor-not-allowed'}`}
                 >
                     Continue

@@ -1,5 +1,5 @@
 'use client'
-import { Input } from "@/widgets";
+import { Input } from "@/shared/ui";
 import { useState } from "react";
 import { registerTeacher } from "../api/registerTeacher";
 import { Icon } from "@/shared/ui";
@@ -18,11 +18,20 @@ export function TeacherForm({ onSuccess }: { onSuccess: () => void }) {
         setIsLoading(true);
         setError(null);
 
-
-        await new Promise(resolve => setTimeout(resolve, 1500));
+        const result = await registerTeacher({
+            fullName,
+            schoolName,
+            workEmail,
+            password
+        });
 
         setIsLoading(false);
-        onSuccess();
+
+        if (result.error) {
+            setError(result.error);
+        } else {
+            onSuccess();
+        }
     };
 
     return (
@@ -55,7 +64,7 @@ export function TeacherForm({ onSuccess }: { onSuccess: () => void }) {
                 </button>
             </form>
             <div className="flex flex-col items-center justify-center">
-                <a href="/" className="text-indigo font-medium text-sm">Already have an account? Sign in</a>
+                <a href="/login/teacher" className="text-indigo font-medium text-sm">Already have an account? Sign in</a>
                 <p className="font-medium pt-4.25 text-sm text-graphite-60">Nevo is built for clarity, not complexity.</p>
             </div>
         </div>

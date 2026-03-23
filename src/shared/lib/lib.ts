@@ -60,3 +60,42 @@ export let works = [
     desc: "With gentle feedback, pacing support, and teacher connection, learning stays possible.",
   },
 ];
+
+export let roles: {path: string, desc: string, name: string, icon: IconType}[] = [
+  {
+    path: "Student / Learner",
+    desc: "Learn with lessons that adapt to your pace, focus, and style.",
+    name: "Student",
+    icon: "grad",
+  },
+  {
+    path: "Teacher",
+    desc: "Support students with insight, clarity, and meaningful learning tools.",
+    name: "Teacher",
+    icon: "female-teacher",
+  },
+  {
+    path: "School",
+    desc: "Bring calm, accessible learning across classrooms and teachers.",
+    name: "School",
+    icon: "school",
+  },
+];
+
+export let loginRoles: {role: string, icon: IconType, loginType: string}[] = [
+  {
+    role: "Student",
+    icon: "student-icon",
+    loginType: "Nevo ID + PIN"
+  },
+  {
+    role: "Teacher",
+    icon: "book-icon",
+    loginType: "Email + Password"
+  },
+  {
+    role: "School",
+    icon: "school-icon",
+    loginType: "Admin Email + Password"
+  }
+]

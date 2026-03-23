@@ -74,7 +74,10 @@ export function Step2({ onNext }: { onNext: () => void }) {
                     </div>
                 </div>
 
-                <button type="submit" onClick={onNext} className="bg-indigo mt-10 text-white rounded-2xl cursor-pointer px-6 py-4 outline-none w-[528px]">Continue</button>
+                <button type="submit" onClick={() => {
+                    console.log("Step 2 complete - Camera/Mic permissions handled");
+                    onNext();
+                }} className="bg-indigo mt-10 text-white rounded-2xl cursor-pointer px-6 py-4 outline-none w-[528px]">Continue</button>
 
                 <div className="flex flex-col items-center gap-1 mt-6">
                     <p className="text-graphite-60 text-sm font-medium">Permissions are asked once and saved.</p>

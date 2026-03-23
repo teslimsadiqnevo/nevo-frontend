@@ -4,11 +4,12 @@ export type ButtonTypes = {
     className?: string,
     type?: "button" | "submit" | "reset" | "transparent",
     width?: number,
+    rounded?: string,
     onClick?: () => void
 }
 
-export function ActionButton({ link, name, className, type, width, onClick }: ButtonTypes) {
-    const baseClasses = `rounded-full px-8 font-semibold text-center inline-block ${type === "transparent" ? "text-indigo bg-transparent border border-indigo" : "text-white bg-indigo"} ${width ? `w-${width}` : "w-fit"} py-3 ${className}`;
+export function ActionButton({ link, name, className, type, width, rounded, onClick }: ButtonTypes) {
+    const baseClasses = ` ${rounded ? 'rounded-full' : ''} px-8 font-semibold text-center inline-block ${type === "transparent" ? "text-indigo bg-transparent border border-indigo" : "text-white bg-indigo"} ${width ? `w-${width}` : "w-fit"} py-3 ${className}`;
 
     if (onClick && !link) {
         return (

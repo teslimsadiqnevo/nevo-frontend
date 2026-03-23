@@ -4,7 +4,7 @@ import Image from "next/image";
 import logo from "@/shared/assets/default-logo.svg";
 import { NavLinks } from "@/shared/lib";
 
-export function Navbar({ ctaText = "Sign in", onCtaClick, ctaLink = "/register/assessment" }: { ctaText?: string, onCtaClick?: () => void, ctaLink?: string } = {}) {
+export function Navbar({ ctaText = "Sign in", onCtaClick, ctaLink = "/login" }: { ctaText?: string, onCtaClick?: () => void, ctaLink?: string } = {}) {
     return (
         <nav className="flex px-6 sm:px-12 xl:px-20 py-4 xl:py-5.5 items-center justify-between w-full">
             <div className="flex items-center justify-start xl:justify-center xl:space-x-10">

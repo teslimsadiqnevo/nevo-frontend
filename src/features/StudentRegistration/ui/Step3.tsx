@@ -1,6 +1,6 @@
 'use client'
 
-import { HorizontalCard } from "@/widgets/HorizontalCard";
+import { HorizontalCard } from "@/shared/ui";
 
 export function Step3({ onNext }: { onNext?: () => void }) {
     return (
@@ -18,7 +18,10 @@ export function Step3({ onNext }: { onNext?: () => void }) {
                     <HorizontalCard content="Nevo adapts lessons based on what you choose" icon="stars" className="w-full justify-start" />
                 </div>
 
-                <button onClick={onNext} className="bg-indigo mb-4 text-white rounded-2xl cursor-pointer px-6 py-4 outline-none w-full">Start Questions</button>
+                <button onClick={() => {
+                    console.log("Step 3 complete - Navigating to Assessment Flow");
+                    if (onNext) onNext();
+                }} className="bg-indigo mb-4 text-white rounded-2xl cursor-pointer px-6 py-4 outline-none w-full">Start Questions</button>
                 <p className="text-graphite-60 text-sm font-medium">You can always change how Nevo supports you later.</p>
             </main>
         </div>

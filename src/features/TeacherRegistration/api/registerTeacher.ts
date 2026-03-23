@@ -8,14 +8,14 @@ export async function registerTeacher(data: {
 }) {
   try {
 
-    const res = await fetch("https://api.nevolearning.com/signup", {
+    const res = await fetch("https://api.nevolearning.com/api/v1/auth/register/teacher", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name: data.fullName,
+        full_name: data.fullName,
+        school_name: data.schoolName,
         email: data.workEmail,
         password: data.password,
-        role: "teacher",
       }),
     });
 
