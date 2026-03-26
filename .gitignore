@@ -42,5 +42,3 @@ next-env.d.ts
 
 # test accounts
 *.md
-middleware.ts
-middleware.js
