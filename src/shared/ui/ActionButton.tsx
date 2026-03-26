@@ -4,7 +4,7 @@ export type ButtonTypes = {
     className?: string,
     type?: "button" | "submit" | "reset" | "transparent",
     width?: number,
-    rounded?: string,
+    rounded?: boolean,
     onClick?: () => void
 }
 

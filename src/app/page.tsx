@@ -37,7 +37,7 @@ export default function Home() {
           <div className="text-container flex flex-col xl:gap-7.75 gap-6 xl:items-start items-center justify-center xl:max-w-150 leading-[1.1]">
             <h1 className="xl:text-6-5xl text-44px font-bold">Learning, your way.</h1>
             <p className="xl:text-xl text-17px xl:text-start text-center leading-[1.6] max-w-125">Nevo is a calm, adaptive learning platform built around how each mind learns, focuses, and progresses — not around rigid systems.</p>
-            <ActionButton link="/" name="Get Started" />
+            <ActionButton link="/" rounded name="Get Started" />
           </div>
           <div className="image-container">
             <Image src={currentImage} alt="cta-landing" width={imageSize.width} height={imageSize.height} className="rounded-4xl" />
@@ -107,7 +107,7 @@ export default function Home() {
         <section className="xl:py-25 py-18" id="action">
           <div className="bg-lavender-10 flex flex-col items-center justify-center rounded-[28px] xl:rounded-4xl py-13 xl:py-16">
             <p className="font-bold text-[38px] xl:text-5xl mb-7 xl:mb-8">Start with one learner. See what changes.</p>
-            <ActionButton link="/" name="Get Started" className="mb-6 text-base" />
+            <ActionButton link="/" rounded name="Get Started" className="mb-6 text-base" />
             <p className="xl:font-semibold font-medium xl:text-base text-sm text-graphite-60">Student, teacher, or school — Nevo meets you where you are.</p>
           </div>
         </section>

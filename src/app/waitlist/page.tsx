@@ -61,7 +61,7 @@ export default function WaitlistPage() {
                     <div className="text-container flex flex-col xl:gap-7.75 gap-6 xl:items-start items-center justify-center xl:max-w-150 leading-[1.1] w-full">
                         <h1 className="xl:text-6-5xl text-44px font-bold text-center xl:text-left">Learning, your way.</h1>
                         <p className="xl:text-xl text-17px xl:text-start text-center leading-[1.6] max-w-full xl:max-w-125">Nevo is a calm, adaptive learning platform built around how each mind learns, focuses, and progresses — not around rigid systems.</p>
-                        <ActionButton name="Join the waitlist" onClick={handleJoinClick} type="button" className="cursor-pointer" />
+                        <ActionButton name="Join the waitlist" onClick={handleJoinClick} type="button" className="cursor-pointer" rounded />
                     </div>
                     <div className="image-container w-full flex justify-center xl:justify-end">
                         <Image src={currentImage} alt="cta-landing" width={imageSize.width} height={imageSize.height} className="rounded-4xl w-full max-w-[608px] xl:max-w-[928px] h-auto object-contain" />
@@ -130,7 +130,7 @@ export default function WaitlistPage() {
                 <section className="xl:py-25 py-18 w-full" id="action">
                     <div className="bg-lavender-10 flex flex-col items-center justify-center rounded-[28px] xl:rounded-4xl py-13 xl:py-16 px-6 text-center">
                         <p className="font-bold text-[38px] xl:text-5xl mb-7 xl:mb-8 leading-[1.2]">Start with one learner.<br className="xl:hidden" /> See what changes.</p>
-                        <ActionButton name="Join the waitlist" onClick={handleJoinClick} className="mb-6 text-base cursor-pointer px-8" type="button" />
+                        <ActionButton name="Join the waitlist" onClick={handleJoinClick} className="mb-6 text-base cursor-pointer px-8" type="button" rounded />
                         <p className="xl:font-semibold font-medium xl:text-base text-sm text-graphite-60">Student, teacher, or school — Nevo meets you where you are.</p>
                     </div>
                 </section>
