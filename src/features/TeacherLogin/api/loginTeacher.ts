@@ -11,6 +11,7 @@ export async function loginTeacher(data: {
     await signIn("credentials", {
       email: data.email,
       password: data.password,
+      loginType: "teacher",
       redirectTo: "/dashboard",
     });
     return { success: true };

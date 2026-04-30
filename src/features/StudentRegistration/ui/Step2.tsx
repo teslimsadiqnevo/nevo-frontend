@@ -1,87 +1,181 @@
 'use client'
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Icon } from "@/shared/ui";
+import { fetchSchools } from "../api/mockData";
+import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
-export function Step2({ onNext }: { onNext: () => void }) {
-    const [micPermission, setMicPermission] = useState<"prompt" | "granted" | "denied">("prompt");
-    const [camPermission, setCamPermission] = useState<"prompt" | "granted" | "denied">("prompt");
+const THROTTLE_MS = 7000;
 
-    const requestMic = async () => {
-        try {
-            await navigator.mediaDevices.getUserMedia({ audio: true });
-            setMicPermission("granted");
-        } catch (err) {
-            setMicPermission("denied");
-            console.error("Microphone permission denied", err);
+export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => void }) {
+    const { setSchoolId } = useRegistrationStore();
+    const [searchQuery, setSearchQuery] = useState("");
+    const [selectedSchool, setSelectedSchool] = useState<{ id: string, name: string, location: string } | null>(null);
+    const [schools, setSchools] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [cooldown, setCooldown] = useState(0);
+
+    const lastSearchTime = useRef(0);
+    const cooldownTimer = useRef<NodeJS.Timeout | null>(null);
+
+    const handleSearch = useCallback(async () => {
+        if (!searchQuery.trim()) return;
+
+        const now = Date.now();
+        const elapsed = now - lastSearchTime.current;
+
+        if (elapsed < THROTTLE_MS && lastSearchTime.current !== 0) {
+            const remaining = Math.ceil((THROTTLE_MS - elapsed) / 1000);
+            setCooldown(remaining);
+
+            if (cooldownTimer.current) clearInterval(cooldownTimer.current);
+            cooldownTimer.current = setInterval(() => {
+                setCooldown(prev => {
+                    if (prev <= 1) {
+                        if (cooldownTimer.current) clearInterval(cooldownTimer.current);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+            return;
         }
-    };
 
-    const requestCam = async () => {
+        lastSearchTime.current = now;
+        setIsLoading(true);
         try {
-            await navigator.mediaDevices.getUserMedia({ video: true });
-            setCamPermission("granted");
-        } catch (err) {
-            setCamPermission("denied");
-            console.error("Camera permission denied", err);
+            const results = await fetchSchools(searchQuery);
+            setSchools(results);
+        } finally {
+            setIsLoading(false);
         }
-    };
+    }, [searchQuery]);
 
     return (
-        <div>
-            <main className="px-4 flex flex-col mb-6.75 items-center justify-center">
-                <header className="pt-8 flex flex-col gap-2 items-center justify-center pb-10">
-                    <p className="font-semibold text-sm text-indigo">Step 2 of 3</p>
-                    <h1 className="font-extrabold text-4xl">A little support for learning</h1>
-                    <div className="flex flex-col max-w-[528px] text-center">
-                        <h2 className="font-medium text-lg text-graphite-70">Nevo can use your microphone and camera to help with focus and engagement during lessons.</h2>
-                        <h2 className="font-medium text-lg text-graphite-70">Nothing is recorded or shared.</h2>
-                    </div>
+        <div className="flex flex-col justify-center items-center">
+            {onBack ? (
+                <button type="button" onClick={onBack} className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start bg-transparent outline-none border-none">
+                    <Icon type="back" width={24} height={24} />
+                </button>
+            ) : (
+                <a href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
+                    <Icon type="back" width={24} height={24} />
+                </a>
+            )}
+
+            <main className="px-6 w-full flex flex-col items-center">
+                <header className="pt-8 flex w-full flex-col gap-2 items-center justify-center pb-10">
+                    <p className="font-semibold text-sm text-lavender">Step 2 of 6</p>
+                    <h1 className="font-extrabold text-[22px] text-indigo mt-7">Find your school</h1>
+                    <h2 className="text-sm">Type your school name and select it from the list.</h2>
                 </header>
 
-                <div className="flex flex-col gap-4">
-                    <div className="bg-white p-6.25 w-[528px] border border-indigo-10 flex items-center justify-between gap-4 rounded-20px">
-                        <div className="icon p-3 bg-parchment rounded-full">
-                            <Icon type="microphone" width={24} height={24} />
+                <div className="w-full flex flex-col items-center">
+                    <div className="w-full  relative">
+                        <div className="flex items-center w-full border border-indigo rounded-xl px-4 py-4 bg-transparent outline-none focus-within:border-2 transition-colors">
+                            <input 
+                                type="text"
+                                placeholder="Search for your school..."
+                                value={selectedSchool ? selectedSchool.name : searchQuery}
+                                onChange={(e) => {
+                                    if (!selectedSchool) {
+                                        setSearchQuery(e.target.value);
+                                    }
+                                }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && !selectedSchool) {
+                                        e.preventDefault();
+                                        handleSearch();
+                                    }
+                                }}
+                                disabled={selectedSchool !== null}
+                                className="w-full bg-transparent outline-none text-indigo font-medium disabled:text-indigo"
+                            />
+                            {selectedSchool ? (
+                                <Icon type="tick" className="shrink-0 ml-3" width={20} height={20} />
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleSearch}
+                                    disabled={!searchQuery.trim() || isLoading}
+                                    className="shrink-0 ml-3 p-1 rounded-lg hover:bg-indigo/5 active:bg-indigo/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    <Icon type="search-II" width={20} height={20} />
+                                </button>
+                            )}
                         </div>
-                        <p className="font-medium w-[241px]">For voice guidance and spoken answers</p>
-                        <button
-                            onClick={requestMic}
-                            disabled={micPermission === "granted"}
-                            className={`rounded-xl px-4 py-2 font-semibold text-sm transition-colors ${micPermission === "granted" ? "bg-green-100 text-green-700" :
-                                micPermission === "denied" ? "bg-red-100 text-red-700" :
-                                    "bg-indigo-10 text-indigo hover:bg-indigo-20 cursor-pointer"
-                                }`}
-                        >
-                            {micPermission === "granted" ? "Allowed" : micPermission === "denied" ? "Denied" : "Allow Microphone"}
-                        </button>
-                    </div>
-                    <div className="bg-white p-6.25 w-[528px] border border-indigo-10 flex items-center justify-between gap-4 rounded-20px">
-                        <div className="icon p-3 bg-parchment rounded-full">
-                            <Icon type="video-camera" width={24} height={24} />
-                        </div>
-                        <p className="font-medium w-[256px]">For learning engagement support when needed</p>
-                        <button
-                            onClick={requestCam}
-                            disabled={camPermission === "granted"}
-                            className={`rounded-xl px-4 py-2 font-semibold text-sm transition-colors ${camPermission === "granted" ? "bg-green-100 text-green-700" :
-                                camPermission === "denied" ? "bg-red-100 text-red-700" :
-                                    "bg-indigo-10 text-indigo hover:bg-indigo-20 cursor-pointer"
-                                }`}
-                        >
-                            {camPermission === "granted" ? "Allowed" : camPermission === "denied" ? "Denied" : "Allow Camera"}
-                        </button>
-                    </div>
-                </div>
 
-                <button type="submit" onClick={() => {
-                    console.log("Step 2 complete - Camera/Mic permissions handled");
-                    onNext();
-                }} className="bg-indigo mt-10 text-white rounded-2xl cursor-pointer px-6 py-4 outline-none w-[528px]">Continue</button>
+                        {cooldown > 0 && (
+                            <p className="text-[11px] text-lavender font-medium mt-2 text-center">
+                                Search again in {cooldown}s
+                            </p>
+                        )}
 
-                <div className="flex flex-col items-center gap-1 mt-6">
-                    <p className="text-graphite-60 text-sm font-medium">Permissions are asked once and saved.</p>
-                    <p className="text-graphite-60 text-sm font-medium">Nevo is built for privacy and care.</p>
+                        {!selectedSchool && searchQuery && (
+                            <div className="mt-2 w-full bg-white border border-indigo-10 rounded-xl overflow-hidden shadow-sm">
+                                {isLoading ? (
+                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
+                                        <p className="text-sm text-graphite">Searching...</p>
+                                    </div>
+                                ) : schools.length > 0 ? (
+                                    <div className="flex flex-col">
+                                        {schools.map((school, index) => (
+                                            <div 
+                                                key={school.id}
+                                                onClick={() => setSelectedSchool(school)}
+                                                className={`flex items-center justify-between p-4 bg-white hover:bg-slate-50 cursor-pointer ${index !== schools.length - 1 ? 'border-b border-indigo-10' : ''}`}
+                                            >
+                                                <span className="font-medium text-sm text-indigo">{school.name}</span>
+                                                <span className="text-xs">{school.location}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
+                                        <p className="text-sm text-graphite">No schools found matching '{searchQuery}'.</p>
+                                        <p className="text-[13px] text-graphite mt-1">Your school may not be registered on Nevo yet.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Selected School Banner */}
+                        {selectedSchool && (
+                            <div className="mt-2 w-full bg-white border border-transparent rounded-xl p-4 flex justify-between items-start">
+                                <div className="flex flex-col gap-1">
+                                    <span className="font-bold text-sm text-indigo">{selectedSchool.name}</span>
+                                    <span className="text-xs font-medium text-graphite-50">{selectedSchool.location}</span>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setSelectedSchool(null);
+                                        setSearchQuery("");
+                                    }}
+                                    className="text-xs text-lavender hover:opacity-100 transition-opacity"
+                                >
+                                    Not your school? Clear
+                                </button>
+                            </div>
+                        )}
+                        
+                    </div>
+
+                    <button 
+                        type="button" 
+                        onClick={() => {
+                            if (selectedSchool) {
+                                console.log("Step 2 complete - School selected:", selectedSchool);
+                                setSchoolId(selectedSchool.id);
+                                onNext();
+                            }
+                        }}
+                        disabled={!selectedSchool}
+                        className={`w-full text-white font-semibold rounded-xl mt-10 px-6 py-4 outline-none transition-opacity ${
+                            selectedSchool ? "bg-indigo hover:opacity-90 cursor-pointer" : "bg-indigo opacity-50 cursor-not-allowed"
+                        }`}
+                    >
+                        Continue
+                    </button>
                 </div>
             </main>
         </div>

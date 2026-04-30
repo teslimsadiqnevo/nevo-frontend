@@ -1,59 +1,103 @@
 'use client'
 
-import { Input } from "@/shared/ui";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Icon } from "@/shared/ui";
 import { loginTeacher } from "../api/loginTeacher";
 
 export function TeacherLoginForm() {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const isComplete = email.trim() !== '' && password !== '';
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
         setError(null);
-        
-        const result = await loginTeacher({ email, password });
-        
-        setIsLoading(false);
 
-        if (result.error) {
-            setError(result.error);
-        } else {
-            router.push('/dashboard');
+        try {
+            const result = await loginTeacher({
+                email,
+                password,
+            });
+
+            if (result?.error) {
+                setError(result.error);
+                setIsLoading(false);
+            }
+            // If successful, loginTeacher triggers a redirect via NextAuth signIn
+        } catch (err) {
+            // NextAuth signIn with redirectTo throws a NEXT_REDIRECT "error"
+            // which is expected — it means the redirect is happening.
+            setIsLoading(false);
         }
     };
 
     return (
-        <form className="flex flex-col items-center justify-center gap-6" onSubmit={handleSubmit}>
-            <Input label="Email" width={512} placeholder="e.g., name@school.edu" name="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <Input label="Password" width={512} placeholder="••••••••" name="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        <form className="flex flex-col items-center w-full gap-[14px]" onSubmit={handleSubmit}>
+            <div className="w-full flex flex-col gap-[14px]">
+                <input 
+                    type="email" 
+                    placeholder="Your email address" 
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                    className={`w-full bg-transparent border rounded-[10px] px-5 py-[14px] outline-none transition-colors text-[13px] font-medium placeholder:text-[#3B3F6E]/40 text-[#3B3F6E] ${
+                        error ? "border-[#E57661]" : "border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50"
+                    }`}
+                />
+                <div className="relative w-full">
+                    <input 
+                        type={showPassword ? "text" : "password"} 
+                        placeholder="Your password" 
+                        value={password}
+                        onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                        className={`w-full bg-transparent border rounded-[10px] pl-5 pr-12 py-[14px] outline-none transition-colors text-[13px] font-medium placeholder:text-[#3B3F6E]/40 text-[#3B3F6E] ${
+                            error ? "border-[#E57661]" : "border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50"
+                        }`}
+                    />
+                    <button 
+                        type="button" 
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-[#3B3F6E]/50 hover:text-[#3B3F6E] transition-colors p-[2px] cursor-pointer"
+                    >
+                        <Icon type="eye" width={18} height={18} />
+                    </button>
+                </div>
+            </div>
 
             {error && (
-                <div className="flex items-center gap-2 p-4 text-red-600 bg-red-50 rounded-2xl w-[512px]">
-                    <p className="text-sm font-medium">{error}</p>
+                <div className="w-full flex justify-center mt-[-4px]">
+                    <span className="text-[11px] font-medium text-[#E57661] tracking-wide">{error}</span>
                 </div>
             )}
 
             <button
                 type="submit"
-                disabled={isLoading}
-                className="bg-[#3B3F6E] text-white font-semibold rounded-2xl cursor-pointer py-4 outline-none w-[512px] disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center mt-2"
+                disabled={!isComplete || isLoading}
+                className={`w-full font-bold rounded-[10px] py-[14px] text-[14px] outline-none transition-all mt-[18px] ${
+                    !isComplete || isLoading
+                        ? 'bg-[#9A9BB5] text-white cursor-not-allowed opacity-90'
+                        : 'bg-[#3B3F6E] text-white hover:opacity-90 active:scale-[0.98] cursor-pointer'
+                }`}
             >
-                {isLoading ? 'Signing in...' : 'Sign in'}
+                {isLoading ? 'Logging in...' : 'Log in'}
             </button>
 
-            <a href="/forgot-password" className="mt-4 text-sm text-[#3B3F6E] font-medium cursor-pointer transition-colors hover:text-indigo">
-                Forgot password
+            <a href="/forgot-password" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-[10px]">
+                Forgot your password?
             </a>
 
-            <a href="/register/teacher" className="mt-2 text-sm text-[#3B3F6E] font-medium cursor-pointer transition-colors hover:text-indigo">
-                New to Nevo? Create teacher account
-            </a>
+            <div className="flex justify-center mt-[24px]">
+                <button type="button" onClick={() => router.back()} className="text-[#3B3F6E] hover:scale-110 opacity-80 hover:opacity-100 transition-all p-2 cursor-pointer">
+                    <Icon type="back" width={16} height={16} />
+                </button>
+            </div>
         </form>
     )
 }

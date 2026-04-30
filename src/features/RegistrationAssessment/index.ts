@@ -5,3 +5,5 @@ export { submitAnswers } from "./api/submitAnswers";
 export { Completion } from "./ui/Completion";
 export { Onboarding } from "./ui/Onboarding";
 export { Connect } from "./ui/Connect";
+export { CreatePIN } from "./ui/CreatePIN";
+export { AdaptationSettings } from "./ui/AdaptationSettings";

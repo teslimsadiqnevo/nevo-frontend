@@ -1,25 +1,51 @@
 import { auth } from "@/features/Auth/api/auth";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { SchoolAdminDashboard, TeacherDashboard, StudentDashboard } from "@/features/Dashboard";
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
     const session = await auth();
+    const resolvedParams = await searchParams;
+    const view = Array.isArray(resolvedParams?.view) ? resolvedParams.view[0] : resolvedParams?.view;
 
-    // If there is no session, redirect to the main login (or onboarding)
-    if (!session || !session.user) {
-        redirect("/login/teacher"); // A sensible default redirect
+    const mockRole = Array.isArray(resolvedParams?.role) ? resolvedParams.role[0] : resolvedParams?.role;
+
+    const cookieStore = await cookies();
+    const cookieUserRaw = cookieStore.get("user")?.value;
+    let cookieUser: any = null;
+    if (cookieUserRaw) {
+        try {
+            cookieUser = JSON.parse(decodeURIComponent(cookieUserRaw));
+        } catch {
+            cookieUser = null;
+        }
     }
 
-    // Role-based rendering
-    // Casting to any because NextAuth types might not have `role` explicitly extended yet
-    const role = (session.user as any).role || null;
+    // Role-based rendering (mockRole overrides session in disconnected mode).
+    // Fallback to the `user` cookie for teacher onboarding flows after verification.
+    const role =
+        mockRole ||
+        (session?.user as any)?.role?.toLowerCase() ||
+        cookieUser?.role?.toLowerCase() ||
+        null;
+
+    // If there is no session and no disconnected role, redirect to login
+    if (!role) {
+        redirect("/login/school"); // A sensible default redirect
+    }
 
     if (role === "school_admin") {
-        return <SchoolAdminDashboard />;
+        return <SchoolAdminDashboard user={(session?.user as any) || cookieUser} />;
     } else if (role === "teacher") {
-        return <TeacherDashboard />;
+        return <TeacherDashboard view={view || "home"} user={(session?.user as any) || cookieUser} />;
     } else if (role === "student") {
-        return <StudentDashboard />;
+        const studentKey =
+            (session?.user as any)?.id ||
+            (session?.user as any)?.nevoId ||
+            (session?.user as any)?.email ||
+            (session?.user as any)?.name ||
+            'student';
+        return <StudentDashboard key={studentKey} view={view || "home"} user={(session?.user as any) || cookieUser} />;
     }
 
     return (

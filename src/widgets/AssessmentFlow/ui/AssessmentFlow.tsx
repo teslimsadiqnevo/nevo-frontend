@@ -1,9 +1,11 @@
 'use client'
 
 import { useState, useEffect } from "react";
-import { Completion, Onboarding, Connect, DynamicQuestion, getQuestions, AssessmentQuestion } from "@/features/RegistrationAssessment";
+import { Onboarding, Connect, DynamicQuestion, getQuestions, AssessmentQuestion, CreatePIN, AdaptationSettings } from "@/features/RegistrationAssessment";
 import { MiniFooter } from "@/widgets/MiniFooter";
 import { useRouter } from "next/navigation";
+import { SplashScreen } from "@/shared/ui/SplashScreen";
+import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 const FOOTER_TEXTS = [
     "",
@@ -21,8 +23,8 @@ const FOOTER_TEXTS = [
 export function AssessmentFlow() {
     const [step, setStep] = useState(1);
     const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
-    const [answers, setAnswers] = useState<Record<number, number>>({});
     const [isLoading, setIsLoading] = useState(true);
+    const { assessmentAnswers, setAssessmentAnswer } = useRegistrationStore();
     const router = useRouter();
 
     useEffect(() => {
@@ -40,30 +42,30 @@ export function AssessmentFlow() {
     const handleNextQuestion = (answerIdx: number) => {
         if (!questions[step - 1]) return;
         const currentQId = questions[step - 1].id;
-        const newAnswers = { ...answers, [currentQId]: answerIdx };
-        setAnswers(newAnswers);
+        const answerText = questions[step - 1].options[answerIdx];
+        
+        setAssessmentAnswer(currentQId.toString(), answerText);
         
         if (step === totalQuestions) {
-            console.log("Accumulated Answers:", newAnswers);
+            setIsLoading(true);
+            setTimeout(() => {
+                setIsLoading(false);
+                setStep(s => s + 1);
+            }, 1000);
+        } else {
+            setStep(s => s + 1);
         }
-        setStep(s => s + 1);
     };
 
     const handleNext = () => setStep(s => s + 1);
     const handleFinish = () => router.push("/");
 
     const isQuestionStep = step <= totalQuestions;
-    const isCompletion = step === totalQuestions + 1;
-    const isOnboarding = step === totalQuestions + 2;
-    const isConnect = step === totalQuestions + 3;
-
-    const formattedAnswers = Object.entries(answers).map(([qId, optionIdx]) => {
-        const question = questions.find(q => q.id === Number(qId));
-        return {
-            question_id: Number(qId),
-            value: question ? question.options[optionIdx] : "",
-        };
-    });
+    const isPin = step === totalQuestions + 1;
+    const isAdaptation = step === totalQuestions + 2;
+    const isOnboarding = step === totalQuestions + 3;
+    const isConnect = step === totalQuestions + 4;
+    // Answers are now stored globally inside useRegistrationStore
 
     return (
         <div className="flex flex-col min-h-screen">
@@ -71,9 +73,7 @@ export function AssessmentFlow() {
             <div className="flex-1 pb-6 w-full flex flex-col justify-between items-center">
                 <div className="w-full">
                     {isLoading ? (
-                        <div className="flex h-64 items-center justify-center font-medium text-graphite-60">
-                            Loading assessment...
-                        </div>
+                        <SplashScreen />
                     ) : (
                         <>
                             {isQuestionStep && questions[step - 1] && (
@@ -81,20 +81,22 @@ export function AssessmentFlow() {
                                     key={questions[step - 1].id}
                                     question={questions[step - 1]} 
                                     number={step}
+                                    totalQuestions={totalQuestions}
                                     onNext={handleNextQuestion} 
                                 />
                             )}
-                            {isCompletion && <Completion onNext={handleNext} />}
-                            {isOnboarding && <Onboarding onNext={handleNext} answers={formattedAnswers} />}
+                            {isPin && <CreatePIN onNext={handleNext} onBack={() => setStep(step - 1)} />}
+                            {isAdaptation && <AdaptationSettings onNext={handleNext} />}
+                            {isOnboarding && <Onboarding onNext={handleNext} />}
                             {isConnect && <Connect />}
                         </>
                     )}
                 </div>
-                {step < FOOTER_TEXTS.length && !isLoading && (
+                {/* {step < FOOTER_TEXTS.length && !isLoading && (
                     <p className="font-medium text-sm text-graphite-60 mt-auto pt-6 text-center">
                         {FOOTER_TEXTS[step] || ""}
                     </p>
-                )}
+                )} */}
             </div>
         </div>
     )

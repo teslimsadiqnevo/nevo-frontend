@@ -1,5 +1,7 @@
 "use server";
 
+import { apiFetch } from "@/shared/lib/api";
+
 export async function joinWaitlist(data: {
   name: string;
   email: string;
@@ -7,18 +9,14 @@ export async function joinWaitlist(data: {
 }) {
   try {
 
-    const res = await fetch(
-      "https://api.nevolearning.com/api/v1/waitlist/join",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email: data.email,
-          name: data.name,
-          role: data.role,
-        }),
-      },
-    );
+    const res = await apiFetch("/waitlist/join", {
+      method: "POST",
+      body: JSON.stringify({
+        email: data.email,
+        name: data.name,
+        role: data.role,
+      }),
+    });
 
     const result = await res.json();
 

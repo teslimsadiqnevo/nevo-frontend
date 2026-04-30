@@ -1,14 +1,20 @@
 'use client'
-import { Input } from "@/shared/ui";
 import { useState } from "react";
+import Link from "next/link";
 import { registerTeacher } from "../api/registerTeacher";
-import { Icon } from "@/shared/ui";
 
-export function TeacherForm({ onSuccess }: { onSuccess: () => void }) {
-    const [fullName, setFullName] = useState('');
-    const [schoolName, setSchoolName] = useState('');
-    const [workEmail, setWorkEmail] = useState('');
-    const [password, setPassword] = useState('');
+export type TeacherRegistrationPayload = {
+    fullName: string;
+    schoolName: string;
+    workEmail: string;
+    password: string;
+};
+
+export function TeacherForm({ onSuccess }: { onSuccess: (payload: TeacherRegistrationPayload) => void }) {
+    const [fullName, setFullName] = useState("");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
 
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -18,55 +24,90 @@ export function TeacherForm({ onSuccess }: { onSuccess: () => void }) {
         setIsLoading(true);
         setError(null);
 
-        const result = await registerTeacher({
-            fullName,
-            schoolName,
-            workEmail,
-            password
-        });
+        try {
+            const payload: TeacherRegistrationPayload = {
+                fullName,
+                schoolName: "",
+                workEmail: email,
+                password,
+            };
+            const result = await registerTeacher(payload);
 
-        setIsLoading(false);
+            setIsLoading(false);
 
-        if (result.error) {
-            setError(result.error);
-        } else {
-            onSuccess();
+            if (result.error) {
+                setError(result.error);
+            } else {
+                onSuccess(payload);
+            }
+        } catch (err) {
+            setIsLoading(false);
+            setError("An unexpected error occurred. Please try again.");
         }
     };
 
+    const isComplete = fullName.trim() !== "" && email.trim() !== "" && password.length >= 8;
+
     return (
-        <div className="pt-12.5 flex flex-col gap-8 items-center justify-center pb-8.75">
-            <header className="flex flex-col gap-2 items-center justify-center">
-                <p className="font-semibold text-sm text-indigo">Step 1 of 2</p>
-                <h1 className="font-bold text-4xl">Create your Teacher account</h1>
-                <p className="font-medium text-lg text-graphite-70">Set up Nevo for your class in minutes.</p>
-            </header>
+        <form className="flex flex-col gap-4 w-full mx-auto" onSubmit={handleSubmit}>
+            <input
+                type="text"
+                placeholder="Your full name"
+                value={fullName}
+                onChange={(e) => { setFullName(e.target.value); setError(null); }}
+                className="w-full bg-transparent border border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50 rounded-[10px] px-4 py-[14px] outline-none transition-colors text-[13.5px] font-medium placeholder:text-[#3B3F6E]/60"
+            />
 
-            <form className="flex flex-col gap-6" onSubmit={handleSubmit}>
-                <Input label="Full name" placeholder="e.g., Sarah Jenkins" name="fullName" width={528} type="text" onChange={(e) => setFullName(e.target.value)} value={fullName} />
-                <Input label="School name" placeholder="e.g., Lincoln High School" name="schoolName" width={528} type="text" onChange={(e) => setSchoolName(e.target.value)} value={schoolName} />
-                <Input label="Work email" placeholder="e.g., name@school.edu" name="workEmail" width={528} type="email" onChange={(e) => setWorkEmail(e.target.value)} value={workEmail} />
-                <Input label="Create Password" placeholder="e.g., ••••••••" name="password" width={528} type="password" onChange={(e) => setPassword(e.target.value)} value={password} />
-
+            <div className="flex flex-col gap-1 w-full">
+                <input
+                    type="email"
+                    placeholder="Your email address"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                    className={`w-full bg-transparent border rounded-[10px] px-4 py-[14px] outline-none transition-colors text-[13.5px] font-medium placeholder:text-[#3B3F6E]/60 ${error ? 'border-[#E57661] focus:border-[#E57661]' : 'border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50'}`}
+                />
                 {error && (
-                    <div className="flex items-center gap-2 p-4 text-red-600 bg-red-50 rounded-2xl w-[528px]">
-
-                        <p className="text-sm font-medium">{error}</p>
-                    </div>
+                    <p className="text-[#E57661] text-[11px] font-medium mt-1 px-1">{error}</p>
                 )}
-
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="bg-indigo text-white rounded-2xl cursor-pointer px-6 py-4 outline-none w-[528px] disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center"
-                >
-                    {isLoading ? 'Creating account...' : 'Continue'}
-                </button>
-            </form>
-            <div className="flex flex-col items-center justify-center">
-                <a href="/login/teacher" className="text-indigo font-medium text-sm">Already have an account? Sign in</a>
-                <p className="font-medium pt-4.25 text-sm text-graphite-60">Nevo is built for clarity, not complexity.</p>
             </div>
-        </div>
-    )
+
+            <div className="flex flex-col gap-1 w-full mb-4 relative">
+                <div className="relative flex items-center w-full">
+                    <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Create a password"
+                        value={password}
+                        onChange={(e) => { setPassword(e.target.value); setError(null); }}
+                        className="w-full bg-transparent border border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50 rounded-[10px] pl-4 pr-12 py-[14px] outline-none transition-colors text-[13.5px] font-medium placeholder:text-[#3B3F6E]/60"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 text-[#3B3F6E]/40 hover:text-[#3B3F6E] transition-colors cursor-pointer"
+                    >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 5C7.3 5 3.3 8.3 1.5 12.5C3.3 16.7 7.3 20 12 20C16.7 20 20.7 16.7 22.5 12.5C20.7 8.3 16.7 5 12 5ZM12 17.5C9.2 17.5 7 15.3 7 12.5C7 9.7 9.2 7.5 12 7.5C14.8 7.5 17 9.7 17 12.5C17 15.3 14.8 17.5 12 17.5ZM12 9.5C10.3 9.5 9 10.8 9 12.5C9 14.2 10.3 15.5 12 15.5C13.7 15.5 15 14.2 15 12.5C15 10.8 13.7 9.5 12 9.5Z" fill="currentColor"/>
+                        </svg>
+                    </button>
+                </div>
+                <p className="text-[11px] text-graphite/40 font-medium px-1">At least 8 characters.</p>
+            </div>
+
+            <button
+                type="submit"
+                disabled={isLoading || !isComplete}
+                className={`w-full text-white font-bold rounded-xl py-[14px] text-[14px] outline-none transition-all ${
+                    !isComplete
+                        ? 'bg-[#9A9BB5] cursor-not-allowed opacity-90'
+                        : 'bg-[#3B3F6E] hover:opacity-90 active:scale-[0.98] cursor-pointer'
+                }`}
+            >
+                {isLoading ? 'Wait...' : 'Create account'}
+            </button>
+
+            <p className="text-[11px] text-graphite-60 text-center mt-2 font-medium">
+                Already have an account? <Link href="/login/teacher" className="text-[#A29ECA] hover:text-[#3B3F6E] transition-colors cursor-pointer">Sign in</Link>
+            </p>
+        </form>
+    );
 }

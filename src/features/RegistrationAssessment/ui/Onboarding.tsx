@@ -1,19 +1,15 @@
 "use client";
 
-import { useState, useRef, ChangeEvent, KeyboardEvent } from "react";
+import { useState } from "react";
 import { Icon } from "@/shared/ui";
 import QRCode from "react-qr-code";
-import { registerStudent } from "@/features/StudentRegistration/api/registerStudent";
-import { submitAnswers } from "@/features/RegistrationAssessment";
+import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
-export function Onboarding({ onNext, answers }: { onNext: () => void; answers?: { question_id: number; value: any }[] }) {
-    const [pin, setPin] = useState(["", "", "", ""]);
-    const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+export function Onboarding({ onNext }: { onNext: () => void }) {
+    const storedNevoId = useRegistrationStore((s) => s.nevoId);
     const [showQR, setShowQR] = useState(false);
     const [copied, setCopied] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [errorMsg, setErrorMsg] = useState("");
-    const nevoId = "NEVO-XXXXX";
+    const nevoId = storedNevoId || "NEVO-XXXXX";
 
     const copyToClipboard = async () => {
         try {
@@ -25,149 +21,65 @@ export function Onboarding({ onNext, answers }: { onNext: () => void; answers?: 
         }
     };
 
-    const handleChange = (index: number, e: ChangeEvent<HTMLInputElement>) => {
-        const value = e.target.value;
-        if (!/^[0-9]?$/.test(value)) return;
 
-        const newPin = [...pin];
-        newPin[index] = value;
-        setPin(newPin);
-
-
-        if (value && index < 3) {
-            inputRefs.current[index + 1]?.focus();
-        }
-    };
-
-    const handleKeyDown = (index: number, e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Backspace" && !pin[index] && index > 0) {
-            inputRefs.current[index - 1]?.focus();
-        }
-    };
-
-    const handleSaveAndContinue = async () => {
-        const pinString = pin.join("");
-        if (pinString.length < 4) {
-            setErrorMsg("Please enter a 4-digit PIN.");
-            return;
-        }
-
-        setIsSubmitting(true);
-        setErrorMsg("");
-
-        try {
-            const storedData = sessionStorage.getItem("nevo_registration_data");
-            if (!storedData) {
-                setErrorMsg("Registration data not found. Please start over.");
-                setIsSubmitting(false);
-                return;
-            }
-
-            const { firstName, lastName, age } = JSON.parse(storedData);
-
-            const regRes = await registerStudent({ firstName, lastName, age, pin: pinString });
-            console.log("Registration API Result:", regRes);
-            
-            if (regRes.error) {
-                setErrorMsg(regRes.error);
-                setIsSubmitting(false);
-                return;
-            }
-
-            const token = regRes.data?.token;
-            if (token && answers && answers.length > 0) {
-                console.log("Submitting these answers:", answers);
-                const subRes = await submitAnswers({ answers, token });
-                console.log("Assessment Submission API Result:", subRes);
-                
-                if (subRes.error) {
-                    setErrorMsg(subRes.error);
-                    setIsSubmitting(false);
-                    return;
-                }
-            }
-
-            onNext();
-        } catch (err) {
-            setErrorMsg("An unexpected error occurred.");
-        } finally {
-            setIsSubmitting(false);
-        }
-    };
 
     return (
-        <div className="flex flex-col p-6 items-center">
-            <p className="text-indigo mb-4.75 text-sm font-semibold">Almost ready</p>
-            <h1 className="text-40px font-extrabold mb-4">This is your Nevo ID</h1>
-            <p className="w-[454px] text-lg text-graphite-80 text-center mb-10 font-medium">You&apos;ll use this ID to log in again — even on a different tablet.</p>
+        <div className="flex-1 w-full flex flex-col justify-center items-center relative mt-8 mb-10">
+            {/* Top Icon */}
+            <div className="w-[88px] h-[88px] bg-[#EAE8F2] rounded-[24px] flex items-center justify-center text-[#B0ADCD] mb-6">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.25"/>
+                    <circle cx="12" cy="12" r="5.5" stroke="currentColor" strokeWidth="1.25"/>
+                    <path d="M12 9.5V12L13.5 13.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+            </div>
 
-            <div className="card p-8.25 mb-10 flex flex-col items-center w-[414px] justify-center rounded-3xl border border-graphite-5 bg-white relative">
-                <p className="text-xs font-bold text-graphite-60 mb-4">YOUR NEVO ID</p>
-                <p className="text-4xl mb-6 font-bold">{nevoId}</p>
-                <div className="flex items-center justify-center gap-6">
-                    <div className="flex gap-2 items-center cursor-pointer transition-all active:scale-95" onClick={copyToClipboard}>
-                        <Icon type={copied ? "checkmark" : "clipboard"} width={18} height={18} />
-                        <p className="text-indigo font-semibold transition-all duration-200 w-16 whitespace-nowrap overflow-hidden text-center">{copied ? "Copied!" : "Copy ID"}</p>
-                    </div>
-                    <div className="w-px h-4 bg-graphite-10"></div>
-                    <div>
-                        <p className="text-indigo cursor-pointer font-semibold transition-all active:scale-95" onClick={() => setShowQR(true)}>
-                            Show QR
-                        </p>
-                        {showQR && (
-                            <div
-                                className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
-                                onClick={() => setShowQR(false)}
-                            >
-                                <div
-                                    className="p-8 bg-white rounded-3xl shadow-2xl flex flex-col items-center gap-6 w-[360px]"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <h2 className="text-2xl font-bold">Your Nevo ID</h2>
-                                    <QRCode value={nevoId} size={200} />
-                                    <button
-                                        className="bg-indigo-10 text-indigo font-semibold px-6 py-2 rounded-xl mt-2 w-full hover:bg-indigo-20 transition-colors"
-                                        onClick={() => setShowQR(false)}
-                                    >
-                                        Close
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+            <h1 className="text-[26px] font-extrabold text-indigo mb-3">You're all set.</h1>
+            <p className="text-[15px] text-graphite-60 font-medium mb-8">Your Nevo account has been created.</p>
+
+            <div className="w-[480px] rounded-2xl border border-indigo/80 flex flex-col items-center pt-8 pb-7 bg-transparent relative mb-5">
+                <p className="text-[12px] font-bold text-lavender tracking-wider mb-5">YOUR NEVO ID</p>
+                <p className="text-[32px] font-bold text-indigo tracking-[0.2em] mb-7">{nevoId}</p>
+                <div className="flex items-center gap-3">
+                    <button className="px-5 py-[9px] rounded-full border border-indigo/80 text-indigo text-[13px] font-bold active:scale-95 transition-all cursor-pointer hover:bg-black/5" onClick={copyToClipboard}>
+                        {copied ? "Copied!" : "Copy ID"}
+                    </button>
+                    <button className="px-5 py-[9px] rounded-full border border-indigo/80 text-indigo text-[13px] font-bold active:scale-95 transition-all cursor-pointer hover:bg-black/5" onClick={() => setShowQR(true)}>
+                        Show QR
+                    </button>
                 </div>
             </div>
 
-            <div className="flex flex-col items-center justify-center">
-                <p className="text-xl font-bold mb-2">Create a simple 4-digit PIN</p>
-                <p className="text-sm text-graphite-60 mb-6">This helps keep your learning space private.</p>
+            <p className="text-[13px] text-graphite-60 font-medium mb-8">Remember this ID — you'll need it to log in.</p>
 
-                <div className="flex gap-3">
-                    {pin.map((digit, index) => (
-                        <input
-                            key={index}
-                            ref={(el) => { inputRefs.current[index] = el; }}
-                            type="text"
-                            inputMode="numeric"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleChange(index, e)}
-                            onKeyDown={(e) => handleKeyDown(index, e)}
-                            className="w-[64px] h-[64px] bg-white rounded-[16px] text-center text-2xl font-semibold text-indigo outline-none border border-transparent focus:border-indigo transition-colors shadow-sm"
-                        />
-                    ))}
-                </div>
+            <button
+                onClick={onNext}
+                className="w-[480px] bg-indigo text-white py-[18px] rounded-[14px] text-[15px] font-bold transition-all duration-200 hover:opacity-90 active:scale-95 cursor-pointer"
+            >
+                Continue
+            </button>
 
-                <p className="mt-4 text-sm font-medium text-graphite-60 mb-12">Choose something easy to remember.</p>
-                {errorMsg && <p className="text-red-500 font-medium mb-4">{errorMsg}</p>}
-                <button
-                    onClick={handleSaveAndContinue}
-                    disabled={isSubmitting}
-                    className={`w-80 bg-indigo text-white cursor-pointer py-3 text-center rounded-2xl text-lg font-semibold ${isSubmitting ? 'opacity-50 cursor-not-allowed' : ''}`}
+            {/* QR Modal */}
+            {showQR && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm"
+                    onClick={() => setShowQR(false)}
                 >
-                    {isSubmitting ? "Saving..." : "Save and Continue"}
-                </button>
-            </div>
+                    <div
+                        className="p-8 bg-white rounded-3xl shadow-2xl flex flex-col items-center gap-6 w-[360px]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h2 className="text-2xl font-bold text-indigo">Your Nevo ID</h2>
+                        <QRCode value={nevoId} size={200} />
+                        <button
+                            className="bg-indigo-10 text-indigo font-semibold px-6 py-3 rounded-xl w-full hover:bg-indigo-20 transition-colors cursor-pointer"
+                            onClick={() => setShowQR(false)}
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
-    )
+    );
 }

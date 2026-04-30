@@ -15,6 +15,7 @@
   --foreground: #171717;
 
   --indigo: #3b3f6e;
+  --indigo-5: #3B3F6E0D;
   --indigo-10: #3B3F6E1A;
   --indigo-20: #3B3F6E33;
 
@@ -43,6 +44,7 @@
   --font-agile: "Agile", sans-serif;
 
   --color-indigo: var(--indigo);
+  --color-indigo-5: var(--indigo-5);
   --color-indigo-10: var(--indigo-10);
   --color-indigo-20: var(--indigo-20);
   --color-parchment: var(--parchment);
@@ -82,4 +84,32 @@
 
 body {
   /* font-family: var(--font-inter), sans-serif; */
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out;
 }

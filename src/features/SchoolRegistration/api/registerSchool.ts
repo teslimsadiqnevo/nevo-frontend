@@ -1,5 +1,7 @@
 "use server";
 
+import { apiFetch } from "@/shared/lib/api";
+
 export async function registerSchool(data: {
   schoolName: string;
   adminName: string;
@@ -8,9 +10,8 @@ export async function registerSchool(data: {
   schoolType?: string;
 }) {
   try {
-    const res = await fetch("https://api.nevolearning.com/api/v1/auth/register/school-admin", {
+    const res = await apiFetch("/auth/register/school-admin", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: data.adminEmail,
         full_name: data.adminName, 

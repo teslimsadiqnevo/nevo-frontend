@@ -66,19 +66,19 @@ export let roles: {path: string, desc: string, name: string, icon: IconType}[] =
     path: "Student / Learner",
     desc: "Learn with lessons that adapt to your pace, focus, and style.",
     name: "Student",
-    icon: "grad",
+    icon: "student-icon-II",
   },
   {
     path: "Teacher",
     desc: "Support students with insight, clarity, and meaningful learning tools.",
     name: "Teacher",
-    icon: "female-teacher",
+    icon: "teacher-icon-II",
   },
   {
     path: "School",
     desc: "Bring calm, accessible learning across classrooms and teachers.",
     name: "School",
-    icon: "school",
+    icon: "school-icon-II",
   },
 ];
 

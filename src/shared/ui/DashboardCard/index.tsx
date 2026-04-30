@@ -18,7 +18,7 @@ export function DashboardCard({
             <div className="flex flex-col">
                 <h3 className="text-[20px] font-extrabold text-[#111111] leading-tight">{title}</h3>
                 <p className="text-graphite-60 text-[14px] mt-1 mb-8">{subtitle}</p>
-                <a href={actionLink} className="text-[#3B3F6E] font-bold text-[14px] hover:underline inline-block">
+                <a href={actionLink} className="text-[#3B3F6E] px-4 font-bold text-[14px] hover:underline inline-block">
                     {actionText}
                 </a>
             </div>

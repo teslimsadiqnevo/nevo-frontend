@@ -37,7 +37,7 @@ export default function Home() {
           <div className="text-container flex flex-col xl:gap-7.75 gap-6 xl:items-start items-center justify-center xl:max-w-150 leading-[1.1]">
             <h1 className="xl:text-6-5xl text-44px font-bold">Learning, your way.</h1>
             <p className="xl:text-xl text-17px xl:text-start text-center leading-[1.6] max-w-125">Nevo is a calm, adaptive learning platform built around how each mind learns, focuses, and progresses — not around rigid systems.</p>
-            <ActionButton link="/" rounded name="Get Started" />
+            <ActionButton link="/auth" rounded name="Get Started" />
           </div>
           <div className="image-container">
             <Image src={currentImage} alt="cta-landing" width={imageSize.width} height={imageSize.height} className="rounded-4xl" />
