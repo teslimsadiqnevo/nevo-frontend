@@ -37,10 +37,10 @@ interface SectionDetail {
 
 /* ─── Mock Data ─── */
 const supportStudents: SupportStudent[] = [
-    { initials: 'EC', avatarBg: '#6A7DB5', name: 'Emma Chen', issues: ['Missed 3 assignments', 'Low participation'] },
-    { initials: 'LT', avatarBg: '#5B8A6E', name: 'Liam Torres', issues: ['Struggling with fractions', 'Requested 4 hints'] },
-    { initials: 'AJ', avatarBg: '#7B6DAA', name: 'Ava Johnson', issues: ['Below grade level', 'Needs extra support'] },
-    { initials: 'NK', avatarBg: '#4A8B9D', name: 'Noah Kim', issues: ['Missed 2 lessons', 'Low engagement'] },
+    { id: 'ec', initials: 'EC', avatarBg: '#6A7DB5', name: 'Emma Chen', issues: ['Missed 3 assignments', 'Low participation'] },
+    { id: 'lt', initials: 'LT', avatarBg: '#5B8A6E', name: 'Liam Torres', issues: ['Struggling with fractions', 'Requested 4 hints'] },
+    { id: 'aj', initials: 'AJ', avatarBg: '#7B6DAA', name: 'Ava Johnson', issues: ['Below grade level', 'Needs extra support'] },
+    { id: 'nk', initials: 'NK', avatarBg: '#4A8B9D', name: 'Noah Kim', issues: ['Missed 2 lessons', 'Low engagement'] },
 ];
 
 const confusionLessons: ConfusionLesson[] = [

@@ -31,7 +31,7 @@ export function TeacherHomeBackendView({
   useEffect(() => {
     (async () => {
       const res = await getTeacherDashboardHome();
-      setData(res.data || null);
+      setData('data' in res ? res.data || null : null);
       setLoading(false);
     })();
   }, []);
@@ -119,7 +119,7 @@ export function TeacherLessonsBackendView({
   useEffect(() => {
     (async () => {
       const res = await getTeacherDashboard();
-      const d = res.data || {};
+      const d = 'data' in res ? res.data || {} : {};
       setData(Array.isArray(d.lessons) ? d.lessons : Array.isArray(d) ? d : []);
     })();
   }, []);
@@ -295,7 +295,7 @@ export function TeacherStudentsBackendView() {
   useEffect(() => {
     (async () => {
       const res = await getTeacherStudents();
-      const d = res.data;
+      const d = 'data' in res ? res.data : null;
       setStudents(Array.isArray(d) ? d : Array.isArray(d?.students) ? d.students : []);
     })();
   }, []);
@@ -444,7 +444,7 @@ export function TeacherInsightsBackendView() {
   useEffect(() => {
     (async () => {
       const res = await getTeacherDashboard();
-      setData(res.data || null);
+      setData('data' in res ? res.data || null : null);
     })();
   }, []);
   return (
@@ -463,8 +463,8 @@ export function TeacherConnectBackendView() {
 
   const refresh = async () => {
     const [qrRes, reqRes] = await Promise.all([getTeacherQr(), getTeacherConnectionRequests()]);
-    setQr(qrRes.data || null);
-    const d = reqRes.data;
+    setQr('data' in qrRes ? qrRes.data || null : null);
+    const d = 'data' in reqRes ? reqRes.data : null;
     setRequests(Array.isArray(d) ? d : Array.isArray(d?.requests) ? d.requests : []);
   };
 
@@ -509,7 +509,7 @@ export function TeacherProfileBackendView() {
   useEffect(() => {
     (async () => {
       const res = await getTeacherProfile();
-      const p = res.data || {};
+      const p = 'data' in res ? res.data || {} : {};
       setProfile(p);
       setName(p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim());
       setEmail(p.email || '');
@@ -520,7 +520,7 @@ export function TeacherProfileBackendView() {
     setSaving(true);
     await updateTeacherProfile({ name, email });
     const res = await getTeacherProfile();
-    setProfile(res.data || null);
+    setProfile('data' in res ? res.data || null : null);
     setSaving(false);
   };
 

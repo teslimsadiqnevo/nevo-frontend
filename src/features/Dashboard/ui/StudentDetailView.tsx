@@ -275,6 +275,7 @@ export function StudentDetailView({
             {showRecommend && (
                 <RecommendSheet
                     studentName={student.name}
+                    lessons={recommendLessons}
                     onClose={() => setShowRecommend(false)}
                     onSend={handleRecommendSend}
                 />
@@ -358,12 +359,22 @@ function ActionButton({
 }
 
 /* ─── Recommend Lesson Bottom Sheet ─── */
-function RecommendSheet({ studentName, onClose, onSend }: { studentName: string; onClose: () => void; onSend: (lessonTitle: string) => void }) {
+function RecommendSheet({
+    studentName,
+    lessons,
+    onClose,
+    onSend,
+}: {
+    studentName: string;
+    lessons: { title: string; tag: string; tagBg: string }[];
+    onClose: () => void;
+    onSend: (lessonTitle: string) => void;
+}) {
     const [search, setSearch] = useState('');
     const [selected, setSelected] = useState<string | null>(null);
     const [message, setMessage] = useState('');
 
-    const filtered = recommendLessons.filter(l =>
+    const filtered = lessons.filter(l =>
         l.title.toLowerCase().includes(search.toLowerCase())
     );
 

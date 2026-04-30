@@ -5,7 +5,7 @@ import { useState } from 'react';
 type LessonStatus = 'Published' | 'Draft';
 
 export interface Lesson {
-    id: number;
+    id: number | string;
     title: string;
     subject: string;
     level: string;
