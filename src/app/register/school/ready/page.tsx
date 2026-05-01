@@ -3,14 +3,42 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/shared/ui";
+import { getSchoolCode, getSchoolOnboardingStatus } from "@/features/Dashboard/api/school";
 
 export default function SchoolReadyPage() {
     const router = useRouter();
     const [showCopied, setShowCopied] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [codeString, setCodeString] = useState("NEVO-SCH");
+    const [schoolName, setSchoolName] = useState("Your school");
 
-    // Hardcoded logic for the mock design
-    const codeString = "NEVO-SCH-4X2";
-    const schoolName = "Lagos International School";
+    useEffect(() => {
+        let mounted = true;
+        void (async () => {
+            const [statusRes, codeRes] = await Promise.all([
+                getSchoolOnboardingStatus(),
+                getSchoolCode(),
+            ]);
+            if (!mounted) return;
+
+            const statusData = "data" in statusRes ? statusRes.data : null;
+            const codeData = "data" in codeRes ? codeRes.data : null;
+
+            if ("error" in statusRes && statusRes.error) {
+                setError(statusRes.error);
+            }
+
+            if (statusData?.school_name) setSchoolName(statusData.school_name);
+            if (statusData?.school_code) setCodeString(statusData.school_code);
+            if (codeData?.school_code) setCodeString(codeData.school_code);
+
+            setPageLoading(false);
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     const handleCopy = () => {
         // Technically copies to clipboard if API allows
@@ -30,6 +58,10 @@ export default function SchoolReadyPage() {
             return () => clearTimeout(timer);
         }
     }, [showCopied]);
+
+    if (pageLoading) {
+        return <div className="min-h-screen flex items-center justify-center text-sm text-[#3B3F6E]">Loading school code...</div>;
+    }
 
     return (
         <div className="flex-1 w-full flex flex-col items-center p-6 min-h-screen relative overflow-x-hidden">
@@ -109,6 +141,7 @@ export default function SchoolReadyPage() {
                     >
                         Go to admin dashboard
                     </button>
+                    {error ? <p className="text-[11px] text-[#E57661] font-bold text-center mt-4">{error}</p> : null}
                 </div>
             </div>
         </div>

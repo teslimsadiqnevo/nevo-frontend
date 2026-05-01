@@ -1,10 +1,27 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/shared/ui";
+import { getSchoolOnboardingStatus } from "@/features/Dashboard/api/school";
 
 export default function SchoolSuccessPage() {
     const router = useRouter();
+    const [schoolName, setSchoolName] = useState("Your school");
+
+    useEffect(() => {
+        let mounted = true;
+        void (async () => {
+            const res = await getSchoolOnboardingStatus();
+            if (!mounted) return;
+            const data = "data" in res ? res.data : null;
+            if (data?.school_name) {
+                setSchoolName(data.school_name);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, []);
 
     return (
         <div className="flex-1 w-full flex flex-col items-center justify-center p-6 bg-[#F6F5F2] min-h-screen relative overflow-x-hidden">
@@ -21,7 +38,7 @@ export default function SchoolSuccessPage() {
 
                 <h1 className="font-bold text-[#3B3F6E] text-[26px] tracking-tight mb-3">Your school is ready.</h1>
                 <p className="text-[14.5px] text-graphite opacity-60 mb-[42px] text-center max-w-[420px] tracking-tight leading-relaxed">
-                    Lagos International Academy is now set up on Nevo. Here's what to do next.
+                    {schoolName} is now set up on Nevo. Here's what to do next.
                 </p>
 
                 {/* Cards Block */}

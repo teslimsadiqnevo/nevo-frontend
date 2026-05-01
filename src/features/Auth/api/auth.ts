@@ -30,6 +30,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           payload = { email: credentials.email, password: credentials.password };
           if (credentials.loginType === "teacher") {
             endpoint = `${API_BASE_URL}/auth/teacher/login`;
+          } else if (credentials.loginType === "school") {
+            endpoint = `${API_BASE_URL}/auth/school/login`;
           }
         } else {
           // Student login — send first_name + nevo_id + pin per backend spec
