@@ -4,3 +4,4 @@ export { features } from "./lib";
 export { pathLinks } from "./lib";
 export { works } from "./lib";
 export { roles } from "./lib";
+export { getInitials } from "./getInitials";
