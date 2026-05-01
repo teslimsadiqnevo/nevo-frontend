@@ -4,7 +4,11 @@ import { useState, useMemo, useEffect } from 'react';
 import { AddLessonWizard } from './AddLessonWizard';
 import { AssignLessonWizard } from './AssignLessonWizard';
 import { LessonDetailsView } from './LessonDetailsView';
-import { getTeacherDashboard } from '../api/teacher';
+import {
+    archiveTeacherLesson,
+    duplicateTeacherLesson,
+    getTeacherLessons,
+} from '../api/teacher';
 
 type LessonStatus = 'Published' | 'Draft';
 
@@ -19,6 +23,23 @@ interface Lesson {
     signal?: { type: 'warning' | 'success'; text: string };
 }
 
+interface BackendLessonItem {
+    id: string;
+    title: string;
+    subject?: string | null;
+    topic?: string | null;
+    status: string;
+    target_grade_level: number;
+    education_level: string;
+    estimated_duration_minutes: number;
+    created_at: string;
+    published_at?: string | null;
+    last_updated: string;
+    assignment_count: number;
+    completion_count: number;
+    confusion_signal_count: number;
+}
+
 type TabFilter = 'All' | 'Published' | 'Drafts';
 
 export function LessonsView() {
@@ -31,29 +52,43 @@ export function LessonsView() {
     const [showWizard, setShowWizard] = useState(false);
     const [showAssignWizard, setShowAssignWizard] = useState(false);
     const [viewingLesson, setViewingLesson] = useState<Lesson | null>(null);
+    const [selectedMenuLesson, setSelectedMenuLesson] = useState<Lesson | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         let mounted = true;
         (async () => {
-            const res = await getTeacherDashboard();
-            if (!mounted || !('data' in res)) return;
-            const payload = res.data || {};
-            const rawLessons = Array.isArray(payload?.lessons) ? payload.lessons : Array.isArray(payload) ? payload : [];
+            setIsLoading(true);
+            setLoadError(null);
 
-            const mapped: Lesson[] = rawLessons.map((l: any, i: number) => {
-                const rawStatus = String(l?.status || l?.lesson_status || 'published').toLowerCase();
+            const res = await getTeacherLessons({ page: 1, page_size: 100, sort_by: 'created_at', sort_order: 'desc' });
+            if (!mounted) return;
+            if (!('data' in res)) {
+                setLoadError(res.error || 'Could not load lessons.');
+                setLessons([]);
+                setIsLoading(false);
+                return;
+            }
+
+            const payload = res.data || {};
+            const rawLessons: BackendLessonItem[] = Array.isArray(payload?.lessons) ? payload.lessons : [];
+
+            const mapped: Lesson[] = rawLessons.map((l: BackendLessonItem) => {
+                const rawStatus = String(l?.status || 'published').toLowerCase();
                 const status: LessonStatus = rawStatus === 'draft' ? 'Draft' : 'Published';
-                const updatedRaw = l?.updated_at || l?.updatedAt || l?.last_updated || l?.created_at || l?.createdAt;
+                const updatedRaw = l?.last_updated || l?.published_at || l?.created_at;
                 const lastUpdated = updatedRaw ? `Last updated ${new Date(updatedRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Last updated recently';
-                const confusionCount = Number(l?.confusion_signals || l?.confusion_count || 0);
-                const completionCount = Number(l?.completed_students || l?.completed_count || 0);
+                const confusionCount = Number(l?.confusion_signal_count || 0);
+                const completionCount = Number(l?.completion_count || 0);
 
                 return {
-                    id: l?.id ?? `lesson-${i}`,
-                    title: l?.title || l?.name || 'Untitled lesson',
-                    subject: l?.subject || l?.topic || 'General',
-                    level: l?.level || l?.grade_level || l?.education_level || 'Secondary',
-                    duration: Number(l?.duration_minutes || l?.duration || 0),
+                    id: l.id,
+                    title: l.title || 'Untitled lesson',
+                    subject: l.subject || l.topic || 'General',
+                    level: l.education_level || 'Secondary',
+                    duration: Number(l.estimated_duration_minutes || 0),
                     status,
                     lastUpdated,
                     signal:
@@ -66,12 +101,13 @@ export function LessonsView() {
             });
 
             setLessons(mapped);
+            setIsLoading(false);
         })();
 
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [reloadKey]);
 
     const subjects = useMemo(() => Array.from(new Set(lessons.map((l) => l.subject))).filter(Boolean), [lessons]);
     const levels = useMemo(() => Array.from(new Set(lessons.map((l) => l.level))).filter(Boolean), [lessons]);
@@ -127,8 +163,26 @@ export function LessonsView() {
         { label: 'Drafts', value: 'Drafts', count: counts.drafts },
     ];
 
+    const handleReload = () => setReloadKey((value) => value + 1);
+
+    const handleDuplicateLesson = async (lesson: Lesson) => {
+        const res = await duplicateTeacherLesson(String(lesson.id));
+        if ('data' in res) {
+            setSelectedMenuLesson(null);
+            handleReload();
+        }
+    };
+
+    const handleArchiveLesson = async (lesson: Lesson) => {
+        const res = await archiveTeacherLesson(String(lesson.id));
+        if ('data' in res) {
+            setSelectedMenuLesson(null);
+            handleReload();
+        }
+    };
+
     if (showWizard) {
-        return <AddLessonWizard onClose={() => setShowWizard(false)} onAssign={() => { setShowWizard(false); setShowAssignWizard(true); }} />;
+        return <AddLessonWizard onClose={() => { setShowWizard(false); handleReload(); }} onAssign={() => { setShowWizard(false); setShowAssignWizard(true); }} />;
     }
 
     if (showAssignWizard) {
@@ -139,8 +193,8 @@ export function LessonsView() {
         return <LessonDetailsView lesson={viewingLesson} onBack={() => setViewingLesson(null)} />;
     }
 
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px]">
+        return (
+        <div className="flex flex-col h-full w-full max-w-225">
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <h2 className="text-2xl font-semibold text-[#3B3F6E] leading-tight">Lessons</h2>
@@ -160,6 +214,12 @@ export function LessonsView() {
                     </button>
                 </div>
             </div>
+
+            {loadError && (
+                <div className="mb-4 rounded-xl border border-[#E0D9CE] bg-white px-4 py-3 text-[13px] text-[#C04A3A]">
+                    {loadError}
+                </div>
+            )}
 
             {/* Search + Filter */}
             <div className="flex gap-3 mb-5">
@@ -197,8 +257,8 @@ export function LessonsView() {
                         }`}
                     >
                         {tab.label}
-                        <span
-                            className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
+                                <span
+                            className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full min-w-5 text-center ${
                                 activeTab === tab.value
                                     ? 'bg-white/20 text-white'
                                     : 'bg-graphite-10 text-graphite-60'
@@ -212,10 +272,20 @@ export function LessonsView() {
 
             {/* Lesson List */}
             <div className="flex flex-col gap-3 pb-12">
-                {filtered.map((lesson) => (
-                    <LessonRow key={lesson.id} lesson={lesson} onClick={() => setViewingLesson(lesson)} />
+                {isLoading && (
+                    <div className="rounded-2xl border border-[#E0DDD8] bg-white px-6 py-10 text-[13px] text-graphite-40">
+                        Loading lessons…
+                    </div>
+                )}
+                {!isLoading && filtered.map((lesson) => (
+                    <LessonRow
+                        key={lesson.id}
+                        lesson={lesson}
+                        onClick={() => setViewingLesson(lesson)}
+                        onMenuClick={() => setSelectedMenuLesson(lesson)}
+                    />
                 ))}
-                {filtered.length === 0 && (
+                {!isLoading && filtered.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-16 text-graphite-40 text-[14px]">
                         No lessons found.
                     </div>
@@ -236,19 +306,47 @@ export function LessonsView() {
                     onClose={() => setShowFilter(false)}
                 />
             )}
+
+            {selectedMenuLesson && (
+                <LessonActionSheet
+                    lesson={selectedMenuLesson}
+                    onView={() => {
+                        setViewingLesson(selectedMenuLesson);
+                        setSelectedMenuLesson(null);
+                    }}
+                    onEdit={() => {
+                        setViewingLesson(selectedMenuLesson);
+                        setSelectedMenuLesson(null);
+                    }}
+                    onDuplicate={() => handleDuplicateLesson(selectedMenuLesson)}
+                    onArchive={() => handleArchiveLesson(selectedMenuLesson)}
+                    onClose={() => setSelectedMenuLesson(null)}
+                />
+            )}
         </div>
     );
 }
 
-function LessonRow({ lesson, onClick }: { lesson: Lesson; onClick: () => void }) {
+function LessonRow({ lesson, onClick, onMenuClick }: { lesson: Lesson; onClick: () => void; onMenuClick: () => void }) {
     return (
-        <div onClick={onClick} className="bg-white rounded-2xl border border-[#E9E7E2] px-6 py-5 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-shadow cursor-pointer">
-            {/* Top row: title + status + menu */}
-            <div className="flex items-start justify-between mb-2.5">
-                <h3 className="text-[15px] font-semibold text-[#2B2B2F] leading-snug">{lesson.title}</h3>
-                <div className="flex items-center gap-2 shrink-0 ml-4">
+        <div
+            onClick={onClick}
+            className="relative w-185 h-27.5 bg-white border border-[#E0D9CE] rounded-xl hover:shadow-[0_2px_8px_rgba(0,0,0,0.08)] transition-shadow cursor-pointer flex flex-col"
+        >
+            {/* Top row: Title + Status Badge + 3-dot Menu (y: 17px) */}
+            <div className="absolute left-4.25 top-4.25 w-176.5 h-6 flex items-center justify-between">
+                {/* Title */}
+                <h3 className="text-[15px] font-semibold text-[#2B2B2F] grow truncate mr-4">
+                    {lesson.title}
+                </h3>
+
+                {/* Status Badge + Menu */}
+                <div className="flex items-center gap-2 shrink-0">
                     <StatusBadge status={lesson.status} />
-                    <button className="text-graphite-40 hover:text-graphite p-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
+                    <button
+                        onClick={(event) => { event.stopPropagation(); onMenuClick(); }}
+                        className="w-5 h-5 flex items-center justify-center text-[#2B2B2F] opacity-40 hover:opacity-60 transition-opacity cursor-pointer"
+                    >
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                             <circle cx="8" cy="3" r="1.2" />
                             <circle cx="8" cy="8" r="1.2" />
@@ -258,28 +356,42 @@ function LessonRow({ lesson, onClick }: { lesson: Lesson; onClick: () => void })
                 </div>
             </div>
 
-            {/* Tags + duration + date */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Tag label={lesson.subject} />
-                    <Tag label={lesson.level} />
-                    <span className="flex items-center gap-1 text-[12px] text-graphite-40 ml-1">
-                        <ClockIcon />
-                        {lesson.duration} min
-                    </span>
+            {/* Bottom row: Subject Pill + Level Pill + Duration + Last Updated (y: 49px) */}
+            <div className="absolute left-4.25 top-12.25 w-176.5 h-6 flex items-center gap-2">
+                {/* Subject Pill */}
+                <Pill label={lesson.subject} />
+
+                {/* Level Pill */}
+                <Pill label={lesson.level} />
+
+                {/* Duration (Clock icon + text with 45% opacity) */}
+                <div className="flex items-center gap-1 text-[12px] text-[#2B2B2F] opacity-45">
+                    <ClockIcon />
+                    <span>{lesson.duration} min</span>
                 </div>
-                <span className="text-[12px] text-graphite-40">{lesson.lastUpdated}</span>
+
+                {/* Last Updated (right-aligned with 40% opacity) */}
+                <div className="grow" />
+                <span className="text-[12px] text-[#2B2B2F] opacity-40 whitespace-nowrap">
+                    {lesson.lastUpdated}
+                </span>
             </div>
 
-            {/* Signal (if any) */}
+            {/* Optional Signal row (y: 77px) */}
             {lesson.signal && (
-                <div className={`flex items-center gap-1.5 mt-2.5 text-[12.5px] font-medium ${
-                    lesson.signal.type === 'warning' ? 'text-[#D97706]' : 'text-[#16A34A]'
-                }`}>
-                    <span className={`w-[7px] h-[7px] rounded-full inline-block ${
-                        lesson.signal.type === 'warning' ? 'bg-[#D97706]' : 'bg-[#16A34A]'
-                    }`} />
-                    {lesson.signal.text}
+                <div className="absolute left-4.25 top-19.25 w-176.5 h-4 flex items-center gap-2">
+                    <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${
+                            lesson.signal.type === 'warning' ? 'bg-[#C47D0E]' : 'bg-[#7AB87A]'
+                        }`}
+                    />
+                    <span
+                        className={`text-[12px] font-normal ${
+                            lesson.signal.type === 'warning' ? 'text-[#C47D0E]' : 'text-[#7AB87A]'
+                        }`}
+                    >
+                        {lesson.signal.text}
+                    </span>
                 </div>
             )}
         </div>
@@ -288,19 +400,19 @@ function LessonRow({ lesson, onClick }: { lesson: Lesson; onClick: () => void })
 
 function StatusBadge({ status }: { status: LessonStatus }) {
     const styles = status === 'Published'
-        ? 'bg-[#E8F5E9] text-[#2E7D32]'
-        : 'bg-[#F0F0F0] text-[#6B6B70]';
+        ? 'bg-[rgba(122,184,122,0.25)] text-[#7AB87A]'
+        : 'bg-[rgba(154,156,203,0.2)] text-[#3B3F6E]';
 
     return (
-        <span className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold ${styles}`}>
+        <span className={`w-[71.55px] h-6 flex items-center justify-center rounded-lg text-[12px] font-semibold ${styles}`}>
             {status}
         </span>
     );
 }
 
-function Tag({ label }: { label: string }) {
+function Pill({ label }: { label: string }) {
     return (
-        <span className="px-2.5 py-1 bg-[#F0EDE8] text-[#4A4A4A] text-[11.5px] font-medium rounded-md">
+        <span className="px-2 h-6 flex items-center bg-[rgba(154,156,203,0.15)] text-[#3B3F6E] text-[12px] font-normal rounded-lg whitespace-nowrap">
             {label}
         </span>
     );
@@ -336,13 +448,13 @@ function FilterSheet({
             />
 
             {/* Sheet */}
-            <div className="relative w-full max-w-[700px] bg-[#F7F1E6] rounded-t-3xl px-8 pt-4 pb-8 animate-slide-up">
+            <div className="relative w-full max-w-175 bg-[#F7F1E6] rounded-t-3xl px-8 pt-4 pb-8 animate-slide-up">
                 {/* Drag handle */}
                 <div className="flex justify-center mb-5">
                     <div className="w-10 h-1 rounded-full bg-graphite-40/40" />
                 </div>
 
-                <h3 className="text-[17px] font-semibold text-[#3B3F6E] mb-6">Filter lessons</h3>
+                <h3 className="text-17px font-semibold text-[#3B3F6E] mb-6">Filter lessons</h3>
 
                 {/* Subject */}
                 <div className="mb-6">
@@ -397,6 +509,41 @@ function FilterSheet({
                 >
                     Clear all
                 </button>
+            </div>
+        </div>
+    );
+}
+
+function LessonActionSheet({
+    lesson,
+    onView,
+    onEdit,
+    onDuplicate,
+    onArchive,
+    onClose,
+}: {
+    lesson: Lesson;
+    onView: () => void;
+    onEdit: () => void;
+    onDuplicate: () => void;
+    onArchive: () => void;
+    onClose: () => void;
+}) {
+    return (
+        <div className="fixed inset-0 z-60 flex items-end justify-center">
+            <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+            <div className="relative w-full max-w-175 bg-[#F7F1E6] rounded-t-3xl px-8 pt-4 pb-8">
+                <div className="flex justify-center mb-5">
+                    <div className="w-10 h-1 rounded-full bg-graphite-40/40" />
+                </div>
+                <h3 className="text-17px font-semibold text-[#3B3F6E] mb-2">Lesson actions</h3>
+                <p className="text-[13px] text-graphite-60 mb-6">{lesson.title}</p>
+                <div className="grid gap-3">
+                    <button onClick={onView} className="w-full h-12 rounded-2xl bg-[#3B3F6E] text-white font-semibold text-[14px]">View</button>
+                    <button onClick={onEdit} className="w-full h-12 rounded-2xl border border-[#3B3F6E] text-[#3B3F6E] font-semibold text-[14px]">Edit</button>
+                    <button onClick={onDuplicate} className="w-full h-12 rounded-2xl border border-[#E0D9CE] bg-white text-[#2B2B2F] font-semibold text-[14px]">Duplicate</button>
+                    <button onClick={onArchive} className="w-full h-12 rounded-2xl border border-[#E0D9CE] bg-white text-[#2B2B2F] font-semibold text-[14px]">Archive</button>
+                </div>
             </div>
         </div>
     );

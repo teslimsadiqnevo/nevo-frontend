@@ -16,14 +16,16 @@ export async function POST(req: Request) {
       return NextResponse.json({ detail: "Unauthorized" }, { status: 401 });
     }
 
-    const formData = await req.formData();
+    // Read JSON body instead of FormData
+    const body = await req.json();
 
     const backendRes = await fetch(`${API_BASE_URL}/lessons`, {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${accessToken}`,
       },
-      body: formData,
+      body: JSON.stringify(body),
     });
 
     const data = await backendRes.json().catch(() => ({}));

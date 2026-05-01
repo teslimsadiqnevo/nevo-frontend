@@ -136,17 +136,28 @@ export function StudentsView() {
                 <StudentsSkeleton />
             ) : students.length === 0 ? (
                 <div className="min-h-[68vh] flex flex-col items-center justify-center">
-                    <div className="w-[160px] h-[128px] rounded-2xl bg-[#DFDCDA] flex items-center justify-center mb-4">
-                        <svg width="72" height="72" viewBox="0 0 72 72" fill="none" stroke="#3b3f6e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="36" cy="18" r="10" />
-                            <path d="M36 28V46" />
-                            <path d="M28 36L36 44L44 36" />
-                            <circle cx="14" cy="47" r="7" />
-                            <circle cx="58" cy="47" r="7" />
-                            <path d="M14 54V62" />
-                            <path d="M58 54V62" />
-                        </svg>
-                    </div>
+                    <svg width="200" height="160" viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-4">
+                        <path d="M0 16C0 7.16345 7.16344 0 16 0H184C192.837 0 200 7.16344 200 16V144C200 152.837 192.837 160 184 160H16C7.16344 160 0 152.837 0 144V16Z" fill="#9A9CCB" fillOpacity="0.15" />
+                        <g clipPath="url(#students-empty-clip)">
+                            <path d="M100 67C106.627 67 112 61.6274 112 55C112 48.3726 106.627 43 100 43C93.3726 43 88 48.3726 88 55C88 61.6274 93.3726 67 100 67Z" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M100 67V90" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M100 75L85 65" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M100 75L115 65" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M100 90L90 110" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M100 90L110 110" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M60 113C64.4183 113 68 109.418 68 105C68 100.582 64.4183 97 60 97C55.5817 97 52 100.582 52 105C52 109.418 55.5817 113 60 113Z" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M60 113V125" stroke="#3B3F6E" strokeWidth="1.5" />
+                            <path d="M140 113C144.418 113 148 109.418 148 105C148 100.582 144.418 97 140 97C135.582 97 132 100.582 132 105C132 109.418 135.582 113 140 113Z" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M140 113V125" stroke="#3B3F6E" strokeWidth="1.5" />
+                            <path d="M75 121C78.3137 121 81 118.314 81 115C81 111.686 78.3137 109 75 109C71.6863 109 69 111.686 69 115C69 118.314 71.6863 121 75 121Z" stroke="#3B3F6E" strokeWidth="2" />
+                            <path d="M75 121V130" stroke="#3B3F6E" strokeWidth="1.5" />
+                        </g>
+                        <defs>
+                            <clipPath id="students-empty-clip">
+                                <rect width="160" height="120" fill="white" transform="translate(20 20)" />
+                            </clipPath>
+                        </defs>
+                    </svg>
                     <p className="text-sm text-graphite-40 mb-5">No students connected yet.</p>
                     <button
                         onClick={async () => {

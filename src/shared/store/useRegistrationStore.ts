@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
+export type LearningMode = 'visual' | 'audio' | 'action' | 'reading';
+
 interface RegistrationState {
     firstName: string;
     age: string;
@@ -11,6 +13,7 @@ interface RegistrationState {
     token: string | null;
     nevoId: string | null;
     isAutoAdapt: boolean;
+    learningMode: LearningMode;
     setFirstName: (name: string) => void;
     setAge: (age: string) => void;
     setSchoolId: (id: string | null) => void;
@@ -20,6 +23,7 @@ interface RegistrationState {
     setToken: (token: string | null) => void;
     setNevoId: (nevoId: string | null) => void;
     setIsAutoAdapt: (val: boolean) => void;
+    setLearningMode: (mode: LearningMode) => void;
     clearRegistration: () => void;
 }
 
@@ -35,6 +39,7 @@ export const useRegistrationStore = create<RegistrationState>()(
             token: null,
             nevoId: null,
             isAutoAdapt: false,
+            learningMode: 'visual',
             setFirstName: (firstName) => set({ firstName }),
             setAge: (age) => set({ age }),
             setSchoolId: (schoolId) => set({ schoolId }),
@@ -50,6 +55,7 @@ export const useRegistrationStore = create<RegistrationState>()(
             setToken: (token) => set({ token }),
             setNevoId: (nevoId) => set({ nevoId }),
             setIsAutoAdapt: (isAutoAdapt) => set({ isAutoAdapt }),
+            setLearningMode: (learningMode) => set({ learningMode }),
             clearRegistration: () => set({
                 firstName: '',
                 age: '',
@@ -60,6 +66,7 @@ export const useRegistrationStore = create<RegistrationState>()(
                 token: null,
                 nevoId: null,
                 isAutoAdapt: false,
+                learningMode: 'visual',
             }),
         }),
         {

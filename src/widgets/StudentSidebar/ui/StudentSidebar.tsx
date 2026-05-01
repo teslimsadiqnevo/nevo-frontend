@@ -1,8 +1,13 @@
 'use client';
 
-import { Icon } from "@/shared/ui";
+import { Icon, UserAvatar } from "@/shared/ui";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+
+type SidebarUser = {
+    name?: string | null;
+    avatarUrl?: string | null;
+};
 
 const navItems = [
     { name: 'Home', view: null },
@@ -13,14 +18,15 @@ const navItems = [
     { name: 'Profile', view: 'profile' },
 ] as const;
 
-export function StudentSidebar() {
+export function StudentSidebar({ user }: { user?: SidebarUser | null } = {}) {
     const searchParams = useSearchParams();
     const currentView = searchParams.get('view') || null;
+    const displayName = user?.name?.trim() || '';
 
     return (
-        <aside className="w-[200px] min-w-[200px] bg-[#3B3F6E] flex flex-col h-full">
+        <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
             {/* Logo */}
-            <div className="px-6 pt-8 pb-6">
+            <div className="px-6 pt-6 pb-5">
                 <div className="flex items-center gap-2">
                     <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M16 4C10 4 6 8 4 12C2 16 4 22 8 26C12 30 20 30 24 26C28 22 30 16 28 12C26 8 22 4 16 4Z" stroke="white" strokeWidth="2" fill="none"/>
@@ -31,7 +37,7 @@ export function StudentSidebar() {
             </div>
 
             {/* Navigation */}
-            <nav className="flex flex-col gap-1 px-3 flex-1">
+            <nav className="flex flex-col gap-1 px-0 flex-1">
                 {navItems.map((item) => {
                     const isActive = item.view === currentView;
                     const role = searchParams.get('role');
@@ -43,22 +49,23 @@ export function StudentSidebar() {
                         <Link
                             key={item.name}
                             href={href}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[13px] ${
+                            className={`relative flex items-center gap-3 px-6 py-3.5 transition-all text-[14px] ${
                                 isActive
-                                    ? 'bg-white/15 text-white font-semibold'
-                                    : 'text-white/70 font-medium hover:bg-white/8 hover:text-white/90'
+                                    ? 'bg-[#4A5080] text-[#F7F1E6] font-medium'
+                                    : 'text-white/60 font-medium hover:bg-white/8 hover:text-white/90'
                             }`}
                         >
                             <StudentSidebarIcon name={item.name} active={isActive} />
                             <span>{item.name}</span>
+                            {isActive && <span className="absolute left-0 top-0 h-full w-[3px] bg-[#F7F1E6]" />}
                         </Link>
                     );
                 })}
             </nav>
 
             {/* Ask Nevo Button */}
-            <div className="px-4 pb-6">
-                <button className="flex justify-center items-center gap-2 w-full bg-white/15 text-white py-[12px] rounded-[20px] font-semibold text-[13px] hover:bg-white/20 transition-colors cursor-pointer backdrop-blur-sm">
+            <div className="px-4 pb-6 pt-2">
+                <button className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm">
                     <Icon type="galaxy" width={16} height={16} className="invert brightness-200" />
                     <span>Ask Nevo</span>
                 </button>
