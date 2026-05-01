@@ -5,9 +5,10 @@ import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 
 type AskNevoButtonProps = {
     context?: string | null;
+    lessonId?: string | null;
 };
 
-export function AskNevoButton({ context }: AskNevoButtonProps) {
+export function AskNevoButton({ context, lessonId }: AskNevoButtonProps) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -20,7 +21,12 @@ export function AskNevoButton({ context }: AskNevoButtonProps) {
                 <span className="text-[16px] leading-none">+</span>
                 <span>Ask Nevo</span>
             </button>
-            <AskNevoDrawer open={open} onClose={() => setOpen(false)} context={context} />
+            <AskNevoDrawer
+                open={open}
+                onClose={() => setOpen(false)}
+                context={context}
+                lessonId={lessonId}
+            />
         </>
     );
 }
