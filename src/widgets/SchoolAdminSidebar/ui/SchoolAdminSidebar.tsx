@@ -1,7 +1,10 @@
 'use client';
 
 import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { getSchoolSettings } from "@/features/Dashboard/api/school";
+import { getInitials } from "@/shared/lib";
 
 const navItems = [
     { name: 'Overview', view: null },
@@ -15,10 +18,38 @@ const navItems = [
 export function SchoolAdminSidebar({ user }: { user?: any }) {
     const searchParams = useSearchParams();
     const currentView = searchParams?.get('view') || null;
+    const [schoolName, setSchoolName] = useState('Your School');
+
+    useEffect(() => {
+        let mounted = true;
+        void (async () => {
+            const res = await getSchoolSettings();
+            if (!mounted) return;
+            const data = 'data' in res ? res.data : null;
+            if (data?.school_name) {
+                setSchoolName(data.school_name);
+            }
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const adminName = useMemo(() => {
+        return user?.name || user?.full_name || user?.email || 'School Admin';
+    }, [user]);
+
+    const buildHref = (view: string | null) => {
+        const params = new URLSearchParams();
+        const role = searchParams?.get('role');
+        if (role) params.set('role', role);
+        if (view) params.set('view', view);
+        const query = params.toString();
+        return query ? `/dashboard?${query}` : '/dashboard';
+    };
 
     return (
-        <aside className="w-[200px] min-w-[200px] bg-[#FDFBF9] border-r border-[#E9E7E2] flex flex-col h-full">
-            {/* Logo and School Name */}
+        <aside className="w-[220px] min-w-[220px] bg-[#FDFBF9] border-r border-[#E9E7E2] flex flex-col h-full">
             <div className="px-6 pt-8 pb-6">
                 <div className="flex items-center gap-2 mb-4">
                     <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -27,24 +58,18 @@ export function SchoolAdminSidebar({ user }: { user?: any }) {
                     </svg>
                     <span className="text-[#3B3F6E] text-lg font-bold tracking-tight">Nevo</span>
                 </div>
-                <div className="text-[13px] font-medium text-[#3B3F6E] leading-snug">
-                    Lagos International<br />Academy
+                <div className="text-[13px] font-medium text-[#3B3F6E] leading-snug break-words">
+                    {schoolName}
                 </div>
             </div>
 
-            {/* Navigation */}
             <nav className="flex flex-col gap-1 px-3 flex-1 mt-4">
                 {navItems.map((item) => {
-                    const isActive = item.view === currentView;
-                    const role = searchParams?.get('role');
-                    const params = new URLSearchParams();
-                    if (role) params.set('role', role);
-                    if (item.view) params.set('view', item.view);
-                    const href = params.toString() ? `/dashboard?${params.toString()}` : '/dashboard';
+                    const isActive = item.view === currentView || (!item.view && !currentView);
                     return (
                         <Link
                             key={item.name}
-                            href={href}
+                            href={buildHref(item.view)}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[13px] ${
                                 isActive
                                     ? 'bg-[#EAE8F2] text-[#3B3F6E] font-semibold'
@@ -58,21 +83,13 @@ export function SchoolAdminSidebar({ user }: { user?: any }) {
                 })}
             </nav>
 
-            {/* User Profile */}
-            <div className="border-t border-[#E9E7E2] px-4 py-4 flex items-center justify-between">
-                <div className="flex items-center gap-3 w-full cursor-pointer group">
-                    <div className="w-[30px] h-[30px] rounded-full bg-[#EAE8F2] flex items-center justify-center text-[#3B3F6E] text-[11px] font-bold shrink-0 transition-colors group-hover:bg-[#DFDCEB] uppercase">
-                        {user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2) : 'AD'}
-                    </div>
-                    <span className="text-[#3B3F6E] text-[12.5px] font-medium truncate flex-1">
-                        {user?.name || 'Adebayo Okonkwo'}
-                    </span>
-                    <button className="text-graphite-40 cursor-pointer hover:text-[#3B3F6E] transition-colors shrink-0">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                            <path d="M12 15a3 3 0 100-6 3 3 0 000 6z" strokeLinecap="round" strokeLinejoin="round"/>
-                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                    </button>
+            <div className="border-t border-[#E9E7E2] px-4 py-4 flex items-center gap-3">
+                <div className="w-[34px] h-[34px] rounded-full bg-[#EAE8F2] flex items-center justify-center text-[#3B3F6E] text-[12px] font-bold shrink-0 uppercase">
+                    {getInitials(adminName)}
+                </div>
+                <div className="min-w-0">
+                    <p className="text-[#3B3F6E] text-[12.5px] font-medium truncate">{adminName}</p>
+                    <p className="text-graphite-40 text-[11px] truncate">{user?.email || 'School admin'}</p>
                 </div>
             </div>
         </aside>

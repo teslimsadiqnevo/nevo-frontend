@@ -1,172 +1,278 @@
 'use client';
 
-import { useState } from 'react';
-
-const LESSON_COMPLETION = [
-    { cls: 'JSS 1A', completed: 16, total: 20 },
-    { cls: 'JSS 1B', completed: 14, total: 20 },
-    { cls: 'JSS 2A', completed: 18, total: 20 },
-    { cls: 'JSS 2B', completed: 12, total: 20 },
-    { cls: 'JSS 3A', completed: 19, total: 20 },
-    { cls: 'JSS 3B', completed: 15, total: 20 },
-];
-
-const TEACHER_ACTIVITY = [
-    { name: 'Chioma Okafor', uploaded: 3, assigned: 8, lastActive: '2 hours ago' },
-    { name: 'Ibrahim Musa', uploaded: 5, assigned: 12, lastActive: 'Today' },
-    { name: 'Ngozi Eze', uploaded: 2, assigned: 5, lastActive: 'Yesterday' },
-    { name: 'Tunde Balogun', uploaded: 4, assigned: 10, lastActive: '3 days ago' },
-    { name: 'Fatima Hassan', uploaded: 6, assigned: 15, lastActive: 'Today' },
-];
-
-const CURRICULUM_COVERAGE = [
-    { subject: 'Mathematics', lessons: 12, pct: 85 },
-    { subject: 'English Language', lessons: 15, pct: 92 },
-    { subject: 'Basic Science', lessons: 10, pct: 70 },
-    { subject: 'Social Studies', lessons: 11, pct: 78 },
-    { subject: 'Computer Studies', lessons: 8, pct: 55 },
-    { subject: 'Yoruba Language', lessons: 9, pct: 62 },
-];
+import { useEffect, useMemo, useState } from 'react';
+import { getSchoolBoardSharePreview, getSchoolTermSummary } from '../api/school';
 
 export function ReportsView() {
-    const [hasData, setHasData] = useState(true);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [termSummary, setTermSummary] = useState<any | null>(null);
+    const [boardPreview, setBoardPreview] = useState<any | null>(null);
 
-    return (
-        <>
-            <div className="w-full flex flex-col gap-6">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-[22px] font-bold text-[#3B3F6E] tracking-tight">Reports</h1>
-                    <div className="flex items-center gap-3">
-                        <button className="flex items-center gap-2 px-4 py-[10px] border border-[#E9E7E2] rounded-lg text-[13px] font-medium text-[#3B3F6E] bg-white hover:bg-black/5 transition-colors cursor-pointer">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <rect x="2" y="2" width="12" height="12" rx="2" />
-                                <line x1="2" y1="6" x2="14" y2="6" />
-                                <line x1="6" y1="2" x2="6" y2="6" />
-                            </svg>
-                            This month
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                                <path d="M3 4.5L6 7.5L9 4.5" />
-                            </svg>
-                        </button>
-                        <button className="flex items-center gap-2 px-4 py-[10px] border border-[#E9E7E2] rounded-lg text-[13px] font-medium text-graphite-40 bg-white hover:bg-black/5 transition-colors cursor-pointer">
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M4 2v12M12 2v12M2 8h12" />
-                                <rect x="2" y="4" width="12" height="8" rx="1" />
-                            </svg>
-                            Export PDF
-                        </button>
+    useEffect(() => {
+        let mounted = true;
+
+        void (async () => {
+            const [termRes, previewRes] = await Promise.all([
+                getSchoolTermSummary(),
+                getSchoolBoardSharePreview(),
+            ]);
+
+            if (!mounted) return;
+
+            const nextError =
+                ('error' in termRes && termRes.error) ||
+                ('error' in previewRes && previewRes.error) ||
+                null;
+
+            if (nextError) {
+                setError(nextError);
+                setLoading(false);
+                return;
+            }
+
+            setTermSummary('data' in termRes ? termRes.data : null);
+            setBoardPreview('data' in previewRes ? previewRes.data : null);
+            setLoading(false);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const subjectBreakdown = useMemo(
+        () => (Array.isArray(termSummary?.subject_breakdown) ? termSummary.subject_breakdown : []),
+        [termSummary],
+    );
+
+    const teacherAvatars = useMemo(
+        () => (Array.isArray(termSummary?.teacher_avatars) ? termSummary.teacher_avatars : []),
+        [termSummary],
+    );
+
+    if (loading) {
+        return (
+            <div className="min-h-[70vh] flex items-center justify-center text-[14px] text-graphite-60">
+                Loading reports...
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="rounded-2xl border border-[#E0D9CE] bg-white px-6 py-8 text-center">
+                <p className="text-[16px] font-semibold text-[#3B3F6E] mb-2">Couldn’t load reports.</p>
+                <p className="text-[13px] text-graphite-60">{error}</p>
+            </div>
+        );
+    }
+
+    if (termSummary?.show_empty_state) {
+        return (
+            <div className="w-full flex flex-col items-center justify-center min-h-[70vh] text-center px-6">
+                <div className="w-[240px] h-[200px] rounded-[32px] bg-[#EAE8F2] flex items-center justify-center mb-8">
+                    <div className="w-[90px] h-[90px] rounded-full bg-white/70 flex items-center justify-center">
+                        <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="#3B3F6E" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 20V10" />
+                            <path d="M18 20V4" />
+                            <path d="M6 20V14" />
+                        </svg>
                     </div>
                 </div>
+                <h1 className="text-[28px] font-bold text-[#3B3F6E] tracking-tight mb-3">
+                    {termSummary?.empty_state?.title || 'Reports will appear once activity begins.'}
+                </h1>
+                <p className="text-[15px] text-graphite-60 max-w-[480px] mb-8">
+                    {termSummary?.empty_state?.description || 'Invite teachers and start classes to unlock reporting.'}
+                </p>
+                <div className="flex items-center gap-3">
+                    <button className="px-5 py-3 bg-[#3B3F6E] text-white rounded-xl text-[14px] font-semibold cursor-default">
+                        {termSummary?.empty_state?.primary_action_label || 'Invite teachers'}
+                    </button>
+                    <button className="px-5 py-3 border border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[14px] font-semibold cursor-default">
+                        {termSummary?.empty_state?.secondary_action_label || 'Set up classes'}
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
-                {hasData ? (
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Student engagement */}
-                        <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                            <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-6 tracking-tight">Student engagement</h2>
-                            <div className="w-full h-[180px] bg-[#FDFBF9] rounded-xl flex flex-col justify-between overflow-hidden pt-4 pb-2 relative">
-                                <div className="absolute inset-0 top-6 z-0">
-                                    <svg viewBox="0 0 1000 180" preserveAspectRatio="none" className="w-full h-full">
-                                        <path
-                                            d="M 0 140 C 100 130, 200 120, 300 110 C 400 100, 450 80, 550 75 C 650 70, 700 85, 800 70 C 850 65, 900 60, 1000 55"
-                                            stroke="#3B3F6E" strokeWidth="2.5" fill="none" strokeLinecap="round" strokeLinejoin="round"
-                                        />
-                                        <path
-                                            d="M 0 140 C 100 130, 200 120, 300 110 C 400 100, 450 80, 550 75 C 650 70, 700 85, 800 70 C 850 65, 900 60, 1000 55 L 1000 180 L 0 180 Z"
-                                            fill="#EAE8F2" fillOpacity="0.4"
-                                        />
-                                    </svg>
+    return (
+        <div className="w-full flex flex-col gap-6">
+            <div className="flex flex-col gap-1">
+                <h1 className="text-[22px] font-bold text-[#3B3F6E] tracking-tight">Reports</h1>
+                <p className="text-[13px] text-graphite-60">
+                    Term window: {formatDate(termSummary?.term_start_date)} to {formatDate(termSummary?.term_end_date)}
+                </p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+                <StatCard number={String(termSummary?.students_used_nevo_this_term ?? 0)} label="Students used Nevo this term" />
+                <StatCard number={String(termSummary?.concepts_covered_this_term ?? 0)} label="Concepts covered this term" />
+                <StatCard number={String(termSummary?.teachers_uploaded_this_term ?? 0)} label="Teachers uploaded this term" />
+                <StatCard number={String(termSummary?.active_weeks ?? 0)} label="Active weeks in this term" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                    <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-5 tracking-tight">Subject coverage</h2>
+                    <div className="flex flex-col gap-4">
+                        {subjectBreakdown.map((subject: any) => (
+                            <div key={subject.subject_name} className="flex items-center gap-3">
+                                <span className="text-[12px] font-medium text-[#3B3F6E] w-[140px] shrink-0">{subject.subject_name}</span>
+                                <div className="flex-1 h-[8px] bg-[#EAE8F2] rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-[#3B3F6E] rounded-full"
+                                        style={{ width: `${Math.min(Number(subject.progress_percentage || 0), 100)}%` }}
+                                    />
                                 </div>
-                                <div className="flex-1" />
-                                <div className="flex justify-between px-4 text-[11px] text-[#A29ECA] font-medium z-10">
-                                    <span>Jan 6</span>
-                                    <span>Jan 11</span>
-                                    <span>Jan 16</span>
-                                    <span>Jan 21</span>
-                                    <span>Jan 26</span>
-                                    <span>Jan 31</span>
-                                </div>
-                            </div>
-                            <p className="text-[11px] text-[#A29ECA] font-medium mt-3">Daily active learners.</p>
-                        </div>
-
-                        {/* Lesson completion */}
-                        <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                            <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-5 tracking-tight">Lesson completion</h2>
-                            <div className="flex flex-col gap-4">
-                                {LESSON_COMPLETION.map(item => (
-                                    <div key={item.cls} className="flex items-center gap-3">
-                                        <span className="text-[12px] font-semibold text-[#3B3F6E] w-[50px] shrink-0">{item.cls}</span>
-                                        <div className="flex-1 h-[8px] bg-[#EAE8F2] rounded-full overflow-hidden">
-                                            <div className="h-full bg-[#3B3F6E] rounded-full" style={{ width: `${(item.completed / item.total) * 100}%` }} />
-                                        </div>
-                                        <span className="text-[11px] text-graphite-40 shrink-0 w-[140px]">{item.completed} of {item.total} lessons completed</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-
-                        {/* Teacher activity */}
-                        <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                            <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-5 tracking-tight">Teacher activity</h2>
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="text-[11px] text-graphite-40 font-medium">
-                                        <td className="pb-3">Teacher</td>
-                                        <td className="pb-3">Uploaded</td>
-                                        <td className="pb-3">Assigned</td>
-                                        <td className="pb-3">Last active</td>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {TEACHER_ACTIVITY.map(t => (
-                                        <tr key={t.name} className="border-t border-[#F0EDE6]">
-                                            <td className="py-3 text-[13px] font-medium text-[#3B3F6E]">{t.name}</td>
-                                            <td className="py-3 text-[13px] text-[#3B3F6E]">{t.uploaded}</td>
-                                            <td className="py-3 text-[13px] text-[#3B3F6E]">{t.assigned}</td>
-                                            <td className="py-3 text-[12px] text-graphite-40">{t.lastActive}</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        {/* Curriculum coverage */}
-                        <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
-                            <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-5 tracking-tight">Curriculum coverage</h2>
-                            <div className="flex flex-col gap-4">
-                                {CURRICULUM_COVERAGE.map(item => (
-                                    <div key={item.subject} className="flex items-center gap-3">
-                                        <span className="text-[12px] font-medium text-[#3B3F6E] w-[120px] shrink-0">{item.subject}</span>
-                                        <div className="flex-1 h-[8px] bg-[#EAE8F2] rounded-full overflow-hidden">
-                                            <div className="h-full bg-[#3B3F6E] rounded-full" style={{ width: `${item.pct}%` }} />
-                                        </div>
-                                        <span className="text-[11px] text-graphite-40 shrink-0 px-2 py-[2px] bg-[#EAE8F2] rounded-full">{item.lessons} active lessons</span>
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                        {['Student engagement', 'Lesson completion', 'Teacher activity', 'Curriculum coverage'].map(title => (
-                            <div key={title} className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)] min-h-[240px] flex flex-col">
-                                <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-4 tracking-tight">{title}</h2>
-                                <div className="flex-1 flex flex-col items-center justify-center">
-                                    <div className="w-[48px] h-[40px] bg-[#EAE8F2] rounded-lg mb-3" />
-                                    <p className="text-[13px] text-graphite-40">No data for selected period.</p>
-                                </div>
+                                <span className="text-[11px] text-graphite-40 shrink-0 w-[95px] text-right">
+                                    {subject.concept_count} concepts
+                                </span>
                             </div>
                         ))}
                     </div>
-                )}
+                </div>
+
+                <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                    <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-5 tracking-tight">Teacher upload momentum</h2>
+                    <div className="flex items-center gap-3 mb-5">
+                        <div className="flex -space-x-2">
+                            {teacherAvatars.slice(0, 4).map((teacher: any) => (
+                                <div
+                                    key={teacher.teacher_id}
+                                    className="w-10 h-10 rounded-full bg-[#EAE8F2] border-2 border-white flex items-center justify-center text-[12px] font-semibold text-[#3B3F6E]"
+                                >
+                                    {getAvatarText(teacher.teacher_name)}
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-[13px] text-graphite-60">
+                            {termSummary?.teachers_uploaded_this_term ?? 0} teachers uploaded this term
+                            {Number(termSummary?.additional_teacher_count || 0) > 0
+                                ? ` • +${termSummary.additional_teacher_count} more`
+                                : ''}
+                        </div>
+                    </div>
+                    <div className="rounded-xl bg-[#F7F1E6] px-4 py-4">
+                        <p className="text-[13px] text-[#3B3F6E] font-medium">
+                            {termSummary?.enrolled_students ?? 0} enrolled students across {termSummary?.total_classes ?? 0} classes.
+                        </p>
+                    </div>
+                </div>
             </div>
 
-            <button
-                onClick={() => setHasData(!hasData)}
-                className="fixed bottom-6 right-6 px-4 py-2 bg-white text-[#3B3F6E] rounded-full text-[11px] font-bold shadow-[0_4px_12px_rgba(0,0,0,0.1)] z-50 border border-[#E9E7E2] hover:bg-gray-50 transition-colors cursor-pointer"
-            >
-                Toggle Empty/Populated
-            </button>
-        </>
+            <div className="grid grid-cols-2 gap-4">
+                <InsightPanel
+                    title="What’s working well"
+                    items={Array.isArray(termSummary?.whats_working_well) ? termSummary.whats_working_well : []}
+                    tone="success"
+                />
+                <InsightPanel
+                    title="Where support is needed"
+                    items={Array.isArray(termSummary?.where_support_is_needed) ? termSummary.where_support_is_needed : []}
+                    tone="warning"
+                />
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+                <div className="flex items-start justify-between gap-6 mb-4">
+                    <div>
+                        <h2 className="text-[14px] font-bold text-[#3B3F6E] tracking-tight">
+                            {boardPreview?.title || 'Board share preview'}
+                        </h2>
+                        <p className="text-[12px] text-graphite-40 mt-1">
+                            Generated {formatDateTime(boardPreview?.generated_at)}
+                        </p>
+                    </div>
+                    <div className="px-3 py-1 rounded-full bg-[#EAE8F2] text-[11px] font-semibold text-[#3B3F6E]">
+                        Preview
+                    </div>
+                </div>
+                <p className="text-[14px] text-[#2B2B2F] leading-6 mb-5">
+                    {boardPreview?.summary || 'No board summary available yet.'}
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <h3 className="text-[12px] font-semibold text-[#3B3F6E] mb-3">Highlights</h3>
+                        <div className="flex flex-col gap-2">
+                            {(Array.isArray(boardPreview?.highlights) ? boardPreview.highlights : []).map((item: string) => (
+                                <div key={item} className="flex items-start gap-2 text-[13px] text-graphite-60">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-[#3B3F6E] mt-2 shrink-0" />
+                                    <span>{item}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="rounded-xl bg-[#F7F1E6] px-4 py-4">
+                        <h3 className="text-[12px] font-semibold text-[#3B3F6E] mb-2">Suggested call to action</h3>
+                        <p className="text-[13px] text-graphite-60">{boardPreview?.call_to_action || 'No call to action yet.'}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
     );
+}
+
+function StatCard({ number, label }: { number: string; label: string }) {
+    return (
+        <div className="bg-white rounded-2xl px-6 py-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)] flex flex-col gap-1">
+            <span className="text-[32px] font-bold text-[#3B3F6E] tracking-tight">{number}</span>
+            <span className="text-[13px] text-graphite-60 font-medium leading-snug">{label}</span>
+        </div>
+    );
+}
+
+function InsightPanel({
+    title,
+    items,
+    tone,
+}: {
+    title: string;
+    items: string[];
+    tone: 'success' | 'warning';
+}) {
+    return (
+        <div className="bg-white rounded-2xl p-6 border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.02)]">
+            <h2 className="text-[14px] font-bold text-[#3B3F6E] mb-5 tracking-tight">{title}</h2>
+            <div className="flex flex-col gap-3">
+                {items.map((item) => (
+                    <div key={item} className="flex items-start gap-3">
+                        <span className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${tone === 'success' ? 'bg-[#7AB87A]' : 'bg-[#E8A84A]'}`} />
+                        <span className="text-[13px] text-graphite-60">{item}</span>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function getAvatarText(name: string) {
+    return name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase() || '')
+        .join('') || 'T';
+}
+
+function formatDate(value?: string) {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(value?: string) {
+    if (!value) return 'recently';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('en-NG', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+    });
 }
