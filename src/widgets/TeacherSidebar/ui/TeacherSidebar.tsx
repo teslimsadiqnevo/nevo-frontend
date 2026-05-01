@@ -99,7 +99,7 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
                 </Link>
             </div>
 
-            <AskNevoDrawer open={showAskNevo} onClose={() => setShowAskNevo(false)} />
+            <AskNevoDrawer open={showAskNevo} onClose={() => setShowAskNevo(false)} leftInset={200} />
         </aside>
     );
 }

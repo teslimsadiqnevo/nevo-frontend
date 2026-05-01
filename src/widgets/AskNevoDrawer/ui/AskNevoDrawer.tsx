@@ -8,9 +8,10 @@ type AskNevoDrawerProps = {
     open: boolean;
     onClose: () => void;
     context?: string | null;
+    leftInset?: number;
 };
 
-export function AskNevoDrawer({ open, onClose, context }: AskNevoDrawerProps) {
+export function AskNevoDrawer({ open, onClose, context, leftInset = 0 }: AskNevoDrawerProps) {
     const [value, setValue] = useState('');
 
     useEffect(() => {
@@ -36,12 +37,14 @@ export function AskNevoDrawer({ open, onClose, context }: AskNevoDrawerProps) {
                 className="absolute inset-0 bg-graphite/35 animate-fade-in"
                 onClick={onClose}
                 aria-hidden
+                style={{ left: leftInset }}
             />
 
             <div
                 role="dialog"
                 aria-modal="true"
                 className="absolute left-0 right-0 bottom-0 h-[55vh] bg-parchment rounded-t-[20px] flex flex-col animate-slide-up shadow-[0_-12px_32px_rgba(0,0,0,0.18)]"
+                style={{ left: leftInset }}
             >
                 <div className="flex justify-center pt-[10px] pb-1">
                     <div className="w-10 h-1 rounded-full bg-[#C8C1B4]" />
