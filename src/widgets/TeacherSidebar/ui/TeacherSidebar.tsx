@@ -38,7 +38,7 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
     return (
         <aside className="w-[200px] min-w-[200px] bg-[#3B3F6E] flex flex-col h-full">
             <div className="px-6 pt-8 pb-6">
-                <NevoLogo className="h-8 w-auto" width={172} height={32} />
+                <NevoLogo className="h-8 w-auto" width={172} height={32} variant="light" />
             </div>
 
             <nav className="flex flex-col gap-1 px-3 flex-1">

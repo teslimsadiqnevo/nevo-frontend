@@ -363,10 +363,17 @@ function DashboardEmptyState({
 function DashboardEmptyIcon({ variant }: { variant: 'book' | 'lightbulb' }) {
     if (variant === 'book') {
         return (
-            <div className="w-20 h-20 bg-[#9A9CCB]/30 rounded-[12px] flex items-center justify-center mb-4 border-[2.5px] border-[#9A9CCB]">
-                <svg width="40" height="40" viewBox="0 0 80 96" fill="none" className="scale-[0.85]" aria-hidden="true">
-                    <path d="M0 12C0 5.37258 5.37258 0 12 0H68C74.6274 0 80 5.37258 80 12V68C80 74.6274 74.6274 80 68 80H12C5.37258 80 0 74.6274 0 68V12Z" fill="#9A9CCB" fillOpacity="0.3" />
-                    <path d="M40 32.5C41.25 27.5656 45.9711 25.0461 56.25 25C56.4143 24.9994 56.5772 25.0313 56.7291 25.0939C56.881 25.1565 57.0191 25.2485 57.1353 25.3647C57.2515 25.4809 57.3435 25.619 57.4061 25.7709C57.4687 25.9229 57.5006 26.0857 57.5 26.25V48.75C57.5 49.0815 57.3683 49.3995 57.1339 49.6339C56.8995 49.8683 56.5815 50 56.25 50C46.25 50 42.3867 52.0164 40 55M40 32.5C38.75 27.5656 34.0289 25.0461 23.75 25C23.5857 24.9994 23.4229 25.0313 23.2709 25.0939C23.119 25.1565 22.9809 25.2485 22.8647 25.3647C22.7485 25.4809 22.6565 25.619 22.5939 25.7709C22.5313 25.9229 22.4994 26.0857 22.5 26.25V48.5992C22.5 49.3711 22.9781 50 23.75 50C33.75 50 37.6274 52.0313 40 55M40 32.5V55" stroke="#9A9CCB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            <div className="mb-4">
+                <svg width="80" height="80" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+                    <path d="M0 12C0 5.37258 5.37258 0 12 0H68C74.6274 0 80 5.37258 80 12V68C80 74.6274 74.6274 80 68 80H12C5.37258 80 0 74.6274 0 68V12Z" fill="#9A9CCB" fillOpacity="0.3"/>
+                    <g clipPath="url(#clip0_student_dashboard_empty_main)">
+                        <path d="M40 32.5C41.25 27.5656 45.9711 25.0461 56.25 25C56.4143 24.9994 56.5772 25.0313 56.7291 25.0939C56.881 25.1565 57.0191 25.2485 57.1353 25.3647C57.2515 25.4809 57.3435 25.619 57.4061 25.7709C57.4687 25.9229 57.5006 26.0857 57.5 26.25V48.75C57.5 49.0815 57.3683 49.3995 57.1339 49.6339C56.8995 49.8683 56.5815 50 56.25 50C46.25 50 42.3867 52.0164 40 55M40 32.5C38.75 27.5656 34.0289 25.0461 23.75 25C23.5857 24.9994 23.4229 25.0313 23.2709 25.0939C23.119 25.1565 22.9809 25.2485 22.8647 25.3647C22.7485 25.4809 22.6565 25.619 22.5939 25.7709C22.5313 25.9229 22.4994 26.0857 22.5 26.25V48.5992C22.5 49.3711 22.9781 50 23.75 50C33.75 50 37.6274 52.0313 40 55M40 32.5V55" stroke="#9A9CCB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </g>
+                    <defs>
+                        <clipPath id="clip0_student_dashboard_empty_main">
+                            <rect width="40" height="40" fill="white" transform="translate(20 20)"/>
+                        </clipPath>
+                    </defs>
                 </svg>
             </div>
         );
@@ -578,11 +585,17 @@ function StudentLessonsEmptyState({
     return (
         <div className={`w-full rounded-[16px] border border-black/5 bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${className} flex flex-col items-center justify-center`}> 
             {variant === 'book' ? (
-                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-xl border-[2.5px] border-[#9A9CCB] bg-[#9A9CCB]/30">
-                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
-                        <path d="M20 8C15.5817 8 12 11.5817 12 16V28C12 29.1046 12.8954 30 14 30H20" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M20 8C24.4183 8 28 11.5817 28 16V28C28 29.1046 27.1046 30 26 30H20" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d="M20 8V30" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" />
+                <div className="mb-4">
+                    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" aria-hidden="true">
+                        <path d="M0 12C0 5.37258 5.37258 0 12 0H68C74.6274 0 80 5.37258 80 12V68C80 74.6274 74.6274 80 68 80H12C5.37258 80 0 74.6274 0 68V12Z" fill="#9A9CCB" fillOpacity="0.3"/>
+                        <g clipPath="url(#clip0_student_dashboard_empty_lessons)">
+                            <path d="M40 32.5C41.25 27.5656 45.9711 25.0461 56.25 25C56.4143 24.9994 56.5772 25.0313 56.7291 25.0939C56.881 25.1565 57.0191 25.2485 57.1353 25.3647C57.2515 25.4809 57.3435 25.619 57.4061 25.7709C57.4687 25.9229 57.5006 26.0857 57.5 26.25V48.75C57.5 49.0815 57.3683 49.3995 57.1339 49.6339C56.8995 49.8683 56.5815 50 56.25 50C46.25 50 42.3867 52.0164 40 55M40 32.5C38.75 27.5656 34.0289 25.0461 23.75 25C23.5857 24.9994 23.4229 25.0313 23.2709 25.0939C23.119 25.1565 22.9809 25.2485 22.8647 25.3647C22.7485 25.4809 22.6565 25.619 22.5939 25.7709C22.5313 25.9229 22.4994 26.0857 22.5 26.25V48.5992C22.5 49.3711 22.9781 50 23.75 50C33.75 50 37.6274 52.0313 40 55M40 32.5V55" stroke="#9A9CCB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </g>
+                        <defs>
+                            <clipPath id="clip0_student_dashboard_empty_lessons">
+                                <rect width="40" height="40" fill="white" transform="translate(20 20)"/>
+                            </clipPath>
+                        </defs>
                     </svg>
                 </div>
             ) : (

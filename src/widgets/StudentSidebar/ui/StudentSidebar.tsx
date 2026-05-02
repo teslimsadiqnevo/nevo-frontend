@@ -21,7 +21,7 @@ export function StudentSidebar() {
     <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
       {/* Logo */}
       <div className="px-6 pt-6 pb-5">
-        <NevoLogo className="h-8 w-auto" width={172} height={32} />
+        <NevoLogo className="h-8 w-auto" width={172} height={32} variant="light" />
       </div>
 
       {/* Navigation */}
