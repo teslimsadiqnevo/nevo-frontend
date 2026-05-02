@@ -1,707 +1,754 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { getTeacherDashboard, updateStudentNote } from '../api/teacher';
+import { useEffect, useMemo, useState } from 'react';
+import {
+    getSchoolClassesOverview,
+    moveSchoolStudentToClass,
+    removeSchoolStudent,
+    resetSchoolStudentId,
+} from '../api/school';
 
-/* ─── Types ─── */
-interface LessonProgress {
-    title: string;
-    progress: number; // 0–100
-    date: string;
+interface StudentDetailViewProps {
+    studentId: number | string;
+    studentData?: any;
+    onBack: () => void;
+    onStudentUpdated?: () => Promise<void> | void;
 }
 
-interface LearningSignal {
-    type: 'warning' | 'info' | 'success';
-    text: string;
-}
-
-interface LearningProfile {
-    learningStyle: string | null;
-    focusTime: string | null;
-    challengeLevel: string | null;
-}
-
-export interface StudentDetail {
-    id: number;
-    initials: string;
-    avatarBg: string;
+interface ClassChoice {
+    id: string;
     name: string;
-    classInfo: string;
-    subject: string;
-    lastActive: string;
-    lessonsInProgress: LessonProgress[];
-    learningProfile: LearningProfile;
-    signals: LearningSignal[];
+    teacherName: string;
+    studentCount: number;
 }
 
-/* ─── Main Component ─── */
+interface LessonActivityItem {
+    title: string;
+    statusLabel: string;
+    timeLabel: string;
+    badgeClass: string;
+}
+
 export function StudentDetailView({
     studentId,
     studentData,
     onBack,
-}: {
-    studentId: number | string;
-    studentData?: any;
-    onBack: () => void;
-}) {
-    const [isLoading, setIsLoading] = useState(true);
-    const [note, setNote] = useState('');
-    const [showRecommend, setShowRecommend] = useState(false);
-    const [showFlag, setShowFlag] = useState(false);
-    const [showFlagSuccess, setShowFlagSuccess] = useState(false);
-    const [successToast, setSuccessToast] = useState<string | null>(null);
+    onStudentUpdated,
+}: StudentDetailViewProps) {
+    const [classes, setClasses] = useState<ClassChoice[]>([]);
+    const [loadingClasses, setLoadingClasses] = useState(true);
+    const [showMoveModal, setShowMoveModal] = useState(false);
+    const [showMoveSuccess, setShowMoveSuccess] = useState(false);
+    const [showRemoveModal, setShowRemoveModal] = useState(false);
+    const [toast, setToast] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
+    const [detailState, setDetailState] = useState(studentData || {});
 
-    const [recommendLessons, setRecommendLessons] = useState<{ title: string; tag: string; tagBg: string }[]>([]);
-    const name = studentData?.name || `${studentData?.first_name || ''} ${studentData?.last_name || ''}`.trim() || 'Student';
-    const initials = name
+    useEffect(() => {
+        setDetailState(studentData || {});
+    }, [studentData]);
+
+    useEffect(() => {
+        let mounted = true;
+
+        void (async () => {
+            const res = await getSchoolClassesOverview();
+
+            if (!mounted) return;
+
+            if ('data' in res && res.data) {
+                const overviewClasses = Array.isArray(res.data?.classes) ? res.data.classes : [];
+                setClasses(
+                    overviewClasses.map((classItem: any) => ({
+                        id: String(classItem.class_id),
+                        name: classItem.class_name || 'Class',
+                        teacherName: classItem.teacher_name || 'No teacher assigned',
+                        studentCount: Number(classItem.student_count || 0),
+                    })),
+                );
+            } else {
+                setClasses([]);
+            }
+
+            setLoadingClasses(false);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!toast) return;
+        const timer = setTimeout(() => setToast(null), 2200);
+        return () => clearTimeout(timer);
+    }, [toast]);
+
+    const fullName =
+        detailState?.name ||
+        [detailState?.first_name, detailState?.last_name].filter(Boolean).join(' ').trim() ||
+        'Student';
+    const firstName = fullName.split(' ')[0] || 'Student';
+    const initials = getInitials(fullName);
+    const nevoId = String(detailState?.nevo_id || detailState?.student_id || `NEVO-LAG-${String(studentId).slice(-4)}`);
+    const maskedNevoId = maskDetailNevoId(nevoId);
+    const className = detailState?.class_name || detailState?.classInfo || 'Unassigned';
+    const subjectLine = detailState?.subject
+        ? `${className} · ${detailState.subject}`
+        : className;
+    const enrolledLabel = detailState?.enrolled_at_label || detailState?.enrolled_at || '12 Jan 2026';
+    const lastActiveLabel = detailState?.last_active_label || detailState?.last_active || 'Today';
+    const currentTeacher = detailState?.teacher_name || findTeacherNameForClass(classes, detailState?.class_id, className);
+    const cameraLabel = detailState?.camera_status_label || (detailState?.camera_enabled === false ? 'Disabled' : 'Enabled');
+    const lessonActivity: LessonActivityItem[] = normalizeLessonActivity(detailState);
+    const selectedClassChoice = useMemo(
+        () => classes.find((classItem) => String(classItem.id) === String(detailState?.class_id || '')),
+        [classes, detailState?.class_id],
+    );
+
+    const handleMoveComplete = async (nextClass: ClassChoice) => {
+        setDetailState((current: any) => ({
+            ...current,
+            class_id: nextClass.id,
+            class_name: nextClass.name,
+            teacher_name: nextClass.teacherName,
+        }));
+        setShowMoveModal(false);
+        setShowMoveSuccess(true);
+        setActionError(null);
+        await onStudentUpdated?.();
+    };
+
+    const handleRemoveComplete = async () => {
+        await onStudentUpdated?.();
+        onBack();
+    };
+
+    return (
+        <>
+            <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
+                {toast ? (
+                    <div className="self-start rounded-[12px] bg-[#3B3F6E] px-4 py-3 text-[13px] font-medium text-white">
+                        {toast}
+                    </div>
+                ) : null}
+
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex items-center gap-2 self-start text-[15px] font-normal text-[#3B3F6E]"
+                >
+                    <BackIcon />
+                    Students
+                </button>
+
+                <div className="grid grid-cols-[1fr_380px] gap-6">
+                    <div className="min-w-0">
+                        <div className="flex items-start gap-4 pt-3">
+                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#3B3F6E] text-[21px] font-semibold text-[#F7F1E6]">
+                                {initials}
+                            </div>
+                            <div className="min-w-0">
+                                <h1 className="text-[20px] font-bold leading-[28px] text-[#2B2B2F]">{fullName}</h1>
+                                <div className="mt-1 flex items-center gap-2 text-[14px] text-[#2B2B2F]/55">
+                                    <span>{nevoId}</span>
+                                    <button type="button" onClick={() => void copyValue(nevoId, () => setToast('Nevo ID copied'))}>
+                                        <CopyIcon />
+                                    </button>
+                                </div>
+                                <p className="mt-1 text-[15px] text-[#2B2B2F]/60">{subjectLine}</p>
+                                <p className="mt-4 text-[14px] text-[#2B2B2F]/45">
+                                    Enrolled: {enrolledLabel}
+                                    <span className="mx-3">•</span>
+                                    Last active: {detailState?.last_active_label || 'Today'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <section className="mt-8">
+                            <h2 className="mb-4 text-[15px] font-semibold uppercase tracking-[0.02em] text-[#6F78A8]">Current class</h2>
+                            <div className="flex items-center justify-between rounded-[16px] border border-[#E0D9CE] bg-white px-5 py-5">
+                                <div>
+                                    <p className="text-[18px] font-semibold text-[#3B3F6E]">{className}</p>
+                                    <p className="mt-1 text-[15px] text-[#2B2B2F]/55">{currentTeacher || 'Teacher not assigned yet'}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMoveModal(true)}
+                                    className="text-[15px] font-medium text-[#9A9CCB]"
+                                >
+                                    Move to another class
+                                </button>
+                            </div>
+                        </section>
+
+                        <section className="mt-8">
+                            <h2 className="mb-4 text-[15px] font-semibold uppercase tracking-[0.02em] text-[#6F78A8]">Lesson activity</h2>
+                            {lessonActivity.length > 0 ? (
+                                <div className="flex flex-col gap-5">
+                                    {lessonActivity.map((lesson: LessonActivityItem) => (
+                                        <div key={`${lesson.title}-${lesson.timeLabel}`} className="grid grid-cols-[1fr_auto_auto] items-center gap-4">
+                                            <p className="text-[15px] font-medium text-[#2B2B2F]">{lesson.title}</p>
+                                            <span className={`rounded-full px-3 py-1 text-[14px] ${lesson.badgeClass}`}>
+                                                {lesson.statusLabel}
+                                            </span>
+                                            <span className="text-[14px] text-[#2B2B2F]/45">{lesson.timeLabel}</span>
+                                        </div>
+                                    ))}
+                                    <button type="button" className="mt-1 self-start text-[15px] font-medium text-[#9A9CCB]">
+                                        View all lessons
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="py-12 text-center text-[15px] text-[#2B2B2F]/45">No lesson activity yet.</div>
+                            )}
+                        </section>
+                    </div>
+
+                    <div className="flex flex-col gap-5">
+                        <div className="rounded-[16px] border border-[#E0D9CE] bg-white px-5 py-5">
+                            <h2 className="text-[15px] font-semibold uppercase tracking-[0.02em] text-[#6F78A8]">Actions</h2>
+                            <div className="mt-5 flex flex-col gap-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowMoveModal(true)}
+                                    className="flex h-[48px] items-center justify-center gap-3 rounded-[12px] border border-[#3B3F6E] text-[15px] font-medium text-[#3B3F6E]"
+                                >
+                                    <ArrowRightIcon />
+                                    Move to another class
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        setActionError(null);
+                                        const res = await resetSchoolStudentId(String(studentId));
+                                        if ('error' in res && res.error) {
+                                            setActionError(res.error);
+                                            return;
+                                        }
+                                        const nextId =
+                                            ('data' in res && (res.data as any)?.nevo_id) ||
+                                            ('data' in res && (res.data as any)?.student_id) ||
+                                            nevoId;
+                                        setDetailState((current: any) => ({ ...current, nevo_id: nextId }));
+                                        setToast('Student ID reset');
+                                        await onStudentUpdated?.();
+                                    }}
+                                    className="flex h-[48px] items-center justify-center gap-3 rounded-[12px] border border-[#3B3F6E] text-[15px] font-medium text-[#3B3F6E]"
+                                >
+                                    <ResetIcon />
+                                    Reset student ID
+                                </button>
+                                <p className="px-1 text-[14px] text-[#2B2B2F]/45">
+                                    Use this if a student has lost access to their account.
+                                </p>
+                                <div className="my-2 h-px bg-[#E0D9CE]" />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowRemoveModal(true)}
+                                    className="flex h-[48px] items-center justify-center gap-3 rounded-[12px] border border-[#E25B4B] text-[15px] font-medium text-[#D94836]"
+                                >
+                                    <WarningCircleIcon />
+                                    Remove from school
+                                </button>
+                                <p className="px-1 text-[14px] text-[#E25B4B]">This cannot be undone.</p>
+                            </div>
+                            {actionError ? <p className="mt-3 text-[13px] text-[#C0392B]">{actionError}</p> : null}
+                        </div>
+
+                        <div className="rounded-[16px] border border-[#E0D9CE] bg-white px-5 py-5">
+                            <div className="space-y-4">
+                                <InfoRow
+                                    label="Nevo ID"
+                                    value={maskedNevoId}
+                                    trailing={
+                                        <button type="button" onClick={() => void copyValue(nevoId, () => setToast('Nevo ID copied'))}>
+                                            <CopyIcon />
+                                        </button>
+                                    }
+                                />
+                                <InfoRow label="Enrolled" value={enrolledLabel} />
+                                <InfoRow label="Last active" value={lastActiveLabel} />
+                                <InfoRow
+                                    label="Camera"
+                                    value={cameraLabel}
+                                    isBadge={cameraLabel.toLowerCase() === 'enabled'}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {showMoveModal ? (
+                <MoveStudentModal
+                    studentName={fullName}
+                    currentClassId={String(detailState?.class_id || selectedClassChoice?.id || '')}
+                    currentClassName={className}
+                    currentTeacherName={currentTeacher || 'No teacher assigned'}
+                    classes={classes}
+                    loading={loadingClasses}
+                    onClose={() => setShowMoveModal(false)}
+                    onMoved={handleMoveComplete}
+                    studentId={String(studentId)}
+                />
+            ) : null}
+
+            {showMoveSuccess ? (
+                <MoveSuccessModal
+                    studentName={fullName}
+                    className={detailState?.class_name || className}
+                    onClose={() => setShowMoveSuccess(false)}
+                />
+            ) : null}
+
+            {showRemoveModal ? (
+                <RemoveStudentModal
+                    studentName={fullName}
+                    className={className}
+                    studentId={String(studentId)}
+                    firstName={firstName}
+                    onClose={() => setShowRemoveModal(false)}
+                    onRemoved={handleRemoveComplete}
+                />
+            ) : null}
+        </>
+    );
+}
+
+function MoveStudentModal({
+    studentName,
+    currentClassId,
+    currentClassName,
+    currentTeacherName,
+    classes,
+    loading,
+    onClose,
+    onMoved,
+    studentId,
+}: {
+    studentName: string;
+    currentClassId: string;
+    currentClassName: string;
+    currentTeacherName: string;
+    classes: ClassChoice[];
+    loading: boolean;
+    onClose: () => void;
+    onMoved: (nextClass: ClassChoice) => Promise<void>;
+    studentId: string;
+}) {
+    const [selectedClassId, setSelectedClassId] = useState('');
+    const [note, setNote] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const selectedClass = classes.find((classItem) => classItem.id === selectedClassId) || null;
+    const movableClasses = classes.filter((classItem) => classItem.id !== currentClassId);
+    const canSave = Boolean(selectedClassId);
+
+    return (
+        <ModalShell onClose={onClose}>
+            <div className="w-full max-w-[480px] rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Move student to another class</h2>
+                    <button type="button" onClick={onClose} className="p-2 text-[#3B3F6E]/70">
+                        <CloseSmallIcon />
+                    </button>
+                </div>
+
+                <div className="mt-4 flex items-center gap-3 border-b border-[#EDE7DD] pb-4">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#3B3F6E] text-[12px] font-semibold text-white">
+                        {getInitials(currentTeacherName)}
+                    </div>
+                    <div>
+                        <p className="text-[15px] font-medium text-[#2B2B2F]">{currentTeacherName}</p>
+                        <p className="text-[13px] text-[#2B2B2F]/45">{currentClassName}</p>
+                    </div>
+                </div>
+
+                <div className="mt-5">
+                    <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.04em] text-[#6F78A8]">Select new class</p>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            type="button"
+                            disabled
+                            className="grid grid-cols-[1fr_auto_auto] items-center rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]/35 px-4 py-3 text-left opacity-55"
+                        >
+                            <div>
+                                <p className="text-[15px] font-medium text-[#3B3F6E]">{currentClassName}</p>
+                                <p className="text-[13px] text-[#2B2B2F]/45">{currentTeacherName}</p>
+                            </div>
+                            <span className="text-[12px] text-[#2B2B2F]/45">Current</span>
+                        </button>
+
+                        {loading ? (
+                            <div className="py-6 text-center text-[14px] text-[#2B2B2F]/45">Loading classes...</div>
+                        ) : (
+                            movableClasses.map((classItem) => {
+                                const selected = classItem.id === selectedClassId;
+                                return (
+                                    <button
+                                        key={classItem.id}
+                                        type="button"
+                                        onClick={() => setSelectedClassId(classItem.id)}
+                                        className={`grid grid-cols-[1fr_auto_auto] items-center rounded-[12px] border px-4 py-3 text-left ${
+                                            selected
+                                                ? 'border-[#3B3F6E] bg-white shadow-[inset_0_0_0_1px_#3B3F6E]'
+                                                : 'border-[#E0D9CE] bg-[#F7F1E6] hover:border-[#CFC6BA]'
+                                        }`}
+                                    >
+                                        <div>
+                                            <p className="text-[15px] font-medium text-[#3B3F6E]">{classItem.name}</p>
+                                            <p className="text-[13px] text-[#2B2B2F]/55">{classItem.teacherName}</p>
+                                        </div>
+                                        <span className="text-[12px] text-[#2B2B2F]/45">{classItem.studentCount} students</span>
+                                        <span className="ml-3">
+                                            {selected ? <SelectedCheckIcon /> : null}
+                                        </span>
+                                    </button>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-5">
+                    <p className="mb-3 text-[13px] font-semibold uppercase tracking-[0.04em] text-[#6F78A8]">Notify teacher (optional)</p>
+                    <textarea
+                        value={note}
+                        onChange={(event) => setNote(event.target.value)}
+                        placeholder="Add a note for the new teacher..."
+                        className="min-h-[72px] w-full rounded-[12px] border border-[#E0D9CE] bg-white px-4 py-4 text-[14px] text-[#2B2B2F] outline-none placeholder:text-[#2B2B2F]/35"
+                    />
+                </div>
+
+                {error ? <p className="mt-3 text-[13px] text-[#C0392B]">{error}</p> : null}
+
+                <button
+                    type="button"
+                    disabled={!canSave || saving}
+                    onClick={async () => {
+                        if (!selectedClass) return;
+                        setSaving(true);
+                        setError(null);
+                        const res = await moveSchoolStudentToClass({
+                            studentId,
+                            classId: selectedClass.id,
+                            note: note.trim(),
+                        });
+                        setSaving(false);
+
+                        if ('error' in res && res.error) {
+                            setError(res.error);
+                            return;
+                        }
+
+                        await onMoved(selectedClass);
+                    }}
+                    className={`mt-5 flex h-[52px] w-full items-center justify-center rounded-[12px] text-[15px] font-semibold text-[#F7F1E6] ${
+                        !canSave || saving ? 'bg-[rgba(59,63,110,0.4)]' : 'bg-[#3B3F6E]'
+                    }`}
+                >
+                    {saving ? 'Moving student...' : 'Move student'}
+                </button>
+
+                <button type="button" onClick={onClose} className="mt-4 block w-full text-center text-[14px] text-[#6F78A8]">
+                    Cancel
+                </button>
+            </div>
+        </ModalShell>
+    );
+}
+
+function MoveSuccessModal({
+    studentName,
+    className,
+    onClose,
+}: {
+    studentName: string;
+    className: string;
+    onClose: () => void;
+}) {
+    return (
+        <ModalShell onClose={onClose}>
+            <div className="w-full max-w-[480px] rounded-[16px] bg-white p-6 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+                <div className="flex flex-col items-center py-3 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(122,184,122,0.2)]">
+                        <SuccessCheckIcon />
+                    </div>
+                    <p className="mt-6 text-[18px] font-medium text-[#2B2B2F]">
+                        {studentName} moved to {className}.
+                    </p>
+                    <p className="mt-3 text-[14px] text-[#2B2B2F]/40">The new class teacher has been notified.</p>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="mt-8 flex h-[52px] w-full items-center justify-center rounded-[12px] bg-[#3B3F6E] text-[15px] font-semibold text-[#F7F1E6]"
+                    >
+                        Done
+                    </button>
+                </div>
+            </div>
+        </ModalShell>
+    );
+}
+
+function RemoveStudentModal({
+    studentName,
+    className,
+    studentId,
+    firstName,
+    onClose,
+    onRemoved,
+}: {
+    studentName: string;
+    className: string;
+    studentId: string;
+    firstName: string;
+    onClose: () => void;
+    onRemoved: () => Promise<void>;
+}) {
+    const [typedName, setTypedName] = useState('');
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const matches = typedName.trim().toLowerCase() === firstName.trim().toLowerCase();
+
+    return (
+        <ModalShell onClose={onClose}>
+            <div className="w-full max-w-[420px] rounded-[16px] bg-white px-8 py-7 shadow-[0_8px_32px_rgba(0,0,0,0.12)]">
+                <div className="flex flex-col items-center text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[rgba(226,91,75,0.15)]">
+                        <WarningCircleIcon large />
+                    </div>
+                    <h2 className="mt-6 text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Remove this student?</h2>
+                    <p className="mt-2 text-[15px] text-[#2B2B2F]/55">
+                        {studentName} · {className}
+                    </p>
+                </div>
+
+                <ul className="mt-6 space-y-3 text-[15px] text-[#2B2B2F]/55">
+                    <li className="flex gap-3"><span className="mt-[8px] h-1.5 w-1.5 rounded-full bg-[#D94836]" />Their account and Nevo ID will be permanently deleted</li>
+                    <li className="flex gap-3"><span className="mt-[8px] h-1.5 w-1.5 rounded-full bg-[#D94836]" />All lesson progress and learning data will be removed</li>
+                    <li className="flex gap-3"><span className="mt-[8px] h-1.5 w-1.5 rounded-full bg-[#D94836]" />This cannot be undone</li>
+                </ul>
+
+                <p className="mt-6 text-[14px] font-medium text-[#6F78A8]">
+                    To confirm, type the student's first name below:
+                </p>
+
+                <input
+                    value={typedName}
+                    onChange={(event) => setTypedName(event.target.value)}
+                    placeholder="Type name to confirm"
+                    className="mt-4 h-[48px] w-full rounded-[12px] border border-[#3B3F6E] bg-white px-4 text-center text-[15px] text-[#2B2B2F] outline-none"
+                />
+
+                {error ? <p className="mt-3 text-[13px] text-[#C0392B]">{error}</p> : null}
+
+                <button
+                    type="button"
+                    disabled={!matches || saving}
+                    onClick={async () => {
+                        setSaving(true);
+                        setError(null);
+                        const res = await removeSchoolStudent(studentId);
+                        setSaving(false);
+
+                        if ('error' in res && res.error) {
+                            setError(res.error);
+                            return;
+                        }
+
+                        await onRemoved();
+                    }}
+                    className={`mt-5 flex h-[52px] w-full items-center justify-center rounded-[12px] text-[15px] font-semibold text-white ${
+                        !matches || saving ? 'bg-[#F0E8DE] text-[#E25B4B]/45' : 'bg-[#D33F2E]'
+                    }`}
+                >
+                    {saving ? 'Removing student...' : 'Remove student'}
+                </button>
+
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="mt-4 flex h-[52px] w-full items-center justify-center rounded-[12px] bg-[#4A4D83] text-[15px] font-semibold text-[#F7F1E6]"
+                >
+                    Cancel
+                </button>
+
+                <p className="mt-4 text-center text-[12px] text-[#2B2B2F]/30">
+                    If you just need to move this student, use Move to class instead.
+                </p>
+            </div>
+        </ModalShell>
+    );
+}
+
+function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={onClose}>
+            <div onClick={(event) => event.stopPropagation()}>{children}</div>
+        </div>
+    );
+}
+
+function InfoRow({
+    label,
+    value,
+    trailing,
+    isBadge = false,
+}: {
+    label: string;
+    value: string;
+    trailing?: React.ReactNode;
+    isBadge?: boolean;
+}) {
+    return (
+        <div className="grid grid-cols-[88px_1fr_auto] items-center gap-3">
+            <span className="text-[15px] text-[#2B2B2F]">{label}</span>
+            {isBadge ? (
+                <span className="justify-self-end rounded-full bg-[rgba(122,184,122,0.2)] px-3 py-1 text-[14px] text-[#7AB87A]">{value}</span>
+            ) : (
+                <span className="justify-self-end text-[15px] text-[#2B2B2F]/65">{value}</span>
+            )}
+            <span>{trailing}</span>
+        </div>
+    );
+}
+
+function normalizeLessonActivity(studentData: any): LessonActivityItem[] {
+    const rows = Array.isArray(studentData?.lesson_activity)
+        ? studentData.lesson_activity
+        : Array.isArray(studentData?.lessons_in_progress)
+          ? studentData.lessons_in_progress
+          : [];
+
+    return rows.slice(0, 5).map((lesson: any) => {
+        const status = String(lesson.status || lesson.state || lesson.progress_status || '').toLowerCase();
+        if (status.includes('complete')) {
+            return {
+                title: lesson.title || lesson.name || 'Lesson',
+                statusLabel: 'Completed',
+                timeLabel: lesson.last_active_label || lesson.date || 'Recently',
+                badgeClass: 'bg-[rgba(122,184,122,0.15)] text-[#7AB87A]',
+            };
+        }
+        if (status.includes('progress') || Number(lesson.progress || lesson.completion_percent || 0) > 0) {
+            return {
+                title: lesson.title || lesson.name || 'Lesson',
+                statusLabel: 'In progress',
+                timeLabel: lesson.last_active_label || lesson.date || 'Recently',
+                badgeClass: 'bg-[rgba(154,156,203,0.12)] text-[#9A9CCB]',
+            };
+        }
+        return {
+            title: lesson.title || lesson.name || 'Lesson',
+            statusLabel: 'Not started',
+            timeLabel: lesson.last_active_label || lesson.date || 'Recently',
+            badgeClass: 'bg-[rgba(247,241,230,1)] text-[#2B2B2F]/45',
+        };
+    });
+}
+
+function findTeacherNameForClass(classes: ClassChoice[], classId?: string, className?: string) {
+    const byId = classes.find((classItem) => String(classItem.id) === String(classId || ''));
+    if (byId) return byId.teacherName;
+    const byName = classes.find((classItem) => classItem.name === className);
+    return byName?.teacherName || '';
+}
+
+function getInitials(name: string) {
+    return name
         .split(' ')
         .filter(Boolean)
         .slice(0, 2)
-        .map((part: string) => part[0]?.toUpperCase() || '')
+        .map((part) => part[0]?.toUpperCase() || '')
         .join('') || 'ST';
-    const classInfo = studentData?.class_name || studentData?.class || studentData?.classInfo || 'Class';
-    const subject = studentData?.subject || studentData?.primary_subject || '';
-    const lessonsInProgress: LessonProgress[] = Array.isArray(studentData?.lessons_in_progress)
-        ? studentData.lessons_in_progress.map((l: any, idx: number) => ({
-              title: l.title || l.name || `Lesson ${idx + 1}`,
-              progress: Number(l.progress ?? l.completion_percent ?? 0),
-              date: l.date || l.updated_at || 'Recently',
-          }))
-        : [];
-    const signals: LearningSignal[] = Array.isArray(studentData?.signals)
-        ? studentData.signals
-              .map((s: any) => ({
-                  type: s.type === 'warning' || s.type === 'success' ? s.type : 'info',
-                  text: s.text || s.message || '',
-              }))
-              .filter((s: LearningSignal) => s.text.length > 0)
-        : [];
-    const learningProfile: LearningProfile = {
-        learningStyle: studentData?.learning_profile?.learning_style || null,
-        focusTime: studentData?.learning_profile?.focus_time || null,
-        challengeLevel: studentData?.learning_profile?.challenge_level || null,
-    };
-    const student: StudentDetail = {
-        id: Number(studentId),
-        initials,
-        avatarBg: '#3B3F6E',
-        name,
-        classInfo,
-        subject,
-        lastActive: studentData?.last_active || studentData?.last_seen || 'Recently',
-        lessonsInProgress,
-        learningProfile,
-        signals,
-    };
-    const firstName = student.name.split(' ')[0];
-    const hasLessons = student.lessonsInProgress.length > 0;
-    const hasSignals = student.signals.length > 0;
-    const hasProfile = student.learningProfile.learningStyle !== null;
-
-    useEffect(() => {
-        const timer = setTimeout(() => setIsLoading(false), 300);
-        return () => clearTimeout(timer);
-    }, [studentId]);
-
-    useEffect(() => {
-        (async () => {
-            const res = await getTeacherDashboard();
-            const d = 'data' in res ? res.data : null;
-            const rawLessons = Array.isArray(d?.lessons) ? d.lessons : Array.isArray(d) ? d : [];
-            const mapped = rawLessons.slice(0, 8).map((l: any) => ({
-                title: l.title || l.name || 'Lesson',
-                tag: l.subject || l.topic || 'General',
-                tagBg: '#E8E4DC',
-            }));
-            setRecommendLessons(mapped);
-        })();
-    }, []);
-
-    // Auto-dismiss toast
-    useEffect(() => {
-        if (!successToast) return;
-        const timer = setTimeout(() => setSuccessToast(null), 4000);
-        return () => clearTimeout(timer);
-    }, [successToast]);
-
-    const handleRecommendSend = (lessonTitle: string) => {
-        setShowRecommend(false);
-        setSuccessToast(`Lesson recommended to ${student.name}`);
-    };
-
-    const handleMessage = () => {
-        setSuccessToast(`Message thread opened for ${student.name}`);
-    };
-
-    const handleFlagSubmit = () => {
-        setShowFlag(false);
-        setShowFlagSuccess(true);
-    };
-
-    const handleNoteBlur = async () => {
-        if (!note.trim()) return;
-        await updateStudentNote(String(studentId), note.trim());
-    };
-
-    if (isLoading) return <DetailSkeleton onBack={onBack} />;
-
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            {/* Success Toast */}
-            {successToast && (
-                <div className="bg-[#3B3F6E] text-white text-[13px] font-medium py-3 px-5 rounded-xl mb-4 flex items-center gap-2 animate-fade-in">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="7" stroke="white" strokeWidth="1.3" />
-                        <path d="M5 8L7 10L11 6" stroke="white" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                    {successToast}
-                </div>
-            )}
-
-            {/* Back nav */}
-            <button
-                onClick={onBack}
-                className="flex items-center gap-2 text-[14px] text-graphite-60 font-medium mb-6 hover:text-[#3B3F6E] transition-colors cursor-pointer w-fit"
-            >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M10 3L5 8L10 13" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Students
-            </button>
-
-            {/* Student Header */}
-            <div className="flex items-center gap-4 mb-5">
-                <div
-                    className="w-14 h-14 rounded-full flex items-center justify-center text-white text-[16px] font-bold ring-2 ring-offset-2 shrink-0"
-                    style={{ backgroundColor: student.avatarBg, '--tw-ring-color': student.avatarBg } as React.CSSProperties}
-                >
-                    {student.initials}
-                </div>
-                <div>
-                    <h2 className="text-[18px] font-semibold text-[#2B2B2F] leading-snug">{student.name}</h2>
-                    <p className="text-[13px] text-graphite-60">
-                        {student.classInfo} {student.subject}
-                    </p>
-                    <p className="text-[12px] text-graphite-40">Last active: {student.lastActive}</p>
-                </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex gap-3 mb-8">
-                <ActionButton icon={<MessageIcon />} label="Message" onClick={handleMessage} />
-                <ActionButton
-                    icon={<PlusIcon />}
-                    label="Recommend lesson"
-                    onClick={() => setShowRecommend(true)}
-                />
-                <ActionButton icon={<FlagIcon />} label="Flag for support" variant="warning" onClick={() => setShowFlag(true)} />
-            </div>
-
-            {/* IN PROGRESS */}
-            <Section title="IN PROGRESS">
-                {hasLessons ? (
-                    <div className="flex flex-col gap-3">
-                        {student.lessonsInProgress.map((lesson) => (
-                            <div
-                                key={lesson.title}
-                                className="bg-white rounded-xl border border-[#E9E7E2] px-5 py-4"
-                            >
-                                <div className="flex justify-between items-center mb-2.5">
-                                    <span className="text-[13.5px] font-semibold text-[#2B2B2F]">{lesson.title}</span>
-                                    <span className="text-[12px] text-graphite-40">{lesson.date}</span>
-                                </div>
-                                <div className="w-full h-[5px] bg-[#EEECEA] rounded-full overflow-hidden">
-                                    <div
-                                        className="h-full bg-[#3B3F6E] rounded-full transition-all"
-                                        style={{ width: `${lesson.progress}%` }}
-                                    />
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <EmptySection
-                        illustration={<BookIllustration />}
-                        text="No lessons started yet"
-                    />
-                )}
-            </Section>
-
-            {/* HOW [NAME] LEARNS */}
-            <Section title={`HOW ${firstName.toUpperCase()} LEARNS`}>
-                <div className="bg-white rounded-xl border border-[#E9E7E2] overflow-hidden">
-                    <ProfileRow label="Learning style" value={student.learningProfile.learningStyle} />
-                    <ProfileRow label="Focus time" value={student.learningProfile.focusTime} border />
-                    <ProfileRow label="Challenge level" value={student.learningProfile.challengeLevel} border />
-                </div>
-            </Section>
-
-            {/* LEARNING SIGNALS */}
-            <Section title="LEARNING SIGNALS">
-                {hasSignals ? (
-                    <div className="flex flex-col gap-3">
-                        {student.signals.map((signal, i) => (
-                            <div key={i} className="bg-white rounded-xl border border-[#E9E7E2] px-5 py-4 flex items-center gap-3">
-                                <span className={`w-[8px] h-[8px] rounded-full shrink-0 ${
-                                    signal.type === 'warning' ? 'bg-[#D97706]' :
-                                    signal.type === 'info' ? 'bg-[#6B7FE0]' :
-                                    'bg-[#16A34A]'
-                                }`} />
-                                <span className="text-[13.5px] text-[#2B2B2F]">{signal.text}</span>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <EmptySection
-                        illustration={<ClipboardIllustration />}
-                        text="Not enough data yet"
-                        subtext={`Check back after ${firstName} completes a few lessons`}
-                    />
-                )}
-            </Section>
-
-            {/* YOUR NOTES */}
-            <Section title="YOUR NOTES">
-                <textarea
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    onBlur={handleNoteBlur}
-                    placeholder="Add a private note about this student..."
-                    className="w-full bg-white border border-[#E9E7E2] rounded-xl px-5 py-4 text-[13.5px] text-[#2B2B2F] placeholder-graphite-40 outline-none focus:border-[#3B3F6E] transition-colors resize-none min-h-[80px]"
-                />
-            </Section>
-
-            {/* Recommend Lesson Bottom Sheet */}
-            {showRecommend && (
-                <RecommendSheet
-                    studentName={student.name}
-                    lessons={recommendLessons}
-                    onClose={() => setShowRecommend(false)}
-                    onSend={handleRecommendSend}
-                />
-            )}
-
-            {/* Flag Support Bottom Sheet */}
-            {showFlag && (
-                <FlagSupportSheet
-                    studentName={student.name}
-                    onClose={() => setShowFlag(false)}
-                    onSubmit={handleFlagSubmit}
-                />
-            )}
-
-            {/* Flag Success Modal */}
-            {showFlagSuccess && (
-                <FlagSuccessModal onClose={() => setShowFlagSuccess(false)} />
-            )}
-        </div>
-    );
 }
 
-/* ─── Section Wrapper ─── */
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-    return (
-        <section className="mb-8">
-            <h3 className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">{title}</h3>
-            {children}
-        </section>
-    );
+function maskDetailNevoId(nevoId: string) {
+    const parts = nevoId.split('-');
+    if (parts.length >= 3) {
+        return `${parts[0]}-***-***`;
+    }
+    return 'NEVO-***-***';
 }
 
-/* ─── Profile Row ─── */
-function ProfileRow({ label, value, border }: { label: string; value: string | null; border?: boolean }) {
-    return (
-        <div className={`flex justify-between items-center px-5 py-3.5 ${border ? 'border-t border-[#EEECEA]' : ''}`}>
-            <span className="text-[13.5px] text-graphite-60">{label}</span>
-            <span className={`text-[13.5px] font-semibold ${value ? 'text-[#3B3F6E]' : 'text-graphite-40'}`}>
-                {value || 'Not set yet'}
-            </span>
-        </div>
-    );
+async function copyValue(value: string, onDone: () => void) {
+    try {
+        await navigator.clipboard.writeText(value);
+        onDone();
+    } catch {
+        // no-op
+    }
 }
 
-/* ─── Empty Section ─── */
-function EmptySection({ illustration, text, subtext }: { illustration: React.ReactNode; text: string; subtext?: string }) {
+function BackIcon() {
     return (
-        <div className="flex flex-col items-center justify-center py-10">
-            <div className="mb-3">{illustration}</div>
-            <p className="text-[13.5px] text-graphite-40">{text}</p>
-            {subtext && <p className="text-[12px] text-graphite-40 mt-1">{subtext}</p>}
-        </div>
-    );
-}
-
-/* ─── Action Button ─── */
-function ActionButton({
-    icon,
-    label,
-    variant = 'default',
-    onClick,
-}: {
-    icon: React.ReactNode;
-    label: string;
-    variant?: 'default' | 'warning';
-    onClick?: () => void;
-}) {
-    const styles = variant === 'warning'
-        ? 'border-[#F59E0B]/40 text-[#D97706] hover:bg-[#FEF3C7]'
-        : 'border-[#3B3F6E]/30 text-[#3B3F6E] hover:bg-indigo-5';
-
-    return (
-        <button
-            onClick={onClick}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full border text-[12.5px] font-semibold transition-all cursor-pointer ${styles}`}
-        >
-            {icon}
-            {label}
-        </button>
-    );
-}
-
-/* ─── Recommend Lesson Bottom Sheet ─── */
-function RecommendSheet({
-    studentName,
-    lessons,
-    onClose,
-    onSend,
-}: {
-    studentName: string;
-    lessons: { title: string; tag: string; tagBg: string }[];
-    onClose: () => void;
-    onSend: (lessonTitle: string) => void;
-}) {
-    const [search, setSearch] = useState('');
-    const [selected, setSelected] = useState<string | null>(null);
-    const [message, setMessage] = useState('');
-
-    const filtered = lessons.filter(l =>
-        l.title.toLowerCase().includes(search.toLowerCase())
-    );
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
-            <div className="relative w-full max-w-[540px] bg-[#F7F1E6] rounded-t-3xl px-6 pt-4 pb-6 animate-slide-up max-h-[85vh] flex flex-col">
-                {/* Drag handle */}
-                <div className="flex justify-center mb-4">
-                    <div className="w-10 h-1 rounded-full bg-graphite-40/40" />
-                </div>
-
-                <h3 className="text-[17px] font-semibold text-[#3B3F6E] mb-0.5">Recommend a lesson</h3>
-                <p className="text-[13px] text-graphite-60 mb-4">for {studentName}</p>
-
-                {/* Search */}
-                <div className="relative mb-4">
-                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2">
-                        <SearchIcon />
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="Search your lesson library"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-[#E0DDD8] bg-white text-[13px] outline-none focus:border-[#3B3F6E] text-[#111111] font-medium placeholder-graphite-40 transition-colors"
-                    />
-                </div>
-
-                {/* Lesson List */}
-                <div className="flex-1 overflow-y-auto mb-4 min-h-0">
-                    {filtered.map((lesson) => (
-                        <button
-                            key={lesson.title}
-                            onClick={() => setSelected(selected === lesson.title ? null : lesson.title)}
-                            className={`w-full flex items-center justify-between px-4 py-3.5 border-b border-[#EEECEA] text-left transition-colors cursor-pointer ${
-                                selected === lesson.title ? 'bg-white/60' : 'hover:bg-white/40'
-                            }`}
-                        >
-                            <span className={`text-[13.5px] font-medium ${
-                                selected === lesson.title ? 'text-[#3B3F6E] font-semibold' : 'text-[#3B3F6E]'
-                            }`}>
-                                {lesson.title}
-                            </span>
-                            <div className="flex items-center gap-2">
-                                <span
-                                    className="px-2.5 py-1 rounded-md text-[11px] font-semibold"
-                                    style={{ backgroundColor: lesson.tagBg, color: '#4A4A4A' }}
-                                >
-                                    {lesson.tag}
-                                </span>
-                                {selected === lesson.title && (
-                                    <div className="w-5 h-5 rounded-full bg-[#3B3F6E] flex items-center justify-center">
-                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="1.5">
-                                            <path d="M2 5L4 7L8 3" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </div>
-                                )}
-                            </div>
-                        </button>
-                    ))}
-                </div>
-
-                {/* Optional message */}
-                <div className="mb-4">
-                    <p className="text-[12px] text-graphite-60 mb-2">
-                        Add a message <span className="text-graphite-40">(optional)</span>
-                    </p>
-                    <input
-                        type="text"
-                        placeholder={`Let ${studentName.split(' ')[0]} know why this lesson might help...`}
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        className="w-full px-4 py-2.5 rounded-xl border border-[#E0DDD8] bg-white text-[13px] outline-none focus:border-[#3B3F6E] text-[#111111] font-medium placeholder-graphite-40 transition-colors"
-                    />
-                </div>
-
-                {/* Submit */}
-                <button
-                    onClick={() => selected && onSend(selected)}
-                    disabled={!selected}
-                    className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer ${
-                        selected
-                            ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
-                            : 'bg-[#3B3F6E]/40 text-white/70 cursor-not-allowed'
-                    }`}
-                >
-                    Send recommendation
-                </button>
-            </div>
-        </div>
-    );
-}
-
-/* ─── Skeleton Loader ─── */
-function DetailSkeleton({ onBack }: { onBack: () => void }) {
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            {/* Offline banner */}
-            <div className="bg-[#E8E4DC] text-graphite-60 text-[12px] py-2 px-4 rounded-lg mb-4">
-                You&apos;re offline. Showing last synced data.
-            </div>
-
-            {/* Back */}
-            <button onClick={onBack} className="flex items-center gap-2 text-[14px] text-graphite-60 font-medium mb-6 cursor-pointer w-fit">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M10 3L5 8L10 13" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Students
-            </button>
-
-            {/* Avatar + info skeleton */}
-            <div className="flex items-center gap-4 mb-5">
-                <div className="w-14 h-14 rounded-full bg-[#E4E0D9] animate-pulse shrink-0" />
-                <div className="flex flex-col gap-2">
-                    <div className="h-4 w-[180px] bg-[#E4E0D9] rounded-md animate-pulse" />
-                    <div className="h-3 w-[120px] bg-[#EDEBE6] rounded-md animate-pulse" />
-                </div>
-            </div>
-
-            {/* Action buttons skeleton */}
-            <div className="flex gap-3 mb-8">
-                <div className="h-9 w-[100px] bg-[#E4E0D9] rounded-full animate-pulse" />
-                <div className="h-9 w-[140px] bg-[#E4E0D9] rounded-full animate-pulse" />
-            </div>
-
-            {/* IN PROGRESS skeleton */}
-            <SkeletonSection title="IN PROGRESS" rows={3} />
-            <SkeletonSection title="HOW CHIOMA LEARNS" rows={3} />
-            <SkeletonSection title="LEARNING SIGNALS" rows={3} />
-
-            {/* NOTES skeleton */}
-            <div className="mb-8">
-                <h3 className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">YOUR NOTES</h3>
-                <div className="bg-white rounded-xl border border-[#E9E7E2] px-5 py-4">
-                    <div className="h-3.5 w-[80%] bg-[#E4E0D9] rounded-md animate-pulse" />
-                    <div className="h-3.5 w-[50%] bg-[#EDEBE6] rounded-md animate-pulse mt-2" />
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function SkeletonSection({ title, rows }: { title: string; rows: number }) {
-    return (
-        <div className="mb-8">
-            <h3 className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">{title}</h3>
-            <div className="bg-white rounded-xl border border-[#E9E7E2] overflow-hidden">
-                {Array.from({ length: rows }).map((_, i) => (
-                    <div key={i} className={`flex items-center justify-between px-5 py-4 ${i > 0 ? 'border-t border-[#EEECEA]' : ''}`}>
-                        <div className="h-3.5 w-[55%] bg-[#E4E0D9] rounded-md animate-pulse" />
-                        <div className="h-3.5 w-[20%] bg-[#EDEBE6] rounded-md animate-pulse" />
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-/* ─── Flag Support Bottom Sheet ─── */
-const FLAG_REASONS = ['Academic support needed', 'Attendance concern', 'Other'];
-
-function FlagSupportSheet({
-    studentName,
-    onClose,
-    onSubmit,
-}: {
-    studentName: string;
-    onClose: () => void;
-    onSubmit: () => void;
-}) {
-    const [selectedReason, setSelectedReason] = useState<string | null>(null);
-    const [context, setContext] = useState('');
-
-    return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" onClick={onClose} />
-            <div className="relative w-full max-w-[540px] bg-[#F7F1E6] rounded-t-3xl px-6 pt-4 pb-6 animate-slide-up max-h-[85vh] flex flex-col">
-                {/* Drag handle */}
-                <div className="flex justify-center mb-4">
-                    <div className="w-10 h-1 rounded-full bg-graphite-40/40" />
-                </div>
-
-                <h3 className="text-[17px] font-semibold text-[#3B3F6E] mb-0.5">Flag for school support</h3>
-                <p className="text-[13px] text-graphite-60 font-medium">{studentName}</p>
-                <p className="text-[12px] text-graphite-40 mb-5">This will notify your school admin. Your notes are kept confidential.</p>
-
-                {/* Reason */}
-                <p className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">Reason</p>
-                <div className="flex flex-col gap-2.5 mb-5">
-                    {FLAG_REASONS.map((reason) => {
-                        const isSelected = selectedReason === reason;
-                        return (
-                            <button
-                                key={reason}
-                                onClick={() => setSelectedReason(reason)}
-                                className={`w-full text-left px-5 py-3.5 rounded-xl border text-[13.5px] font-medium transition-all cursor-pointer flex items-center justify-between ${
-                                    isSelected
-                                        ? 'border-[#3B3F6E] bg-[#3B3F6E]/5 text-[#3B3F6E]'
-                                        : 'border-[#E0DDD8] bg-white text-[#2B2B2F] hover:border-[#C4C0BA]'
-                                }`}
-                            >
-                                {reason}
-                                {isSelected && (
-                                    <div className="w-5 h-5 rounded-full bg-[#3B3F6E] flex items-center justify-center shrink-0">
-                                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="white" strokeWidth="1.5">
-                                            <path d="M2 5L4 7L8 3" strokeLinecap="round" strokeLinejoin="round" />
-                                        </svg>
-                                    </div>
-                                )}
-                            </button>
-                        );
-                    })}
-                </div>
-
-                {/* Additional context */}
-                <p className="text-[12px] text-graphite-60 mb-2">
-                    Additional context <span className="text-graphite-40">(optional)</span>
-                </p>
-                <textarea
-                    value={context}
-                    onChange={(e) => setContext(e.target.value)}
-                    placeholder="Add any additional details..."
-                    className="w-full bg-white border border-[#E0DDD8] rounded-xl px-5 py-3.5 text-[13px] text-[#2B2B2F] placeholder-graphite-40 outline-none focus:border-[#3B3F6E] transition-colors resize-none min-h-[80px] mb-5"
-                />
-
-                {/* Submit */}
-                <button
-                    onClick={onSubmit}
-                    disabled={!selectedReason}
-                    className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer ${
-                        selectedReason
-                            ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
-                            : 'bg-[#3B3F6E]/40 text-white/70 cursor-not-allowed'
-                    }`}
-                >
-                    Submit flag
-                </button>
-            </div>
-        </div>
-    );
-}
-
-/* ─── Flag Success Modal ─── */
-function FlagSuccessModal({ onClose }: { onClose: () => void }) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px]" />
-            <div className="relative bg-white rounded-2xl px-10 py-10 flex flex-col items-center max-w-[380px] w-full shadow-xl animate-fade-in">
-                {/* Green checkmark */}
-                <div className="w-12 h-12 rounded-full bg-[#16A34A] flex items-center justify-center mb-4">
-                    <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
-                        <path d="M6 11L9.5 14.5L16 7.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                </div>
-                <h3 className="text-[16px] font-semibold text-[#2B2B2F] mb-1">Flag submitted.</h3>
-                <p className="text-[13px] text-graphite-40 mb-6">Your school admin has been notified.</p>
-                <button
-                    onClick={onClose}
-                    className="w-full max-w-[240px] py-3 bg-[#3B3F6E] text-white rounded-2xl font-semibold text-[14px] hover:bg-[#2E3259] transition-colors cursor-pointer"
-                >
-                    Close
-                </button>
-            </div>
-        </div>
-    );
-}
-
-/* ─── Illustrations ─── */
-function BookIllustration() {
-    return (
-        <div className="w-[80px] h-[60px] bg-[#E8E4DC] rounded-xl flex items-center justify-center">
-            <svg width="36" height="28" viewBox="0 0 36 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M18 4C18 4 14 2 8 2C4 2 2 3 2 3V24C2 24 4 23 8 23C14 23 18 25 18 25" stroke="#3B3F6E" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M18 4C18 4 22 2 28 2C32 2 34 3 34 3V24C34 24 32 23 28 23C22 23 18 25 18 25" stroke="#3B3F6E" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
-                <line x1="18" y1="4" x2="18" y2="25" stroke="#3B3F6E" strokeWidth="1.3"/>
-            </svg>
-        </div>
-    );
-}
-
-function ClipboardIllustration() {
-    return (
-        <div className="w-[80px] h-[60px] bg-[#E8E4DC] rounded-xl flex items-center justify-center">
-            <svg width="28" height="34" viewBox="0 0 28 34" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <rect x="2" y="4" width="24" height="28" rx="3" stroke="#3B3F6E" strokeWidth="1.3"/>
-                <rect x="9" y="1" width="10" height="6" rx="2" stroke="#3B3F6E" strokeWidth="1.3" fill="#E8E4DC"/>
-                <line x1="8" y1="14" x2="20" y2="14" stroke="#3B3F6E" strokeWidth="1.3" strokeLinecap="round"/>
-                <line x1="8" y1="19" x2="20" y2="19" stroke="#3B3F6E" strokeWidth="1.3" strokeLinecap="round"/>
-                <line x1="8" y1="24" x2="15" y2="24" stroke="#3B3F6E" strokeWidth="1.3" strokeLinecap="round"/>
-            </svg>
-        </div>
-    );
-}
-
-/* ─── Icons ─── */
-function SearchIcon() {
-    return (
-        <svg width="16" height="16" viewBox="0 0 18 18" fill="none" stroke="#9B9B9B" strokeWidth="1.5">
-            <circle cx="7.5" cy="7.5" r="5.5" />
-            <line x1="11.5" y1="11.5" x2="16" y2="16" strokeLinecap="round" />
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <path d="M11.5 4.5L7 9L11.5 13.5" stroke="#3B3F6E" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 }
 
-function MessageIcon() {
+function CopyIcon() {
     return (
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <circle cx="8" cy="8" r="6.5" />
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M5.5 5.5H11.5V11.5H5.5V5.5Z" stroke="#3B3F6E" strokeWidth="1" />
+            <path d="M4 10.5H3.5C2.94772 10.5 2.5 10.0523 2.5 9.5V3.5C2.5 2.94772 2.94772 2.5 3.5 2.5H9.5C10.0523 2.5 10.5 2.94772 10.5 3.5V4" stroke="#3B3F6E" strokeWidth="1" />
         </svg>
     );
 }
 
-function PlusIcon() {
+function ArrowRightIcon() {
     return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <line x1="6" y1="2" x2="6" y2="10" strokeLinecap="round" />
-            <line x1="2" y1="6" x2="10" y2="6" strokeLinecap="round" />
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M3 8H13M13 8L9 4M13 8L9 12" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 }
 
-function FlagIcon() {
+function ResetIcon() {
     return (
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M2 1V13" strokeLinecap="round" />
-            <path d="M2 1H11L9 4.5L11 8H2" strokeLinejoin="round" />
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M12.5 4.5V8.5H8.5" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M11.25 11.25C10.4167 12.0833 9.25 12.5 8 12.5C5.51472 12.5 3.5 10.4853 3.5 8C3.5 5.51472 5.51472 3.5 8 3.5C9.25 3.5 10.4167 3.91667 11.25 4.75L12.5 6" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+function WarningCircleIcon({ large = false }: { large?: boolean }) {
+    const size = large ? 22 : 16;
+    return (
+        <svg width={size} height={size} viewBox="0 0 20 20" fill="none">
+            <circle cx="10" cy="10" r="7" stroke="#D94836" strokeWidth="1.6" />
+            <path d="M10 6V10.2" stroke="#D94836" strokeWidth="1.6" strokeLinecap="round" />
+            <circle cx="10" cy="13.5" r="0.8" fill="#D94836" />
+        </svg>
+    );
+}
+
+function SelectedCheckIcon() {
+    return (
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="10" fill="#3B3F6E" />
+            <path d="M7.5 11.5L9.7 13.7L14.5 8.9" stroke="white" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function SuccessCheckIcon() {
+    return (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M7 12L10.3 15.3L17 8.6" stroke="#7AB87A" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function CloseSmallIcon() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M6 6L14 14M14 6L6 14" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" />
         </svg>
     );
 }

@@ -126,6 +126,41 @@ export function StudentsView() {
                 studentId={selectedStudentId}
                 studentData={selectedStudent.raw}
                 onBack={() => setSelectedStudentId(null)}
+                onStudentUpdated={async () => {
+                    const res = await getSchoolStudentsPage({
+                        classId: selectedClassId,
+                        page,
+                        pageSize: PAGE_SIZE,
+                    });
+
+                    if ('error' in res && res.error) {
+                        setError(res.error);
+                        return;
+                    }
+
+                    const data = 'data' in res ? res.data : null;
+                    const rows: any[] = Array.isArray(data?.students) ? data.students : [];
+                    const mappedRows: StudentRow[] = rows.map((student: any) => mapStudentRow(student));
+                    const filteredRows = selectedClassId
+                        ? mappedRows.filter((student: StudentRow) => student.classId === selectedClassId)
+                        : mappedRows;
+                    const serverPagination = extractPagination(data, page, PAGE_SIZE);
+
+                    setStudents(serverPagination ? filteredRows : filteredRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE));
+                    setPagination({
+                        totalCount: serverPagination?.totalCount ?? filteredRows.length,
+                        totalPages:
+                            serverPagination?.totalPages ??
+                            Math.max(1, Math.ceil(Math.max(filteredRows.length, 1) / PAGE_SIZE)),
+                        start: serverPagination?.start ?? (filteredRows.length ? (page - 1) * PAGE_SIZE + 1 : 0),
+                        end:
+                            serverPagination?.end ??
+                            (filteredRows.length
+                                ? Math.min(filteredRows.length, page * PAGE_SIZE)
+                                : 0),
+                        usesServerPagination: Boolean(serverPagination),
+                    });
+                }}
             />
         );
     }
@@ -246,7 +281,7 @@ export function StudentsView() {
                                     <button type="button" onClick={() => setSelectedStudentId(student.id)}>
                                         View
                                     </button>
-                                    <button type="button" className="leading-[16px] text-left opacity-80">
+                                    <button type="button" onClick={() => setSelectedStudentId(student.id)} className="leading-[16px] text-left opacity-80">
                                         Move class
                                     </button>
                                     <button type="button" className="opacity-90" aria-label="More actions">

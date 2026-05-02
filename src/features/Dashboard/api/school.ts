@@ -175,6 +175,53 @@ export async function enrollSchoolStudent(payload: {
   }
 }
 
+export async function moveSchoolStudentToClass(payload: {
+  studentId: string;
+  classId: string;
+  note?: string;
+}) {
+  try {
+    const { headers } = await schoolContext();
+    const res = await apiFetch(`/schools/me/students/${payload.studentId}/move-class`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({
+        class_id: payload.classId,
+        note: payload.note || null,
+      }),
+    });
+    return unwrap(res, "Failed to move student");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function removeSchoolStudent(studentId: string) {
+  try {
+    const { headers } = await schoolContext();
+    const res = await apiFetch(`/schools/me/students/${studentId}`, {
+      method: "DELETE",
+      headers,
+    });
+    return unwrap(res, "Failed to remove student");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function resetSchoolStudentId(studentId: string) {
+  try {
+    const { headers } = await schoolContext();
+    const res = await apiFetch(`/schools/me/students/${studentId}/reset-id`, {
+      method: "POST",
+      headers,
+    });
+    return unwrap(res, "Failed to reset student ID");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 export async function getSchoolClassesOverview() {
   try {
     const { headers } = await schoolContext();
@@ -359,6 +406,22 @@ export async function updateSchoolSettings(payload: Record<string, any>) {
       body: JSON.stringify(payload),
     });
     return unwrap(res, "Failed to update school settings");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function deleteSchoolAccount(confirmationName: string) {
+  try {
+    const { headers } = await schoolContext();
+    const res = await apiFetch("/schools/me", {
+      method: "DELETE",
+      headers,
+      body: JSON.stringify({
+        confirmation_name: confirmationName,
+      }),
+    });
+    return unwrap(res, "Failed to delete school account");
   } catch (e: any) {
     return { error: e.message };
   }
