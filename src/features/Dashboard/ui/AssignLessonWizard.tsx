@@ -1,12 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
-/* ─── Mock Data ─── */
 type LessonStatus = 'Published' | 'Draft';
 
-interface Lesson {
-    id: number;
+type Lesson = {
+    id: string;
     title: string;
     subject: string;
     level: string;
@@ -14,137 +13,302 @@ interface Lesson {
     status: LessonStatus;
     lastUpdated: string;
     signal?: { type: 'warning' | 'success'; text: string };
+};
+
+type ClassOption = {
+    id: string;
+    name: string;
+    teacherName?: string;
+    students: number;
+};
+
+type StudentOption = {
+    id: string;
+    name: string;
+    initials: string;
+};
+
+function buildErrorMessage(data: any, fallback: string) {
+    if (typeof data?.detail === 'string') return data.detail;
+    if (typeof data?.message === 'string') return data.message;
+    if (typeof data?.error === 'string') return data.error;
+    return fallback;
 }
 
-const DUMMY_LESSONS: Lesson[] = [
-    {
-        id: 2,
-        title: 'Cellular Respiration Process',
-        subject: 'Science',
-        level: 'Secondary',
-        duration: 60,
-        status: 'Draft',
-        lastUpdated: 'Last updated Mar 14',
-    },
-    {
-        id: 3,
-        title: "Shakespeare's Macbeth Analysis",
-        subject: 'English',
-        level: 'Secondary',
-        duration: 90,
-        status: 'Published',
-        lastUpdated: 'Last updated Mar 12',
-        signal: { type: 'success', text: '8 students completed' },
-    },
-    {
-        id: 4,
-        title: 'Ancient Egyptian Civilization',
-        subject: 'History',
-        level: 'Secondary',
-        duration: 55,
-        status: 'Published',
-        lastUpdated: 'Last updated Mar 10',
-    },
-    {
-        id: 1,
-        title: 'Introduction to Quadratic Equations',
-        subject: 'Mathematics',
-        level: 'Secondary',
-        duration: 45,
-        status: 'Published',
-        lastUpdated: 'Last updated Mar 15',
-        signal: { type: 'warning', text: 'Confusion signals from 3 students' },
-    },
-    {
-        id: 5,
-        title: 'Photosynthesis and Plant Biology',
-        subject: 'Science',
-        level: 'Primary',
-        duration: 50,
-        status: 'Published',
-        lastUpdated: 'Last updated Mar 16',
-    },
-];
+function formatUpdatedDate(value?: string | null) {
+    if (!value) return 'Last updated recently';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Last updated recently';
+    return `Last updated ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
 
-const DUMMY_CLASSES = [
-    { id: 'c1', name: 'Form 3A Mathematics', students: 24 },
-    { id: 'c2', name: 'Form 3B Mathematics', students: 22 },
-    { id: 'c3', name: 'Form 4A Mathematics', students: 26 },
-    { id: 'c4', name: 'Form 2C General Science', students: 28 },
-];
+function getInitials(name: string) {
+    return (
+        name
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() || '')
+            .join('') || 'ST'
+    );
+}
 
-const DUMMY_STUDENTS = [
-    { id: 's1', name: 'Adebayo Olumide', initials: 'AO', cls: '3A' },
-    { id: 's2', name: 'Chen Ming', initials: 'CM', cls: '3B' },
-    { id: 's3', name: 'Okonkwo Chioma', initials: 'OC', cls: '3A' },
-    { id: 's4', name: 'Patel Ravi', initials: 'PR', cls: '4A' },
-    { id: 's5', name: 'Williams Sarah', initials: 'WS', cls: '3B' },
-    { id: 's6', name: 'Mensah Kwame', initials: 'MK', cls: '3A' },
-    { id: 's7', name: 'Ibrahim Fatima', initials: 'IF', cls: '4A' },
-    { id: 's8', name: 'Lopez Maria', initials: 'LM', cls: '3B' },
-];
+async function fetchTeacherLessons() {
+    const params = new URLSearchParams({
+        page: '1',
+        page_size: '100',
+        sort_by: 'created_at',
+        sort_order: 'desc',
+    });
+    const res = await fetch(`/api/teacher/lessons?${params.toString()}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not load lessons.'));
 
-/* ─── Components ─── */
+    const rawLessons = Array.isArray(data?.lessons) ? data.lessons : [];
+    return rawLessons
+        .filter((lesson: any) => String(lesson?.status || '').toLowerCase() === 'published')
+        .map((lesson: any): Lesson => {
+            const confusionCount = Number(lesson?.confusion_signal_count || 0);
+            const completionCount = Number(lesson?.completion_count || 0);
+            return {
+                id: String(lesson.id),
+                title: lesson.title || 'Untitled lesson',
+                subject: lesson.subject || lesson.topic || 'General',
+                level: lesson.education_level || 'Secondary',
+                duration: Number(lesson.estimated_duration_minutes || 0),
+                status: 'Published',
+                lastUpdated: formatUpdatedDate(lesson.last_updated || lesson.created_at),
+                signal:
+                    confusionCount > 0
+                        ? { type: 'warning', text: `Confusion signals from ${confusionCount} students` }
+                        : completionCount > 0
+                            ? { type: 'success', text: `${completionCount} students completed` }
+                            : undefined,
+            };
+        });
+}
+
+async function fetchTeacherClasses() {
+    const res = await fetch('/api/teacher/classes');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not load classes.'));
+
+    const rawClasses = Array.isArray(data?.classes) ? data.classes : [];
+    return rawClasses.map((item: any): ClassOption => ({
+        id: String(item.id || item.class_id),
+        name: item.name || item.class_name || 'Class',
+        teacherName: item.teacher_name || undefined,
+        students: Number(item.student_count || 0),
+    }));
+}
+
+async function fetchAssignableStudents() {
+    const res = await fetch('/api/teacher/students/assignable');
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not load students.'));
+
+    const rawStudents = Array.isArray(data?.students) ? data.students : [];
+    return rawStudents.map((item: any): StudentOption => {
+        const name =
+            item.name ||
+            `${item.first_name || ''} ${item.last_name || ''}`.trim() ||
+            item.email ||
+            'Student';
+        return {
+            id: String(item.id),
+            name,
+            initials: getInitials(name),
+        };
+    });
+}
+
+async function assignLesson(payload: {
+    lessonId: string;
+    recipientMode: 'class' | 'students';
+    classId?: string | null;
+    studentIds?: string[];
+    dueDate?: string;
+}) {
+    const res = await fetch(`/api/teacher/lessons/${payload.lessonId}/assign`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            target: payload.recipientMode === 'class' ? 'class' : 'individual',
+            class_id: payload.classId || null,
+            student_ids: payload.recipientMode === 'students' ? payload.studentIds || [] : [],
+            due_at: payload.dueDate || null,
+        }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not assign lesson.'));
+    return data;
+}
 
 export function AssignLessonWizard({
     onClose,
     initialLessonId,
 }: {
     onClose: () => void;
-    initialLessonId?: number;
+    initialLessonId?: number | string;
 }) {
     const [step, setStep] = useState(1);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [successCount, setSuccessCount] = useState(0);
     const TOTAL_STEPS = 4;
 
-    const [selectedLessonId, setSelectedLessonId] = useState<number | null>(initialLessonId || null);
+    const [lessons, setLessons] = useState<Lesson[]>([]);
+    const [classes, setClasses] = useState<ClassOption[]>([]);
+    const [students, setStudents] = useState<StudentOption[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState<string | null>(null);
+    const [submitError, setSubmitError] = useState<string | null>(null);
+    const [assigning, setAssigning] = useState(false);
+
+    const [selectedLessonId, setSelectedLessonId] = useState<string | null>(
+        initialLessonId ? String(initialLessonId) : null,
+    );
     const [isSelectingLesson, setIsSelectingLesson] = useState(!initialLessonId);
-
-    // Step 2 State
     const [recipientMode, setRecipientMode] = useState<'class' | 'students' | null>(null);
-    const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
     const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
-
-    // Step 3 & 4 State
-    const [availableFrom, setAvailableFrom] = useState('');
     const [dueDate, setDueDate] = useState('');
-    const [allowOffline, setAllowOffline] = useState(false);
-    const [selfPaced, setSelfPaced] = useState(true);
+
+    useEffect(() => {
+        let mounted = true;
+
+        (async () => {
+            setLoading(true);
+            setLoadError(null);
+
+            try {
+                const [lessonData, classData, studentData] = await Promise.all([
+                    fetchTeacherLessons(),
+                    fetchTeacherClasses(),
+                    fetchAssignableStudents(),
+                ]);
+
+                if (!mounted) return;
+                setLessons(lessonData);
+                setClasses(classData);
+                setStudents(studentData);
+            } catch (error) {
+                if (!mounted) return;
+                setLoadError(error instanceof Error ? error.message : 'Could not load assignment data.');
+            } finally {
+                if (mounted) setLoading(false);
+            }
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const selectedLesson = useMemo(
+        () => lessons.find((lesson) => lesson.id === selectedLessonId),
+        [lessons, selectedLessonId],
+    );
+
+    const selectedClass = useMemo(
+        () => classes.find((classItem) => classItem.id === selectedClassId),
+        [classes, selectedClassId],
+    );
+
+    const selectedStudentRecords = useMemo(
+        () => students.filter((student) => selectedStudents.includes(student.id)),
+        [students, selectedStudents],
+    );
 
     const handleBack = () => {
+        setSubmitError(null);
         if (step === 1) {
             onClose();
         } else {
-            setStep(step - 1);
+            setStep((current) => current - 1);
         }
     };
 
     const handleContinue = () => {
-        if (step < TOTAL_STEPS) setStep(step + 1);
-        else setShowSuccess(true);
+        setSubmitError(null);
+        if (step < TOTAL_STEPS) setStep((current) => current + 1);
+    };
+
+    const handleAssign = async () => {
+        if (!selectedLessonId || !recipientMode) return;
+
+        setAssigning(true);
+        setSubmitError(null);
+
+        try {
+            const result = await assignLesson({
+                lessonId: selectedLessonId,
+                recipientMode,
+                classId: recipientMode === 'class' ? selectedClassId : null,
+                studentIds: recipientMode === 'students' ? selectedStudents : [],
+                dueDate,
+            });
+
+            setSuccessCount(Number(result?.assigned_count || 0));
+            setShowSuccess(true);
+        } catch (error) {
+            setSubmitError(error instanceof Error ? error.message : 'Could not assign lesson.');
+        } finally {
+            setAssigning(false);
+        }
+    };
+
+    const resetWizard = () => {
+        setStep(1);
+        setSelectedLessonId(initialLessonId ? String(initialLessonId) : null);
+        setIsSelectingLesson(!initialLessonId);
+        setRecipientMode(null);
+        setSelectedClassId(null);
+        setSelectedStudents([]);
+        setDueDate('');
+        setSubmitError(null);
+        setShowSuccess(false);
+        setSuccessCount(0);
     };
 
     if (showSuccess) {
         return (
             <AssignmentSuccess
-                recipientCount={recipientMode === 'class' ? selectedClasses.length * 24 : selectedStudents.length}
-                onView={() => onClose()}
-                onAssignAnother={() => {
-                    setStep(1);
-                    setSelectedLessonId(null);
-                    setRecipientMode(null);
-                    setSelectedClasses([]);
-                    setSelectedStudents([]);
-                    setShowSuccess(false);
-                }}
+                recipientCount={successCount}
+                onView={onClose}
+                onAssignAnother={resetWizard}
                 onBack={onClose}
             />
         );
     }
 
+    if (loading) {
+        return (
+            <div className="flex h-full w-full max-w-[900px] items-center justify-center">
+                <span className="text-[14px] text-[#6E74AA]">Loading assignment options...</span>
+            </div>
+        );
+    }
+
+    if (loadError) {
+        return (
+            <div className="flex h-full w-full max-w-[900px] flex-col items-center justify-center gap-4 text-center">
+                <p className="text-[15px] font-semibold text-[#3B3F6E]">We couldn&apos;t load assignment data.</p>
+                <p className="text-[13px] text-graphite-60">{loadError}</p>
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="rounded-xl bg-[#3B3F6E] px-5 py-3 text-[14px] font-semibold text-white cursor-pointer"
+                >
+                    Close
+                </button>
+            </div>
+        );
+    }
+
     return (
         <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            {/* Header */}
             <div className="flex items-center mb-6">
                 <button
                     onClick={handleBack}
@@ -159,78 +323,79 @@ export function AssignLessonWizard({
                 </span>
             </div>
 
-            {step === 1 && (
+            {step === 1 ? (
                 <Step1Lesson
+                    lessons={lessons}
                     selectedLessonId={selectedLessonId}
                     setSelectedLessonId={setSelectedLessonId}
                     isSelectingLesson={isSelectingLesson}
                     setIsSelectingLesson={setIsSelectingLesson}
                     onContinue={handleContinue}
                 />
-            )}
+            ) : null}
 
-            {step === 2 && (
+            {step === 2 ? (
                 <Step2Recipients
                     recipientMode={recipientMode}
                     setRecipientMode={setRecipientMode}
-                    selectedClasses={selectedClasses}
-                    setSelectedClasses={setSelectedClasses}
+                    classes={classes}
+                    selectedClassId={selectedClassId}
+                    setSelectedClassId={setSelectedClassId}
+                    students={students}
                     selectedStudents={selectedStudents}
                     setSelectedStudents={setSelectedStudents}
                     onContinue={handleContinue}
                 />
-            )}
+            ) : null}
 
-            {step === 3 && (
-                <Step3Scheduling
-                    availableFrom={availableFrom}
-                    setAvailableFrom={setAvailableFrom}
-                    dueDate={dueDate}
-                    setDueDate={setDueDate}
-                    onContinue={handleContinue}
-                />
-            )}
+            {step === 3 ? (
+                <Step3Scheduling dueDate={dueDate} setDueDate={setDueDate} onContinue={handleContinue} />
+            ) : null}
 
-            {step === 4 && (
+            {step === 4 ? (
                 <Step4Summary
-                    lesson={DUMMY_LESSONS.find(l => l.id === selectedLessonId)}
+                    lesson={selectedLesson}
                     recipientMode={recipientMode}
-                    recipientCount={recipientMode === 'class' ? selectedClasses.length * 24 : selectedStudents.length}
-                    availableFrom={availableFrom}
+                    selectedClass={selectedClass}
+                    selectedStudents={selectedStudentRecords}
                     dueDate={dueDate}
-                    allowOffline={allowOffline}
-                    setAllowOffline={setAllowOffline}
-                    selfPaced={selfPaced}
-                    setSelfPaced={setSelfPaced}
-                    onAssign={handleContinue}
+                    onAssign={handleAssign}
+                    assigning={assigning}
+                    submitError={submitError}
                 />
-            )}
+            ) : null}
         </div>
     );
 }
 
-/* ─── Step 1: Which lesson? ─── */
 function Step1Lesson({
+    lessons,
     selectedLessonId,
     setSelectedLessonId,
     isSelectingLesson,
     setIsSelectingLesson,
     onContinue,
 }: {
-    selectedLessonId: number | null;
-    setSelectedLessonId: (id: number) => void;
+    lessons: Lesson[];
+    selectedLessonId: string | null;
+    setSelectedLessonId: (id: string) => void;
     isSelectingLesson: boolean;
-    setIsSelectingLesson: (v: boolean) => void;
+    setIsSelectingLesson: (value: boolean) => void;
     onContinue: () => void;
 }) {
     const [searchQuery, setSearchQuery] = useState('');
 
-    const filteredLessons = DUMMY_LESSONS.filter(l => 
-        l.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-        l.subject.toLowerCase().includes(searchQuery.toLowerCase())
+    const filteredLessons = useMemo(
+        () =>
+            lessons.filter(
+                (lesson) =>
+                    lesson.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                    lesson.subject.toLowerCase().includes(searchQuery.toLowerCase()),
+            ),
+        [lessons, searchQuery],
     );
 
-    const selectedLesson = DUMMY_LESSONS.find(l => l.id === selectedLessonId);
+    const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId);
 
     return (
         <div className="flex flex-col h-full flex-1">
@@ -272,7 +437,7 @@ function Step1Lesson({
                     </div>
 
                     <div className="flex flex-col gap-3 pb-6 flex-1 overflow-y-auto hide-scrollbar min-h-0">
-                        {filteredLessons.map(lesson => {
+                        {filteredLessons.map((lesson) => {
                             const isSelected = selectedLessonId === lesson.id;
                             return (
                                 <div
@@ -294,15 +459,7 @@ function Step1Lesson({
                                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="ml-1">
                                                     <path d="M20 6L9 17l-5-5" />
                                                 </svg>
-                                            ) : (
-                                                <button className="text-graphite-40 hover:text-graphite p-1 rounded-full transition-colors cursor-pointer ml-1">
-                                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                                                        <circle cx="8" cy="3" r="1.2" />
-                                                        <circle cx="8" cy="8" r="1.2" />
-                                                        <circle cx="8" cy="13" r="1.2" />
-                                                    </svg>
-                                                </button>
-                                            )}
+                                            ) : null}
                                         </div>
                                     </div>
                                     <div className="flex items-center justify-between">
@@ -317,11 +474,9 @@ function Step1Lesson({
                                                 {lesson.duration} min
                                             </span>
                                         </div>
-                                        {lesson.lastUpdated && (
-                                            <span className="text-[12px] text-graphite-40">{lesson.lastUpdated}</span>
-                                        )}
+                                        <span className="text-[12px] text-graphite-40">{lesson.lastUpdated}</span>
                                     </div>
-                                    {lesson.signal && (
+                                    {lesson.signal ? (
                                         <div className={`flex items-center gap-1.5 mt-2.5 text-[12px] font-medium ${
                                             lesson.signal.type === 'warning' ? 'text-[#D97706]' : 'text-[#16A34A]'
                                         }`}>
@@ -330,7 +485,7 @@ function Step1Lesson({
                                             }`} />
                                             {lesson.signal.text}
                                         </div>
-                                    )}
+                                    ) : null}
                                 </div>
                             );
                         })}
@@ -347,8 +502,8 @@ function Step1Lesson({
                     onContinue();
                 }}
                 className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
-                    selectedLessonId 
-                        ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]' 
+                    selectedLessonId
+                        ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
                         : 'bg-[#B0ADAD] text-white cursor-not-allowed'
                 }`}
             >
@@ -358,58 +513,80 @@ function Step1Lesson({
     );
 }
 
-/* ─── Step 2: Who receives this lesson? ─── */
 function Step2Recipients({
     recipientMode,
     setRecipientMode,
-    selectedClasses,
-    setSelectedClasses,
+    classes,
+    selectedClassId,
+    setSelectedClassId,
+    students,
     selectedStudents,
     setSelectedStudents,
     onContinue,
 }: {
     recipientMode: 'class' | 'students' | null;
-    setRecipientMode: (v: 'class' | 'students') => void;
-    selectedClasses: string[];
-    setSelectedClasses: React.Dispatch<React.SetStateAction<string[]>>;
+    setRecipientMode: (value: 'class' | 'students') => void;
+    classes: ClassOption[];
+    selectedClassId: string | null;
+    setSelectedClassId: (value: string | null) => void;
+    students: StudentOption[];
     selectedStudents: string[];
     setSelectedStudents: React.Dispatch<React.SetStateAction<string[]>>;
     onContinue: () => void;
 }) {
-    const [studentFilter, setStudentFilter] = useState('All');
+    const [searchQuery, setSearchQuery] = useState('');
 
-    const toggleClass = (id: string) => {
-        setSelectedClasses(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    const filteredStudents = useMemo(
+        () =>
+            students.filter((student) =>
+                student.name.toLowerCase().includes(searchQuery.toLowerCase()),
+            ),
+        [students, searchQuery],
+    );
+
+    const allFilteredSelected =
+        filteredStudents.length > 0 &&
+        filteredStudents.every((student) => selectedStudents.includes(student.id));
+
+    const toggleStudent = (studentId: string) => {
+        setSelectedStudents((current) =>
+            current.includes(studentId)
+                ? current.filter((id) => id !== studentId)
+                : [...current, studentId],
+        );
     };
 
-    const toggleStudent = (id: string) => {
-        setSelectedStudents(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    };
-
-    const canContinue = recipientMode === 'class' ? selectedClasses.length > 0 : selectedStudents.length > 0;
-
-    const filteredStudents = studentFilter === 'All' 
-        ? DUMMY_STUDENTS 
-        : DUMMY_STUDENTS.filter(s => s.cls === studentFilter.replace('Form ', ''));
-
-    const allFilteredSelected = filteredStudents.length > 0 && filteredStudents.every(s => selectedStudents.includes(s.id));
     const toggleSelectAll = () => {
         if (allFilteredSelected) {
-            setSelectedStudents(prev => prev.filter(id => !filteredStudents.find(s => s.id === id)));
-        } else {
-            const additions = filteredStudents.filter(s => !selectedStudents.includes(s.id)).map(s => s.id);
-            setSelectedStudents(prev => [...prev, ...additions]);
+            setSelectedStudents((current) =>
+                current.filter((id) => !filteredStudents.find((student) => student.id === id)),
+            );
+            return;
         }
+
+        const additions = filteredStudents
+            .filter((student) => !selectedStudents.includes(student.id))
+            .map((student) => student.id);
+        setSelectedStudents((current) => [...current, ...additions]);
     };
+
+    const canContinue =
+        recipientMode === 'class'
+            ? Boolean(selectedClassId)
+            : recipientMode === 'students'
+                ? selectedStudents.length > 0
+                : false;
 
     return (
         <div className="flex flex-col h-full flex-1">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">Who receives this lesson?</h2>
 
-            {/* Mode Toggle */}
             <div className="flex gap-2 mb-8">
                 <button
-                    onClick={() => setRecipientMode('class')}
+                    onClick={() => {
+                        setRecipientMode('class');
+                        setSelectedStudents([]);
+                    }}
                     className={`px-5 py-2.5 rounded-full text-[13px] font-semibold border transition-all cursor-pointer ${
                         recipientMode === 'class'
                             ? 'bg-[#3B3F6E] text-white border-[#3B3F6E]'
@@ -419,7 +596,10 @@ function Step2Recipients({
                     Entire class
                 </button>
                 <button
-                    onClick={() => setRecipientMode('students')}
+                    onClick={() => {
+                        setRecipientMode('students');
+                        setSelectedClassId(null);
+                    }}
                     className={`px-5 py-2.5 rounded-full text-[13px] font-semibold border transition-all cursor-pointer ${
                         recipientMode === 'students'
                             ? 'bg-[#3B3F6E] text-white border-[#3B3F6E]'
@@ -430,65 +610,72 @@ function Step2Recipients({
                 </button>
             </div>
 
-            {/* Empty State */}
-            {!recipientMode && (
+            {!recipientMode ? (
                 <div className="flex items-center justify-center flex-1 pb-20">
-                    <p className="text-[14px] text-[#6E74AA]">Select how you'd like to assign this lesson</p>
+                    <p className="text-[14px] text-[#6E74AA]">Select how you&apos;d like to assign this lesson</p>
                 </div>
-            )}
+            ) : null}
 
-            {/* Class Selection View */}
-            {recipientMode === 'class' && (
+            {recipientMode === 'class' ? (
                 <div className="flex flex-col gap-3 flex-1 overflow-y-auto pb-6 hide-scrollbar min-h-0">
-                    {DUMMY_CLASSES.map(cls => {
-                        const isSelected = selectedClasses.includes(cls.id);
-                        return (
-                            <button
-                                key={cls.id}
-                                onClick={() => toggleClass(cls.id)}
-                                className={`w-full flex items-center justify-between px-6 py-5 rounded-2xl border transition-colors cursor-pointer ${
-                                    isSelected
-                                        ? 'bg-[#F7F5FC] border-[#3B3F6E]'
-                                        : 'bg-[#FDFBF9] border-[#E0DDD8] hover:border-[#D0CCC5]'
-                                }`}
-                            >
-                                <span className="text-[14px] font-semibold text-[#3B3F6E]">{cls.name}</span>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-[13px] text-graphite-40">{cls.students} students</span>
-                                    {isSelected && (
-                                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M20 6L9 17l-5-5" />
-                                        </svg>
-                                    )}
-                                </div>
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-
-            {/* Student Selection View */}
-            {recipientMode === 'students' && (
-                <div className="flex flex-col flex-1 min-h-0">
-                    {/* Filters */}
-                    <div className="flex gap-2 mb-6 overflow-x-auto pb-1 hide-scrollbar shrink-0">
-                        {['All classes', 'Form 3A', 'Form 3B', 'Form 4A'].map(filter => {
-                            const val = filter === 'All classes' ? 'All' : filter;
-                            const isActive = studentFilter === val;
+                    {classes.length === 0 ? (
+                        <div className="rounded-2xl border border-[#E9E7E2] bg-white px-6 py-5 text-[13px] text-graphite-60">
+                            No classes are available yet.
+                        </div>
+                    ) : (
+                        classes.map((classItem) => {
+                            const isSelected = selectedClassId === classItem.id;
                             return (
                                 <button
-                                    key={filter}
-                                    onClick={() => setStudentFilter(val)}
-                                    className={`shrink-0 px-4 py-2 rounded-full text-[12.5px] font-semibold transition-all cursor-pointer ${
-                                        isActive
-                                            ? 'bg-[#3B3F6E] text-white'
-                                            : 'bg-white text-[#2B2B2F] border border-[#E0DDD8] hover:border-[#3B3F6E]'
+                                    key={classItem.id}
+                                    onClick={() => setSelectedClassId(isSelected ? null : classItem.id)}
+                                    className={`w-full flex items-center justify-between px-6 py-5 rounded-2xl border transition-colors cursor-pointer ${
+                                        isSelected
+                                            ? 'bg-[#F7F5FC] border-[#3B3F6E]'
+                                            : 'bg-[#FDFBF9] border-[#E0DDD8] hover:border-[#D0CCC5]'
                                     }`}
                                 >
-                                    {filter}
+                                    <div className="text-left">
+                                        <span className="block text-[14px] font-semibold text-[#3B3F6E]">{classItem.name}</span>
+                                        {classItem.teacherName ? (
+                                            <span className="mt-1 block text-[12px] text-graphite-40">
+                                                Teacher: {classItem.teacherName}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-[13px] text-graphite-40">
+                                            {classItem.students} students
+                                        </span>
+                                        {isSelected ? (
+                                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                                <path d="M20 6L9 17l-5-5" />
+                                            </svg>
+                                        ) : null}
+                                    </div>
                                 </button>
                             );
-                        })}
+                        })
+                    )}
+                </div>
+            ) : null}
+
+            {recipientMode === 'students' ? (
+                <div className="flex flex-col flex-1 min-h-0">
+                    <div className="relative mb-4 shrink-0">
+                        <span className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9B9B9B" strokeWidth="1.5">
+                                <circle cx="7.5" cy="7.5" r="5.5" />
+                                <line x1="11.5" y1="11.5" x2="16" y2="16" strokeLinecap="round" />
+                            </svg>
+                        </span>
+                        <input
+                            type="text"
+                            placeholder="Search students..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-11 pr-4 py-3 rounded-xl border border-[#E0DDD8] bg-white text-[14px] outline-none focus:border-[#3B3F6E] transition-colors"
+                        />
                     </div>
 
                     <div className="flex items-center justify-between mb-3 px-2 shrink-0">
@@ -499,7 +686,7 @@ function Step2Recipients({
                     </div>
 
                     <div className="flex flex-col gap-1 pb-6 overflow-y-auto hide-scrollbar flex-1 min-h-0">
-                        {filteredStudents.map(student => {
+                        {filteredStudents.map((student) => {
                             const isSelected = selectedStudents.includes(student.id);
                             return (
                                 <label
@@ -509,27 +696,28 @@ function Step2Recipients({
                                     <div className="w-9 h-9 rounded-full bg-[#E8E6F5] text-[#3B3F6E] flex items-center justify-center font-bold text-[12px]">
                                         {student.initials}
                                     </div>
-                                    <span className="text-[14px] font-medium text-[#3B3F6E] flex-1">
-                                        {student.name}
-                                    </span>
-                                    <span className="text-[13px] text-graphite-40 font-medium w-8 text-right mr-4">
-                                        {student.cls}
-                                    </span>
+                                    <span className="text-[14px] font-medium text-[#3B3F6E] flex-1">{student.name}</span>
                                     <div className={`w-[18px] h-[18px] rounded flex items-center justify-center transition-colors border ${
                                         isSelected ? 'bg-[#3B3F6E] border-[#3B3F6E]' : 'bg-white border-[#D0CCC5]'
                                     }`}>
-                                        {isSelected && (
+                                        {isSelected ? (
                                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                                 <path d="M20 6L9 17l-5-5" />
                                             </svg>
-                                        )}
+                                        ) : null}
                                     </div>
+                                    <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={() => toggleStudent(student.id)}
+                                        className="sr-only"
+                                    />
                                 </label>
                             );
                         })}
                     </div>
                 </div>
-            )}
+            ) : null}
 
             <div className="flex-1" />
 
@@ -537,8 +725,8 @@ function Step2Recipients({
                 disabled={!canContinue}
                 onClick={onContinue}
                 className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
-                    canContinue 
-                        ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]' 
+                    canContinue
+                        ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
                         : 'bg-[#B0ADAD] text-white cursor-not-allowed'
                 }`}
             >
@@ -548,73 +736,19 @@ function Step2Recipients({
     );
 }
 
-/* ─── Shared UI ─── */
-function StatusBadge({ status }: { status: LessonStatus }) {
-    const styles = status === 'Published'
-        ? 'bg-[#E8F5E9] text-[#2E7D32]'
-        : 'bg-[#F0F0F0] text-[#6B6B70]';
-
-    return (
-        <span className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold ${styles}`}>
-            {status}
-        </span>
-    );
-}
-
-function Tag({ label }: { label: string }) {
-    return (
-        <span className="px-2.5 py-1 bg-[#F0EDE8] text-[#4A4A4A] text-[11.5px] font-medium rounded-md">
-            {label}
-        </span>
-    );
-}
-
-/* ─── Step 3: When should students do this? ─── */
 function Step3Scheduling({
-    availableFrom,
-    setAvailableFrom,
     dueDate,
     setDueDate,
     onContinue,
 }: {
-    availableFrom: string;
-    setAvailableFrom: (v: string) => void;
     dueDate: string;
-    setDueDate: (v: string) => void;
+    setDueDate: (value: string) => void;
     onContinue: () => void;
 }) {
-    // Basic date parsing validation if format allows it or just string compare
-    const isError = availableFrom && dueDate && new Date(dueDate) < new Date(availableFrom);
-
     return (
         <div className="flex flex-col h-full flex-1">
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-8">When should students do this?</h2>
-
-            <div className="mb-6">
-                <label className="text-[11px] font-bold text-graphite-60 tracking-wider uppercase mb-2 block">
-                    AVAILABLE FROM
-                </label>
-                <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E74AA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    </span>
-                    <input
-                        type="date"
-                        value={availableFrom}
-                        onChange={(e) => setAvailableFrom(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-[#E0DDD8] bg-white text-[14px] text-[#2B2B2F] outline-none focus:border-[#3B3F6E] transition-colors"
-                        style={{ appearance: 'none' }}
-                    />
-                    {!availableFrom && (
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[14px] text-graphite-60 pointer-events-none">Today</span>
-                    )}
-                </div>
-            </div>
+            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">When should students complete this?</h2>
+            <p className="text-[13px] text-graphite-60 mb-8">A due date is optional.</p>
 
             <div className="mb-2">
                 <div className="flex items-center gap-2 mb-2">
@@ -636,37 +770,21 @@ function Step3Scheduling({
                         type="date"
                         value={dueDate}
                         onChange={(e) => setDueDate(e.target.value)}
-                        className={`w-full pl-11 pr-4 py-3.5 rounded-xl border bg-white text-[14px] outline-none transition-colors ${
-                            isError ? 'border-[#E5533D] text-[#E5533D]' : 'border-[#E0DDD8] text-[#2B2B2F] focus:border-[#3B3F6E]'
-                        }`}
+                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-[#E0DDD8] bg-white text-[14px] outline-none transition-colors focus:border-[#3B3F6E]"
                     />
-                    {!dueDate && (
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[14px] text-graphite-60 pointer-events-none bg-white pl-2">No due date — students can complete anytime</span>
-                    )}
+                    {!dueDate ? (
+                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[14px] text-graphite-60 pointer-events-none bg-white pl-2">
+                            No due date
+                        </span>
+                    ) : null}
                 </div>
             </div>
-            
-            {isError && (
-                <div className="flex items-center gap-1.5 mt-2">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#E5533D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                        <line x1="12" y1="9" x2="12" y2="13" />
-                        <line x1="12" y1="17" x2="12.01" y2="17" />
-                    </svg>
-                    <span className="text-[12px] font-medium text-[#E5533D]">Due date must be after the start date.</span>
-                </div>
-            )}
 
             <div className="flex-1" />
 
             <button
-                disabled={!!isError}
                 onClick={onContinue}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
-                    !isError
-                        ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
-                        : 'bg-[#B0ADAD] text-white cursor-not-allowed'
-                }`}
+                className="w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 bg-[#3B3F6E] text-white hover:bg-[#2E3259]"
             >
                 Continue
             </button>
@@ -674,105 +792,102 @@ function Step3Scheduling({
     );
 }
 
-/* ─── Step 4: A few last things ─── */
 function Step4Summary({
     lesson,
     recipientMode,
-    recipientCount,
-    availableFrom,
+    selectedClass,
+    selectedStudents,
     dueDate,
-    allowOffline,
-    setAllowOffline,
-    selfPaced,
-    setSelfPaced,
     onAssign,
+    assigning,
+    submitError,
 }: {
     lesson?: Lesson;
-    recipientMode: string | null;
-    recipientCount: number;
-    availableFrom: string;
+    recipientMode: 'class' | 'students' | null;
+    selectedClass?: ClassOption;
+    selectedStudents: StudentOption[];
     dueDate: string;
-    allowOffline: boolean;
-    setAllowOffline: (v: boolean) => void;
-    selfPaced: boolean;
-    setSelfPaced: (v: boolean) => void;
     onAssign: () => void;
+    assigning: boolean;
+    submitError: string | null;
 }) {
-    const formatDate = (d: string) => {
-        if (!d) return 'Today';
-        return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    const recipientLabel =
+        recipientMode === 'class'
+            ? selectedClass?.name || 'Class'
+            : `${selectedStudents.length} student${selectedStudents.length === 1 ? '' : 's'}`;
+
+    const formatDate = (value: string) => {
+        if (!value) return 'No due date';
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return 'No due date';
+        return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
     };
 
     return (
         <div className="flex flex-col h-full flex-1">
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">A few last things.</h2>
-            <p className="text-[13px] text-graphite-60 mb-8">All optional.</p>
+            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">Ready to assign.</h2>
+            <p className="text-[13px] text-graphite-60 mb-8">Review the details before sending.</p>
 
-            {/* Offline Switch */}
-            <div className="mb-6 flex items-start justify-between">
-                <div>
-                    <p className="text-[14px] text-[#2B2B2F] font-medium mb-1">Allow offline download</p>
-                    <p className="text-[12px] text-graphite-40">Students can download this lesson to use without internet.</p>
-                </div>
-                <button
-                    onClick={() => setAllowOffline(!allowOffline)}
-                    className={`w-10 h-6 mt-[2px] rounded-full flex items-center shrink-0 px-1 transition-colors ${allowOffline ? 'bg-[#8E86C8]' : 'bg-[#D0CCC5]'}`}
-                >
-                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${allowOffline ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-            </div>
-
-            {/* Self Paced Switch */}
-            <div className="mb-8 flex items-start justify-between">
-                <div>
-                    <p className="text-[14px] text-[#2B2B2F] font-medium mb-1">Self-paced</p>
-                    <p className="text-[12px] text-graphite-40">Students work through the lesson at their own speed.</p>
-                </div>
-                <button
-                    onClick={() => setSelfPaced(!selfPaced)}
-                    className={`w-10 h-6 mt-[2px] rounded-full flex items-center shrink-0 px-1 transition-colors ${selfPaced ? 'bg-[#8E86C8]' : 'bg-[#D0CCC5]'}`}
-                >
-                    <div className={`w-4 h-4 bg-white rounded-full transition-transform ${selfPaced ? 'translate-x-4' : 'translate-x-0'}`} />
-                </button>
-            </div>
-
-            {/* Assignment Summary */}
             <div className="bg-white rounded-xl border border-[#E0DDD8] p-5 mb-8">
                 <span className="block text-[13px] font-bold text-[#3B3F6E] mb-4">Assignment summary</span>
-                
+
                 <div className="flex justify-between items-start mb-4">
                     <span className="text-[13px] text-graphite-40 w-[100px]">Lesson</span>
-                    <span className="text-[13px] font-medium text-[#2B2B2F] text-right flex-1">{lesson?.title || 'Unknown Lesson'}</span>
+                    <span className="text-[13px] font-medium text-[#2B2B2F] text-right flex-1">{lesson?.title || 'Unknown lesson'}</span>
                 </div>
                 <div className="flex justify-between items-start mb-4">
                     <span className="text-[13px] text-graphite-40 w-[100px]">Recipients</span>
-                    <span className="text-[13px] font-medium text-[#2B2B2F] text-right flex-1">
-                        {recipientCount} {recipientMode === 'class' ? 'students (Class)' : 'students'}
-                    </span>
-                </div>
-                <div className="flex justify-between items-start mb-4">
-                    <span className="text-[13px] text-graphite-40 w-[100px]">Available from</span>
-                    <span className="text-[13px] font-medium text-[#2B2B2F] text-right flex-1">{formatDate(availableFrom)}</span>
+                    <span className="text-[13px] font-medium text-[#2B2B2F] text-right flex-1">{recipientLabel}</span>
                 </div>
                 <div className="flex justify-between items-start">
                     <span className="text-[13px] text-graphite-40 w-[100px]">Due</span>
-                    <span className="text-[13px] font-medium text-graphite-60 text-right flex-1">{dueDate ? formatDate(dueDate) : 'No due date'}</span>
+                    <span className="text-[13px] font-medium text-graphite-60 text-right flex-1">{formatDate(dueDate)}</span>
                 </div>
             </div>
+
+            {submitError ? (
+                <div className="mb-5 rounded-xl border border-[#F1C5BF] bg-[#FFF6F4] px-4 py-3 text-[13px] text-[#B54708]">
+                    {submitError}
+                </div>
+            ) : null}
 
             <div className="flex-1" />
 
             <button
                 onClick={onAssign}
-                className="w-full py-3.5 rounded-2xl bg-[#3B3F6E] text-white font-semibold text-[14px] hover:bg-[#2E3259] transition-all cursor-pointer"
+                disabled={assigning}
+                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer ${
+                    assigning
+                        ? 'bg-[#B0ADAD] text-white cursor-not-allowed'
+                        : 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
+                }`}
             >
-                Assign lesson
+                {assigning ? 'Assigning...' : 'Assign lesson'}
             </button>
         </div>
     );
 }
 
-/* ─── Success Screen ─── */
+function StatusBadge({ status }: { status: LessonStatus }) {
+    const styles = status === 'Published'
+        ? 'bg-[#E8F5E9] text-[#2E7D32]'
+        : 'bg-[#F0F0F0] text-[#6B6B70]';
+
+    return (
+        <span className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold ${styles}`}>
+            {status}
+        </span>
+    );
+}
+
+function Tag({ label }: { label: string }) {
+    return (
+        <span className="px-2.5 py-1 bg-[#F0EDE8] text-[#4A4A4A] text-[11.5px] font-medium rounded-md">
+            {label}
+        </span>
+    );
+}
+
 function AssignmentSuccess({
     recipientCount,
     onView,
@@ -786,7 +901,6 @@ function AssignmentSuccess({
 }) {
     return (
         <div className="flex flex-col h-full flex-1 relative items-center justify-center -mt-16">
-            {/* Top toast */}
             <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#3B3F6E] text-white text-[13px] font-medium px-6 py-3 rounded-lg shadow-sm whitespace-nowrap">
                 Lesson sent to {recipientCount} students
             </div>

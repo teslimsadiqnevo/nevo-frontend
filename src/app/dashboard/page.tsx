@@ -8,8 +8,6 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const resolvedParams = await searchParams;
     const view = Array.isArray(resolvedParams?.view) ? resolvedParams.view[0] : resolvedParams?.view;
 
-    const mockRole = Array.isArray(resolvedParams?.role) ? resolvedParams.role[0] : resolvedParams?.role;
-
     const cookieStore = await cookies();
     const cookieUserRaw = cookieStore.get("user")?.value;
     let cookieUser: any = null;
@@ -21,10 +19,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }
     }
 
-    // Role-based rendering (mockRole overrides session in disconnected mode).
     // Fallback to the `user` cookie for teacher onboarding flows after verification.
     const role =
-        mockRole ||
         (session?.user as any)?.role?.toLowerCase() ||
         cookieUser?.role?.toLowerCase() ||
         null;

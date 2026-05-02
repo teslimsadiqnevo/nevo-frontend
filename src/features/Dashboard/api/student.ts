@@ -115,3 +115,75 @@ export async function updateStudentSettings(settings: any) {
         return { data: null, error: e.message };
     }
 }
+
+export async function getStudentSettings() {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/students/me/settings`, { headers });
+        return unwrap(res, "Failed to fetch settings");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function setStudentAdaptation(enabled: boolean) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/students/me/adaptation?enabled=${encodeURIComponent(String(enabled))}`, {
+            method: "PUT",
+            headers,
+        });
+        return unwrap(res, "Failed to update adaptation");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function getStudentDownloads() {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/downloads/me/downloads`, { headers });
+        return unwrap(res, "Failed to fetch downloads");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function recordStudentDownload(payload: { lesson_id: string; version_hash: string; size_bytes: number }) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/downloads/me/downloads`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payload),
+        });
+        return unwrap(res, "Failed to record download");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function removeStudentDownload(lessonId: string) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/downloads/me/downloads/${encodeURIComponent(lessonId)}`, {
+            method: "DELETE",
+            headers,
+        });
+        return unwrap(res, "Failed to remove download");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function getLessonDownloadPackage(lessonId: string) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/downloads/me/lessons/${encodeURIComponent(lessonId)}/package`, {
+            headers,
+        });
+        return unwrap(res, "Failed to fetch lesson package");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
