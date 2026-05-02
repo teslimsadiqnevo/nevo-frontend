@@ -1,11 +1,9 @@
-import { apiFetch } from "@/shared/lib/api";
-
 export async function submitAnswers(data: {
     answers: { question_id: number; value: any }[];
     token: string;
 }) {
     try {
-        const res = await apiFetch("/assessments", {
+        const res = await fetch("/api/assessments", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",

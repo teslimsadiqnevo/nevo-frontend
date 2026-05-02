@@ -1,5 +1,3 @@
-import { apiFetch } from "@/shared/lib/api";
-
 export async function connectTeacher(data: {
   code: string;
   token: string;
@@ -10,7 +8,7 @@ export async function connectTeacher(data: {
       ? { class_code: normalizedCode }
       : { teacher_nevo_id: normalizedCode };
 
-    const res = await apiFetch("/teachers/connect", {
+    const res = await fetch("/api/teachers/connect", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

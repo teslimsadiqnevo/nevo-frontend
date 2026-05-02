@@ -1,5 +1,3 @@
-import { apiFetch } from "@/shared/lib/api";
-
 export type SchoolSearchOption = {
   id: string;
   name: string;
@@ -23,8 +21,8 @@ export async function fetchSchools(query: string = "") {
   if (!trimmedQuery) return [];
 
   try {
-    const res = await apiFetch(
-      `/schools/search?q=${encodeURIComponent(trimmedQuery)}`,
+    const res = await fetch(
+      `/api/schools/search?q=${encodeURIComponent(trimmedQuery)}`,
     );
 
     if (!res.ok) {
@@ -59,7 +57,7 @@ export async function fetchClassesBySchoolId(schoolId: string) {
   if (!schoolId) return [];
 
   try {
-    const res = await apiFetch(`/schools/${schoolId}/classes`);
+    const res = await fetch(`/api/schools/${schoolId}/classes`);
 
     if (!res.ok) {
       let data: any = null;

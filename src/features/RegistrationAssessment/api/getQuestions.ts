@@ -1,5 +1,3 @@
-import { apiFetch } from "@/shared/lib/api";
-
 export type AssessmentQuestion = {
     id: number;
     text: string;
@@ -11,7 +9,7 @@ export type AssessmentQuestion = {
 
 export async function getQuestions(): Promise<AssessmentQuestion[]> {
     try {
-        const res = await apiFetch("/assessments/questions");
+        const res = await fetch("/api/assessments/questions");
         const data = await res.json();
         return data.questions || [];
     } catch (err) {

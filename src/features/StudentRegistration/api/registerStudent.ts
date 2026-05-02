@@ -1,5 +1,3 @@
-import { apiFetch } from "@/shared/lib/api";
-
 export async function registerStudent(data: {
   fullName: string;
   age: string;
@@ -23,8 +21,11 @@ export async function registerStudent(data: {
       phone_number: "+2348133333333",
     };
 
-    const res = await apiFetch("/auth/student/register", {
+    const res = await fetch("/api/auth/student/register", {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify(payload),
     });
 
@@ -58,8 +59,11 @@ export async function registerStudent(data: {
     
     if (!token && nevoId) {
         try {
-            const loginRes = await apiFetch("/auth/student/login", {
+            const loginRes = await fetch("/api/auth/student/login", {
                 method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
                 body: JSON.stringify({
                     first_name: firstName,
                     nevo_id: nevoId,
