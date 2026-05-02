@@ -1,10 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import { getSchoolTeachersPage } from '../api/school';
 import { InviteTeacherModal } from './InviteTeacherModal';
 
 export function TeachersView() {
+    const guardAuth = useAuthGuard('school');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [teachersPage, setTeachersPage] = useState<any | null>(null);
@@ -14,6 +16,7 @@ export function TeachersView() {
     const loadTeachers = async () => {
         setLoading(true);
         const res = await getSchoolTeachersPage();
+        if (guardAuth(res)) return;
 
         if ('error' in res && res.error) {
             setError(res.error);

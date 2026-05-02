@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import {
     checkSchoolTeacherInviteEmail,
     getSchoolTeacherInviteForm,
@@ -30,6 +31,7 @@ type InviteTeacherModalProps = {
 const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 
 export function InviteTeacherModal({ onClose, onSuccess }: InviteTeacherModalProps) {
+    const guardAuth = useAuthGuard('school');
     const [formLoading, setFormLoading] = useState(true);
     const [formOptions, setFormOptions] = useState<{
         school_code: string | null;
@@ -51,6 +53,7 @@ export function InviteTeacherModal({ onClose, onSuccess }: InviteTeacherModalPro
         void (async () => {
             const res = await getSchoolTeacherInviteForm();
             if (cancelled) return;
+            if (guardAuth(res)) return;
             if ('data' in res && res.data) {
                 setFormOptions({
                     school_code: res.data.school_code ?? null,
@@ -81,6 +84,10 @@ export function InviteTeacherModal({ onClose, onSuccess }: InviteTeacherModalPro
         debounceRef.current = setTimeout(async () => {
             setChecking(true);
             const res = await checkSchoolTeacherInviteEmail(trimmed);
+            if (guardAuth(res)) {
+                setChecking(false);
+                return;
+            }
             lastCheckedEmailRef.current = trimmed;
             if ('data' in res && res.data) {
                 setCheck(res.data as EmailCheck);
@@ -129,6 +136,7 @@ export function InviteTeacherModal({ onClose, onSuccess }: InviteTeacherModalPro
         if (classId) payload.class_ids = [classId];
         const res = await inviteSchoolTeacher(payload);
         setSubmitting(false);
+        if (guardAuth(res)) return;
         if ('error' in res && res.error) {
             setSubmitError(res.error);
             return;

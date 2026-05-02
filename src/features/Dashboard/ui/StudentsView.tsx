@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import { StudentDetailView } from './StudentDetailView';
 import { enrollSchoolStudent, getSchoolStudentsPage } from '../api/school';
 
@@ -24,6 +25,7 @@ interface ClassOption {
 }
 
 export function StudentsView() {
+    const guardAuth = useAuthGuard('school');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [students, setStudents] = useState<StudentRow[]>([]);
@@ -56,6 +58,7 @@ export function StudentsView() {
             });
 
             if (!mounted) return;
+            if (guardAuth(res)) return;
 
             if ('error' in res && res.error) {
                 setError(res.error);
@@ -132,6 +135,8 @@ export function StudentsView() {
                         page,
                         pageSize: PAGE_SIZE,
                     });
+
+                    if (guardAuth(res)) return;
 
                     if ('error' in res && res.error) {
                         setError(res.error);
@@ -336,6 +341,8 @@ export function StudentsView() {
                             page: 1,
                             pageSize: PAGE_SIZE,
                         });
+
+                        if (guardAuth(res)) return;
 
                         if ('error' in res && res.error) {
                             setError(res.error);

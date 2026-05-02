@@ -2,6 +2,7 @@
 
 import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import { deleteSchoolAccount, getSchoolSettings, updateSchoolSettings } from '../api/school';
 
 type SectionId = 'school-profile' | 'features' | 'permissions' | 'data-privacy' | 'danger-zone';
@@ -27,6 +28,7 @@ const SECTION_ITEMS: { id: SectionId; label: string }[] = [
 ];
 
 export function SettingsView() {
+    const guardAuth = useAuthGuard('school');
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingFeature, setSavingFeature] = useState<keyof FeatureState | null>(null);
@@ -61,6 +63,7 @@ export function SettingsView() {
         void (async () => {
             const res = await getSchoolSettings();
             if (!mounted) return;
+            if (guardAuth(res)) return;
 
             if ('error' in res && res.error) {
                 setError(res.error);
@@ -123,6 +126,7 @@ export function SettingsView() {
         });
 
         setSaving(false);
+        if (guardAuth(res)) return;
 
         if ('error' in res && res.error) {
             setError(res.error);
@@ -156,6 +160,7 @@ export function SettingsView() {
         });
 
         setSavingFeature(null);
+        if (guardAuth(res)) return;
 
         if ('error' in res && res.error) {
             setFeatures((current) => ({ ...current, [key]: previousValue }));
@@ -183,6 +188,7 @@ export function SettingsView() {
         const res = await deleteSchoolAccount(settings.school_name);
 
         setDeletingSchool(false);
+        if (guardAuth(res)) return;
 
         if ('error' in res && res.error) {
             setError(res.error);

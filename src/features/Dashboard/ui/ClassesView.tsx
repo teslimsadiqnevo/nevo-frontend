@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import {
     archiveSchoolClass,
     createSchoolClass,
@@ -12,6 +13,7 @@ import {
 } from '../api/school';
 
 export function ClassesView() {
+    const guardAuth = useAuthGuard('school');
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [overview, setOverview] = useState<any | null>(null);
@@ -25,6 +27,7 @@ export function ClassesView() {
     const loadOverview = async () => {
         setLoading(true);
         const res = await getSchoolClassesOverview();
+        if (guardAuth(res)) return;
 
         if ('error' in res && res.error) {
             setError(res.error);
@@ -40,6 +43,7 @@ export function ClassesView() {
     const loadDetail = async (classId: string) => {
         setDetailLoading(true);
         const res = await getSchoolClassDetail(classId);
+        if (guardAuth(res)) return;
 
         if ('error' in res && res.error) {
             setError(res.error);

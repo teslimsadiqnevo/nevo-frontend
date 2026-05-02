@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { useAuthGuard } from '@/shared/lib';
 import { SchoolAdminSidebar } from "@/widgets";
 import { ClassesView } from './ClassesView';
 import { TeachersView } from './TeachersView';
@@ -48,6 +49,7 @@ export function SchoolAdminDashboard({ user }: { user?: any }) {
 }
 
 function AdminDashboardOverview({ user }: { user?: any }) {
+    const guardAuth = useAuthGuard('school');
     const [state, setState] = useState<{
         loading: boolean;
         error: string | null;
@@ -69,6 +71,7 @@ function AdminDashboardOverview({ user }: { user?: any }) {
             ]);
 
             if (!mounted) return;
+            if (guardAuth([summaryRes, overviewRes, settingsRes])) return;
 
             const summary = 'data' in summaryRes ? summaryRes.data : null;
             const overview = 'data' in overviewRes ? overviewRes.data : null;
@@ -92,7 +95,7 @@ function AdminDashboardOverview({ user }: { user?: any }) {
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [guardAuth]);
 
     if (state.loading) {
         return (

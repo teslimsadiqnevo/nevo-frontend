@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import {
     getSchoolClassesOverview,
     moveSchoolStudentToClass,
@@ -35,6 +36,7 @@ export function StudentDetailView({
     onBack,
     onStudentUpdated,
 }: StudentDetailViewProps) {
+    const guardAuth = useAuthGuard('school');
     const [classes, setClasses] = useState<ClassChoice[]>([]);
     const [loadingClasses, setLoadingClasses] = useState(true);
     const [showMoveModal, setShowMoveModal] = useState(false);
@@ -55,6 +57,7 @@ export function StudentDetailView({
             const res = await getSchoolClassesOverview();
 
             if (!mounted) return;
+            if (guardAuth(res)) return;
 
             if ('data' in res && res.data) {
                 const overviewClasses = Array.isArray(res.data?.classes) ? res.data.classes : [];
@@ -222,6 +225,7 @@ export function StudentDetailView({
                                     onClick={async () => {
                                         setActionError(null);
                                         const res = await resetSchoolStudentId(String(studentId));
+                                        if (guardAuth(res)) return;
                                         if ('error' in res && res.error) {
                                             setActionError(res.error);
                                             return;
@@ -337,6 +341,7 @@ function MoveStudentModal({
     onMoved: (nextClass: ClassChoice) => Promise<void>;
     studentId: string;
 }) {
+    const guardAuth = useAuthGuard('school');
     const [selectedClassId, setSelectedClassId] = useState('');
     const [note, setNote] = useState('');
     const [saving, setSaving] = useState(false);
@@ -437,6 +442,7 @@ function MoveStudentModal({
                             note: note.trim(),
                         });
                         setSaving(false);
+                        if (guardAuth(res)) return;
 
                         if ('error' in res && res.error) {
                             setError(res.error);
@@ -508,6 +514,7 @@ function RemoveStudentModal({
     onClose: () => void;
     onRemoved: () => Promise<void>;
 }) {
+    const guardAuth = useAuthGuard('school');
     const [typedName, setTypedName] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -553,6 +560,7 @@ function RemoveStudentModal({
                         setError(null);
                         const res = await removeSchoolStudent(studentId);
                         setSaving(false);
+                        if (guardAuth(res)) return;
 
                         if ('error' in res && res.error) {
                             setError(res.error);

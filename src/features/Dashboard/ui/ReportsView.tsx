@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 import { getSchoolBoardSharePreview, getSchoolTermSummary } from '../api/school';
 
 type ReportState = {
@@ -38,6 +39,7 @@ type CoverageRow = {
 };
 
 export function ReportsView() {
+    const guardAuth = useAuthGuard('school');
     const [state, setState] = useState<ReportState>({
         loading: true,
         error: null,
@@ -56,6 +58,7 @@ export function ReportsView() {
             ]);
 
             if (!mounted) return;
+            if (guardAuth([termRes, previewRes])) return;
 
             const termSummary = 'data' in termRes ? termRes.data : null;
             const boardPreview = 'data' in previewRes ? previewRes.data : null;
@@ -84,7 +87,7 @@ export function ReportsView() {
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [guardAuth]);
 
     const engagementSeries = useMemo(
         () => getEngagementSeries(state.termSummary, state.boardPreview),
