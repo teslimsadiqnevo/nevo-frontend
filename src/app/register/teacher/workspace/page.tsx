@@ -38,7 +38,7 @@ export default function WorkspaceSelectionPage() {
 
                 const schools: any[] = Array.isArray(data)
                     ? data
-                    : data.schools || data.results || [];
+                    : data.schools || data.results || data.items || (data.id ? [data] : []);
 
                 const match = schools.find(
                     (s) => String(s.id || s.school_id || "").trim().length > 0,

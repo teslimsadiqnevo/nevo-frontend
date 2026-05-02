@@ -2,6 +2,33 @@
 
 import { apiFetch } from "@/shared/lib/api";
 
+function extractErrorMessage(result: any, fallback: string) {
+  const detail = result?.detail ?? result?.message ?? result?.error;
+
+  if (typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  if (Array.isArray(detail)) {
+    return detail
+      .map((err: any) => {
+        const field = err?.loc ? err.loc[err.loc.length - 1] : "Field";
+        return `${field}: ${err?.msg || "Validation error"}`;
+      })
+      .join(", ");
+  }
+
+  if (detail && typeof detail === "object") {
+    try {
+      return JSON.stringify(detail);
+    } catch {
+      return fallback;
+    }
+  }
+
+  return fallback;
+}
+
 export async function registerSchool(data: {
   schoolName: string;
   adminName: string;
@@ -25,27 +52,14 @@ export async function registerSchool(data: {
         admin_password: data.password,
         state: data.state,
         country: "Nigeria",
+        ...(data.schoolType ? { school_type: data.schoolType } : {}),
       }),
     });
 
-    const result = await res.json();
+    const result = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      let errorMessage = "Failed to sign up.";
-      if (result.detail) {
-        if (typeof result.detail === "string") {
-          errorMessage = result.detail;
-        } else if (Array.isArray(result.detail)) {
-          errorMessage = result.detail
-            .map((err: any) => {
-              const field = err.loc ? err.loc[err.loc.length - 1] : "Field";
-              return `${field}: ${err.msg || "Validation error"}`;
-            })
-            .join(", ");
-        } else if (typeof result.detail === "object") {
-          errorMessage = JSON.stringify(result.detail);
-        }
-      }
+      const errorMessage = extractErrorMessage(result, "Failed to sign up.");
       return { error: errorMessage };
     }
 
