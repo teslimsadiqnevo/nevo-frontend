@@ -6,6 +6,7 @@ import { getSchoolBoardSharePreview, getSchoolTermSummary } from '../api/school'
 export function ReportsView() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [warning, setWarning] = useState<string | null>(null);
     const [termSummary, setTermSummary] = useState<any | null>(null);
     const [boardPreview, setBoardPreview] = useState<any | null>(null);
 
@@ -20,17 +21,22 @@ export function ReportsView() {
 
             if (!mounted) return;
 
+            const termError = 'error' in termRes ? termRes.error : null;
+            const previewError = 'error' in previewRes ? previewRes.error : null;
+            const termMissing = isMissingEndpointError(termError);
+            const previewMissing = isMissingEndpointError(previewError);
             const nextError =
-                ('error' in termRes && termRes.error) ||
-                ('error' in previewRes && previewRes.error) ||
-                null;
+                (termError && !termMissing && !('data' in previewRes && previewRes.data)) ||
+                (previewError && !previewMissing && !('data' in termRes && termRes.data)) ||
+                (termError && previewError ? termError || previewError : null);
 
-            if (nextError) {
+            if (nextError && !termMissing && !previewMissing) {
                 setError(nextError);
                 setLoading(false);
                 return;
             }
 
+            setWarning(termError && !nextError ? termError : null);
             setTermSummary('data' in termRes ? termRes.data : null);
             setBoardPreview('data' in previewRes ? previewRes.data : null);
             setLoading(false);
@@ -99,17 +105,23 @@ export function ReportsView() {
     }
 
     return (
-        <div className="w-full flex flex-col gap-6">
-            <div className="flex flex-col gap-1">
-                <h1 className="text-[22px] font-bold text-[#3B3F6E] tracking-tight">Reports</h1>
-                <p className="text-[13px] text-graphite-60">
-                    Term window: {formatDate(termSummary?.term_start_date)} to {formatDate(termSummary?.term_end_date)}
-                </p>
-            </div>
+            <div className="w-full flex flex-col gap-6">
+                <div className="flex flex-col gap-1">
+                    <h1 className="text-[22px] font-bold text-[#3B3F6E] tracking-tight">Reports</h1>
+                    <p className="text-[13px] text-graphite-60">
+                        Term window: {formatDate(termSummary?.term_start_date)} to {formatDate(termSummary?.term_end_date)}
+                    </p>
+                </div>
 
-            <div className="grid grid-cols-4 gap-4">
-                <StatCard number={String(termSummary?.students_used_nevo_this_term ?? 0)} label="Students used Nevo this term" />
-                <StatCard number={String(termSummary?.concepts_covered_this_term ?? 0)} label="Concepts covered this term" />
+                {warning ? (
+                    <div className="rounded-xl border border-[#E0D9CE] bg-white px-4 py-3 text-[12px] text-graphite-60">
+                        Some report sections are not available yet. Showing the data the backend returned.
+                    </div>
+                ) : null}
+
+                <div className="grid grid-cols-4 gap-4">
+                    <StatCard number={String(termSummary?.students_used_nevo_this_term ?? 0)} label="Students used Nevo this term" />
+                    <StatCard number={String(termSummary?.concepts_covered_this_term ?? 0)} label="Concepts covered this term" />
                 <StatCard number={String(termSummary?.teachers_uploaded_this_term ?? 0)} label="Teachers uploaded this term" />
                 <StatCard number={String(termSummary?.active_weeks ?? 0)} label="Active weeks in this term" />
             </div>
@@ -275,4 +287,8 @@ function formatDateTime(value?: string) {
         hour: 'numeric',
         minute: '2-digit',
     });
+}
+
+function isMissingEndpointError(error: string | null | undefined) {
+    return Boolean(error && /not found/i.test(error));
 }

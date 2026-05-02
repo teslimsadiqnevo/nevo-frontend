@@ -102,15 +102,74 @@ export async function getSchoolDashboardSummary() {
 export async function getSchoolStudentsPage(params?: {
   search?: string;
   classId?: string | null;
+  page?: number;
+  pageSize?: number;
 }) {
   try {
     const { headers } = await schoolContext();
     const query = new URLSearchParams();
     if (params?.search) query.set("search", params.search);
     if (params?.classId) query.set("class_id", params.classId);
+    if (typeof params?.page === "number") query.set("page", String(params.page));
+    if (typeof params?.pageSize === "number") query.set("page_size", String(params.pageSize));
     const suffix = query.toString() ? `?${query.toString()}` : "";
     const res = await apiFetch(`/schools/me/students${suffix}`, { headers });
     return unwrap(res, "Failed to fetch school students");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function enrollSchoolStudent(payload: {
+  firstName: string;
+  age: number;
+  classId: string;
+}) {
+  try {
+    const { schoolId } = await schoolContext();
+
+    if (!schoolId) {
+      return { error: "School not found in session." };
+    }
+
+    const res = await apiFetch("/auth/student/register", {
+      method: "POST",
+      body: JSON.stringify({
+        age: Number(payload.age),
+        class_id: payload.classId,
+        first_name: payload.firstName.trim(),
+        last_name: "",
+        pin: String(Math.floor(1000 + Math.random() * 9000)),
+        role: "student",
+        school_id: schoolId,
+        phone_number: "+2348133333333",
+      }),
+    });
+
+    const result = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const detail =
+        (result as any)?.detail ||
+        (result as any)?.message ||
+        (result as any)?.error ||
+        "Failed to enroll student.";
+      const detailText =
+        typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
+      return { error: detailText || "Failed to enroll student." };
+    }
+
+    return {
+      data: {
+        nevo_id:
+          (result as any)?.nevo_id ||
+          (result as any)?.student_id ||
+          (result as any)?.user?.nevo_id ||
+          (result as any)?.user?.student_id ||
+          null,
+        raw: result,
+      },
+    };
   } catch (e: any) {
     return { error: e.message };
   }

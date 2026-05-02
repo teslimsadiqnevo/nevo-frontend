@@ -18,18 +18,21 @@ const navItems = [
 export function SchoolAdminSidebar({ user }: { user?: any }) {
     const searchParams = useSearchParams();
     const currentView = searchParams?.get('view') || null;
-    const [schoolName, setSchoolName] = useState('Your School');
+    const [schoolName, setSchoolName] = useState('Lagos International Academy');
 
     useEffect(() => {
         let mounted = true;
+
         void (async () => {
             const res = await getSchoolSettings();
             if (!mounted) return;
+
             const data = 'data' in res ? res.data : null;
             if (data?.school_name) {
                 setSchoolName(data.school_name);
             }
         })();
+
         return () => {
             mounted = false;
         };
@@ -42,110 +45,142 @@ export function SchoolAdminSidebar({ user }: { user?: any }) {
     const buildHref = (view: string | null) => {
         const params = new URLSearchParams();
         const role = searchParams?.get('role');
+
         if (role) params.set('role', role);
         if (view) params.set('view', view);
+
         const query = params.toString();
         return query ? `/dashboard?${query}` : '/dashboard';
     };
 
     return (
-        <aside className="w-[220px] min-w-[220px] bg-[#FDFBF9] border-r border-[#E9E7E2] flex flex-col h-full">
-            <div className="px-6 pt-8 pb-6">
-                <div className="flex items-center gap-2 mb-4">
-                    <svg width="24" height="24" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M16 4C10 4 6 8 4 12C2 16 4 22 8 26C12 30 20 30 24 26C28 22 30 16 28 12C26 8 22 4 16 4Z" stroke="#3B3F6E" strokeWidth="2" fill="none"/>
-                        <path d="M12 14C12 14 14 18 16 18C18 18 20 14 20 14" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                    <span className="text-[#3B3F6E] text-lg font-bold tracking-tight">Nevo</span>
+        <aside className="w-[240px] min-w-[240px] h-full bg-[#FCFCFC] border-r border-[#E0D9CE] flex flex-col">
+            <div className="px-6 pt-6 pb-8">
+                <div className="flex items-center gap-2.5 text-[#3B3F6E]">
+                    <NevoLogo />
+                    <span className="text-[20px] font-bold leading-[1] tracking-[-0.03em]">Nevo</span>
                 </div>
-                <div className="text-[13px] font-medium text-[#3B3F6E] leading-snug break-words">
+                <p className="mt-3 max-w-[170px] text-[14px] font-semibold leading-[20px] text-[#3B3F6E]">
                     {schoolName}
-                </div>
+                </p>
             </div>
 
-            <nav className="flex flex-col gap-1 px-3 flex-1 mt-4">
-                {navItems.map((item) => {
-                    const isActive = item.view === currentView || (!item.view && !currentView);
-                    return (
-                        <Link
-                            key={item.name}
-                            href={buildHref(item.view)}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[13px] ${
-                                isActive
-                                    ? 'bg-[#EAE8F2] text-[#3B3F6E] font-semibold'
-                                    : 'text-graphite-60 font-medium hover:bg-black/5 hover:text-[#3B3F6E]'
-                            }`}
-                        >
-                            <SidebarIcon name={item.name} active={isActive} />
-                            <span>{item.name}</span>
-                        </Link>
-                    );
-                })}
+            <nav className="flex-1 px-0">
+                <div className="flex flex-col gap-1">
+                    {navItems.map((item) => {
+                        const isActive = item.view === currentView || (!item.view && !currentView);
+
+                        return (
+                            <Link
+                                key={item.name}
+                                href={buildHref(item.view)}
+                                className={`group relative flex h-12 items-center gap-3 px-4 text-[15px] font-medium transition-colors ${
+                                    isActive
+                                        ? 'bg-[rgba(59,63,110,0.08)] text-[#3B3F6E]'
+                                        : 'text-[#2B2B2F] hover:bg-[rgba(59,63,110,0.04)]'
+                                }`}
+                            >
+                                {isActive ? <span className="absolute left-0 top-0 h-12 w-[3px] bg-[#3B3F6E]" /> : null}
+                                <SidebarIcon name={item.name} active={isActive} />
+                                <span className={isActive ? 'font-medium' : 'opacity-80'}>{item.name}</span>
+                            </Link>
+                        );
+                    })}
+                </div>
             </nav>
 
-            <div className="border-t border-[#E9E7E2] px-4 py-4 flex items-center gap-3">
-                <div className="w-[34px] h-[34px] rounded-full bg-[#EAE8F2] flex items-center justify-center text-[#3B3F6E] text-[12px] font-bold shrink-0 uppercase">
-                    {getInitials(adminName)}
-                </div>
-                <div className="min-w-0">
-                    <p className="text-[#3B3F6E] text-[12.5px] font-medium truncate">{adminName}</p>
-                    <p className="text-graphite-40 text-[11px] truncate">{user?.email || 'School admin'}</p>
+            <div className="mt-auto border-t border-[#E0D9CE] px-4 py-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[rgba(59,63,110,0.15)] text-[13px] font-semibold uppercase text-[#3B3F6E]">
+                        {getInitials(adminName)}
+                    </div>
+                    <p className="min-w-0 flex-1 truncate text-[13px] font-normal text-[#2B2B2F]">
+                        {adminName}
+                    </p>
+                    <div className="opacity-40">
+                        <SidebarIcon name="Settings" active={false} small />
+                    </div>
                 </div>
             </div>
         </aside>
     );
 }
 
-function SidebarIcon({ name, active }: { name: string; active: boolean }) {
-    const opacity = active ? 1 : 0.6;
-    const color = active ? "#3B3F6E" : "#8A8D9F";
+function NevoLogo() {
+    return (
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path
+                d="M6.5 18.5V7.25C6.5 6.00736 7.50736 5 8.75 5C9.39268 5 10.0024 5.2752 10.4296 5.75648L13.5704 9.29352C13.9976 9.7748 14.6073 10.05 15.25 10.05C16.4926 10.05 17.5 9.04264 17.5 7.8V5.5"
+                stroke="#3B3F6E"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M17.5 18.5V13.25C17.5 12.0074 16.4926 11 15.25 11C14.6073 11 13.9976 11.2752 13.5704 11.7565L10.4296 15.2935C10.0024 15.7748 9.39268 16.05 8.75 16.05C7.50736 16.05 6.5 15.0426 6.5 13.8V12.25"
+                stroke="#3B3F6E"
+                strokeWidth="1.9"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            />
+            <circle cx="6.5" cy="18.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
+            <circle cx="17.5" cy="18.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
+            <circle cx="17.5" cy="5.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
+            <circle cx="6.5" cy="5.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
+        </svg>
+    );
+}
+
+function SidebarIcon({ name, active, small = false }: { name: string; active: boolean; small?: boolean }) {
+    const size = small ? 16 : 20;
+    const color = active ? '#3B3F6E' : '#2B2B2F';
+    const opacity = active ? 1 : 0.72;
 
     switch (name) {
         case 'Overview':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" opacity={opacity}>
-                    <rect x="2" y="2" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.5"/>
-                    <rect x="12" y="2" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.5"/>
-                    <rect x="2" y="12" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.5"/>
-                    <rect x="12" y="12" width="6" height="6" rx="1.5" stroke={color} strokeWidth="1.5"/>
+                <svg width={size} height={size} viewBox="0 0 20 20" fill="none" opacity={opacity}>
+                    <rect x="2.5" y="2.5" width="5.5" height="5.5" rx="1" stroke={color} strokeWidth="1.25" />
+                    <rect x="12" y="2.5" width="5.5" height="5.5" rx="1" stroke={color} strokeWidth="1.25" />
+                    <rect x="2.5" y="12" width="5.5" height="5.5" rx="1" stroke={color} strokeWidth="1.25" />
+                    <rect x="12" y="12" width="5.5" height="5.5" rx="1" stroke={color} strokeWidth="1.25" />
                 </svg>
             );
         case 'Classes':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" opacity={opacity}>
-                    <rect x="3" y="5" width="14" height="12" rx="2" stroke={color} strokeWidth="1.5"/>
-                    <path d="M6 3H14V5H6V3Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
-                    <line x1="7" y1="10" x2="13" y2="10" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+                <svg width={size} height={size} viewBox="0 0 20 20" fill="none" opacity={opacity}>
+                    <path d="M3.75 6.25H16.25V15.25C16.25 16.0784 15.5784 16.75 14.75 16.75H5.25C4.42157 16.75 3.75 16.0784 3.75 15.25V6.25Z" stroke={color} strokeWidth="1.25" />
+                    <path d="M6 4.25V6.25H14V4.25" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             );
         case 'Teachers':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" opacity={opacity}>
-                    <path d="M10 2L12.44 7.06L18 7.82L13.91 11.66L14.96 17.11L10 14.41L5.04 17.11L6.09 11.66L2 7.82L7.56 7.06L10 2Z" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg width={size} height={size} viewBox="0 0 20 20" fill="none" opacity={opacity}>
+                    <path d="M10 2.75L12.163 7.13L17 7.833L13.5 11.244L14.326 16.083L10 13.808L5.674 16.083L6.5 11.244L3 7.833L7.837 7.13L10 2.75Z" stroke={color} strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
             );
         case 'Students':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" opacity={opacity}>
-                    <circle cx="7" cy="7" r="3" stroke={color} strokeWidth="1.5"/>
-                    <path d="M2 17C2 14.2386 4.23858 12 7 12C9.76142 12 12 14.2386 12 17" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-                    <circle cx="14" cy="8" r="2.5" stroke={color} strokeWidth="1.5"/>
-                    <path d="M13 17C13 14.7909 14.7909 13 17 13" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+                <svg width={size} height={size} viewBox="0 0 20 20" fill="none" opacity={opacity}>
+                    <circle cx="7.25" cy="7" r="2.5" stroke={color} strokeWidth="1.25" />
+                    <path d="M2.75 15.75C2.75 13.4028 4.65279 11.5 7 11.5H7.5C9.84721 11.5 11.75 13.4028 11.75 15.75" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
+                    <circle cx="14.25" cy="8" r="2" stroke={color} strokeWidth="1.25" />
+                    <path d="M13 15.5C13.3918 14.0372 14.5654 13 16 13" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
                 </svg>
             );
         case 'Reports':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" opacity={opacity}>
-                    <rect x="4" y="3" width="12" height="14" rx="2" stroke={color} strokeWidth="1.5"/>
-                    <line x1="7" y1="8" x2="13" y2="8" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
-                    <line x1="7" y1="12" x2="11" y2="12" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
+                <svg width={size} height={size} viewBox="0 0 20 20" fill="none" opacity={opacity}>
+                    <path d="M6 2.75H11.75L15.5 6.5V16C15.5 16.6904 14.9404 17.25 14.25 17.25H6C5.30964 17.25 4.75 16.6904 4.75 16V4C4.75 3.30964 5.30964 2.75 6 2.75Z" stroke={color} strokeWidth="1.25" />
+                    <path d="M11.75 2.75V6.5H15.5" stroke={color} strokeWidth="1.25" strokeLinejoin="round" />
+                    <path d="M7.5 10H12.5M7.5 13H11" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
                 </svg>
             );
         case 'Settings':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" opacity={opacity}>
-                    <circle cx="10" cy="10" r="3.5" stroke={color} strokeWidth="1.5"/>
-                    <path d="M10 2V4M10 16V18M18 10H16M4 10H2M15.6569 4.34315L14.2426 5.75736M5.75736 14.2426L4.34315 15.6569M15.6569 15.6569L14.2426 14.2426M5.75736 5.75736L4.34315 4.34315" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                <svg width={size} height={size} viewBox="0 0 20 20" fill="none" opacity={opacity}>
+                    <circle cx="10" cy="10" r="2.75" stroke={color} strokeWidth="1.25" />
+                    <path d="M10 3V4.5M10 15.5V17M17 10H15.5M4.5 10H3M14.95 5.05L13.9 6.1M6.1 13.9L5.05 14.95M14.95 14.95L13.9 13.9M6.1 6.1L5.05 5.05" stroke={color} strokeWidth="1.25" strokeLinecap="round" />
                 </svg>
             );
         default:

@@ -1,13 +1,8 @@
 'use client';
 
-import { Icon, UserAvatar } from "@/shared/ui";
+import { Icon } from "@/shared/ui";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-
-type SidebarUser = {
-    name?: string | null;
-    avatarUrl?: string | null;
-};
 
 const navItems = [
     { name: 'Home', view: null },
@@ -18,10 +13,9 @@ const navItems = [
     { name: 'Profile', view: 'profile' },
 ] as const;
 
-export function StudentSidebar({ user }: { user?: SidebarUser | null } = {}) {
+export function StudentSidebar() {
     const searchParams = useSearchParams();
     const currentView = searchParams.get('view') || null;
-    const displayName = user?.name?.trim() || '';
 
     return (
         <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
