@@ -1,13 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { signOut } from 'next-auth/react';
 import QRCode from 'react-qr-code';
 import {
     getTeacherConnectionRequests,
     getTeacherQr,
     updateTeacherConnectionRequest,
 } from '../api/teacher';
+import { useAuthGuard } from '@/shared/lib';
 
 type ConnectScreen = 'list' | 'qr-full';
 
@@ -28,17 +28,11 @@ export function ConnectView() {
     const [actingId, setActingId] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [fetchError, setFetchError] = useState<string | null>(null);
+    const guardAuth = useAuthGuard('teacher');
 
     const refresh = async () => {
         const [qrRes, reqRes] = await Promise.all([getTeacherQr(), getTeacherConnectionRequests()]);
-        const authExpired = Boolean((qrRes as any)?.authExpired) || Boolean((reqRes as any)?.authExpired);
-        const qrErrorText = String((qrRes as any)?.error || '');
-        const reqErrorText = String((reqRes as any)?.error || '');
-        const hasTokenError = /invalid|expired|unauthorized|token/i.test(`${qrErrorText} ${reqErrorText}`);
-        if (authExpired || hasTokenError) {
-            await signOut({ callbackUrl: '/login/teacher' });
-            return;
-        }
+        if (guardAuth([qrRes as any, reqRes as any])) return;
 
         const qr = 'data' in qrRes ? qrRes.data : null;
         const reqPayload = 'data' in reqRes ? reqRes.data : null;

@@ -2,22 +2,38 @@
 
 import { useState, useEffect } from "react";
 import { Icon } from "@/shared/ui";
-import { fetchClassesBySchoolId } from "../api/mockData";
+import { fetchClassesBySchoolId, type SchoolClassOption } from "../api/mockData";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 export function Step3({ onNext, onBack }: { onNext?: () => void, onBack?: () => void }) {
     const { schoolId, setClassId } = useRegistrationStore();
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-    const [classes, setClasses] = useState<any[]>([]);
+    const [classes, setClasses] = useState<SchoolClassOption[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         let isMounted = true;
         const loadClasses = async () => {
+            if (!schoolId) {
+                if (isMounted) {
+                    setClasses([]);
+                    setError("Please go back and choose a school first.");
+                    setIsLoading(false);
+                }
+                return;
+            }
+
             setIsLoading(true);
+            setError(null);
             try {
-                const results = await fetchClassesBySchoolId(schoolId || '');
+                const results = await fetchClassesBySchoolId(schoolId);
                 if (isMounted) setClasses(results);
+            } catch (err) {
+                if (isMounted) {
+                    setClasses([]);
+                    setError(err instanceof Error ? err.message : "Failed to load classes.");
+                }
             } finally {
                 if (isMounted) setIsLoading(false);
             }
@@ -51,6 +67,11 @@ export function Step3({ onNext, onBack }: { onNext?: () => void, onBack?: () => 
                         {isLoading ? (
                             <div className="flex flex-col items-center justify-center py-10 mt-6 text-center">
                                 <p className="text-sm text-graphite">Loading classes...</p>
+                            </div>
+                        ) : error ? (
+                            <div className="flex flex-col items-center justify-center py-10 mt-6 text-center">
+                                <p className="text-sm text-[#E57661]">{error}</p>
+                                <p className="text-[13px] text-graphite opacity-60 mt-2">Please try again or go back to reselect your school.</p>
                             </div>
                         ) : classes.length > 0 ? (
                             classes.map((cls) => {

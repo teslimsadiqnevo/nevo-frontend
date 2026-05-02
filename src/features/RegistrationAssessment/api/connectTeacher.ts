@@ -1,17 +1,22 @@
-"use server";
-
 import { apiFetch } from "@/shared/lib/api";
 
 export async function connectTeacher(data: {
-  teacherId: string;
+  code: string;
   token: string;
 }) {
   try {
-    const res = await apiFetch(`/teachers/${data.teacherId}/connect`, {
+    const normalizedCode = data.code.trim().toUpperCase();
+    const payload = normalizedCode.startsWith("NEVO-CLASS-")
+      ? { class_code: normalizedCode }
+      : { teacher_nevo_id: normalizedCode };
+
+    const res = await apiFetch("/teachers/connect", {
       method: "POST",
       headers: {
+        "Content-Type": "application/json",
         Authorization: `Bearer ${data.token}`,
       },
+      body: JSON.stringify(payload),
     });
 
     const result = await res.json();

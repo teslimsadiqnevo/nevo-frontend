@@ -1,5 +1,3 @@
-"use server";
-
 import { apiFetch } from "@/shared/lib/api";
 
 export async function submitAnswers(data: {
@@ -7,7 +5,7 @@ export async function submitAnswers(data: {
     token: string;
 }) {
     try {
-        const res = await apiFetch("/assessment/submit", {
+        const res = await apiFetch("/assessments", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -19,10 +17,15 @@ export async function submitAnswers(data: {
         const result = await res.json();
         
         if (!res.ok) {
-            return { error: result.detail || "Failed to submit assessment answers." };
+            const detail =
+                typeof result?.detail === "string"
+                    ? result.detail
+                    : typeof result?.error === "string"
+                        ? result.error
+                        : "Failed to submit assessment answers.";
+            return { error: detail };
         }
         
-        console.log(result)
         return { success: true, data: result };
     } catch (error) {
         console.error("Submit assessment error:", error);

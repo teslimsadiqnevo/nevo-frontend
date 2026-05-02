@@ -1,5 +1,3 @@
-"use server";
-
 import { apiFetch } from "@/shared/lib/api";
 
 export async function registerStudent(data: {

@@ -7,6 +7,7 @@ import { StudentSidebar } from "@/widgets/StudentSidebar";
 import { getStudentDashboard, getStudentLessons, getStudentProfile, getStudentProgress, getStudentConnections, updateStudentSettings } from '../api/student';
 import { useRegistrationStore } from '@/shared/store/useRegistrationStore';
 import { signOut } from 'next-auth/react';
+import { useAuthGuard } from '@/shared/lib';
 import { StudentProgressPanel } from './StudentProgressPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ export function StudentDashboard({ view = 'home', user }: { view?: string; user?
     const [progressData, setProgressData] = useState<any>(null);
     const clearRegistration = useRegistrationStore((state) => state.clearRegistration);
     const userIdentity = user?.id || user?.nevoId || user?.email || user?.name || null;
+    const guardAuth = useAuthGuard('student');
 
     const resetStudentState = () => {
         setSelectedLesson(null);
@@ -88,7 +90,11 @@ export function StudentDashboard({ view = 'home', user }: { view?: string; user?
                     getStudentProgress(),
                     getStudentConnections()
                 ]);
-                
+
+                if (guardAuth([dashRes as any, lessRes as any, profRes as any, progRes as any, connRes as any])) {
+                    return;
+                }
+
                 if (profRes.data) setProfile(profRes.data);
                 if (progRes.data) setProgressData(progRes.data);
                 if (connRes.data) {

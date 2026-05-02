@@ -29,7 +29,7 @@ export function Connect() {
         };
     }, [isScanning]);
 
-    const performConnection = async (teacherId: string) => {
+    const performConnection = async (teacherCode: string) => {
         if (!token) {
             setError("You must be registered to connect. Missing token.");
             return;
@@ -38,11 +38,13 @@ export function Connect() {
         setIsLoading(true);
         setError(null);
         try {
-            const result = await connectTeacher({ teacherId, token });
+            const normalizedCode = teacherCode.trim().toUpperCase();
+            const result = await connectTeacher({ code: normalizedCode, token });
             if (result.error) {
                 setError(result.error);
                 setIsConnected(false);
             } else {
+                setCode(normalizedCode);
                 setIsConnected(true);
                 if (result.data?.teacher_name || result.data?.teacher?.name) {
                     setTeacherName(result.data.teacher_name || result.data.teacher.name);

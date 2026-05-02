@@ -13,6 +13,7 @@ import { AddLessonWizard } from "./AddLessonWizard";
 import { AssignLessonWizard } from "./AssignLessonWizard";
 import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
+import { useAuthGuard } from "@/shared/lib";
 
 function getUserDisplayName(user?: any) {
     return (
@@ -28,17 +29,9 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
     const router = useRouter();
     const [actionModal, setActionModal] = useState<'upload' | 'assign' | null>(null);
     const [profileIdentity, setProfileIdentity] = useState<{ name?: string; email?: string; avatarUrl?: string } | null>(null);
+    const guardAuth = useAuthGuard('teacher');
 
-    const handleExpiredTeacherSession = async (res?: any) => {
-        const errorText = String(res?.error || '');
-        const isExpired =
-            Boolean(res?.authExpired) ||
-            /invalid|expired|unauthorized|token/i.test(errorText);
-
-        if (!isExpired) return false;
-        await signOut({ callbackUrl: '/login/teacher' });
-        return true;
-    };
+    const handleExpiredTeacherSession = (res?: any) => guardAuth(res);
 
     useEffect(() => {
         let mounted = true;
@@ -117,19 +110,13 @@ function TeacherHomeView({
     const router = useRouter();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const guardAuth = useAuthGuard('teacher');
 
     useEffect(() => {
         let mounted = true;
         (async () => {
             const res = await getTeacherDashboardHome();
-            const errorText = String((res as any)?.error || '');
-            const isExpired =
-                Boolean((res as any)?.authExpired) ||
-                /invalid|expired|unauthorized|token/i.test(errorText);
-            if (isExpired) {
-                await signOut({ callbackUrl: '/login/teacher' });
-                return;
-            }
+            if (guardAuth(res)) return;
             if (!mounted) return;
             if ('data' in res) {
                 setData(res.data || null);
@@ -141,7 +128,7 @@ function TeacherHomeView({
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [guardAuth]);
 
     const firstName = user?.name || 'Teacher';
     const studentsNeedSupport = Number(data?.students_need_support ?? 0);

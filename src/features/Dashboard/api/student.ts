@@ -1,7 +1,8 @@
 "use server";
 
 import { apiFetch } from "@/shared/lib/api";
-import { auth } from "@/features/Auth/api/auth";
+import { auth, signOut } from "@/features/Auth/api/auth";
+import { cookies } from "next/headers";
 
 async function getAuthHeader() {
     const session = await auth();
@@ -12,16 +13,52 @@ async function getAuthHeader() {
     return { Authorization: `Bearer ${token}` };
 }
 
+function isAuthExpiredResponse(status: number, detail: unknown) {
+    if (status !== 401 && status !== 403) return false;
+    const text = typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
+    return /invalid|expired|unauthorized|token/i.test(text);
+}
+
+async function clearAuthState() {
+    try {
+        await signOut({ redirect: false });
+    } catch {
+        // no-op
+    }
+    const cookieStore = await cookies();
+    cookieStore.delete("access_token");
+    cookieStore.delete("refresh_token");
+    cookieStore.delete("user");
+}
+
+async function unwrap(res: Response, label: string) {
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        const detail =
+            (data as any)?.detail ||
+            (data as any)?.message ||
+            (data as any)?.error ||
+            res.statusText;
+        const detailText =
+            typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
+        const authExpired = isAuthExpiredResponse(res.status, detail);
+
+        if (authExpired) {
+            await clearAuthState();
+        }
+
+        return { data: data ?? null, error: `${label}: ${detailText || res.statusText}`, authExpired };
+    }
+    return { data, error: undefined as string | undefined, authExpired: false };
+}
+
 export async function getStudentDashboard() {
     try {
         const headers = await getAuthHeader();
         const res = await apiFetch(`/students/me/dashboard`, { headers });
-        if (!res.ok) {
-            return { error: `Failed to fetch dashboard: ${res.statusText}` };
-        }
-        return { data: await res.json() };
+        return unwrap(res, "Failed to fetch dashboard");
     } catch (e: any) {
-        return { error: e.message };
+        return { data: null, error: e.message };
     }
 }
 
@@ -29,12 +66,9 @@ export async function getStudentLessons() {
     try {
         const headers = await getAuthHeader();
         const res = await apiFetch(`/students/me/lessons`, { headers });
-        if (!res.ok) {
-            return { error: `Failed to fetch lessons: ${res.statusText}` };
-        }
-        return { data: await res.json() };
+        return unwrap(res, "Failed to fetch lessons");
     } catch (e: any) {
-        return { error: e.message };
+        return { data: null, error: e.message };
     }
 }
 
@@ -42,12 +76,9 @@ export async function getStudentProfile() {
     try {
         const headers = await getAuthHeader();
         const res = await apiFetch(`/students/me/profile`, { headers });
-        if (!res.ok) {
-            return { error: `Failed to fetch profile: ${res.statusText}` };
-        }
-        return { data: await res.json() };
+        return unwrap(res, "Failed to fetch profile");
     } catch (e: any) {
-        return { error: e.message };
+        return { data: null, error: e.message };
     }
 }
 
@@ -55,12 +86,9 @@ export async function getStudentProgress() {
     try {
         const headers = await getAuthHeader();
         const res = await apiFetch(`/students/me/progress`, { headers });
-        if (!res.ok) {
-            return { error: `Failed to fetch progress: ${res.statusText}` };
-        }
-        return { data: await res.json() };
+        return unwrap(res, "Failed to fetch progress");
     } catch (e: any) {
-        return { error: e.message };
+        return { data: null, error: e.message };
     }
 }
 
@@ -68,12 +96,9 @@ export async function getStudentConnections() {
     try {
         const headers = await getAuthHeader();
         const res = await apiFetch(`/students/me/connections`, { headers });
-        if (!res.ok) {
-            return { error: `Failed to fetch connections: ${res.statusText}` };
-        }
-        return { data: await res.json() };
+        return unwrap(res, "Failed to fetch connections");
     } catch (e: any) {
-        return { error: e.message };
+        return { data: null, error: e.message };
     }
 }
 
@@ -85,11 +110,8 @@ export async function updateStudentSettings(settings: any) {
             headers,
             body: JSON.stringify(settings),
         });
-        if (!res.ok) {
-            return { error: `Failed to update settings: ${res.statusText}` };
-        }
-        return { data: await res.json() };
+        return unwrap(res, "Failed to update settings");
     } catch (e: any) {
-        return { error: e.message };
+        return { data: null, error: e.message };
     }
 }

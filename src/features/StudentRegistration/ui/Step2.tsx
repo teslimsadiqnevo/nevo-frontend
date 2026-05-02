@@ -1,55 +1,52 @@
 'use client'
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Icon } from "@/shared/ui";
-import { fetchSchools } from "../api/mockData";
+import { fetchSchools, type SchoolSearchOption } from "../api/mockData";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
-
-const THROTTLE_MS = 7000;
 
 export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => void }) {
     const { setSchoolId } = useRegistrationStore();
     const [searchQuery, setSearchQuery] = useState("");
-    const [selectedSchool, setSelectedSchool] = useState<{ id: string, name: string, location: string } | null>(null);
-    const [schools, setSchools] = useState<any[]>([]);
+    const [selectedSchool, setSelectedSchool] = useState<SchoolSearchOption | null>(null);
+    const [schools, setSchools] = useState<SchoolSearchOption[]>([]);
     const [isLoading, setIsLoading] = useState(false);
-    const [cooldown, setCooldown] = useState(0);
+    const [error, setError] = useState<string | null>(null);
 
-    const lastSearchTime = useRef(0);
-    const cooldownTimer = useRef<NodeJS.Timeout | null>(null);
-
-    const handleSearch = useCallback(async () => {
-        if (!searchQuery.trim()) return;
-
-        const now = Date.now();
-        const elapsed = now - lastSearchTime.current;
-
-        if (elapsed < THROTTLE_MS && lastSearchTime.current !== 0) {
-            const remaining = Math.ceil((THROTTLE_MS - elapsed) / 1000);
-            setCooldown(remaining);
-
-            if (cooldownTimer.current) clearInterval(cooldownTimer.current);
-            cooldownTimer.current = setInterval(() => {
-                setCooldown(prev => {
-                    if (prev <= 1) {
-                        if (cooldownTimer.current) clearInterval(cooldownTimer.current);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
+    useEffect(() => {
+        if (selectedSchool || !searchQuery.trim()) {
+            setSchools([]);
+            setError(null);
+            setIsLoading(false);
             return;
         }
 
-        lastSearchTime.current = now;
-        setIsLoading(true);
-        try {
-            const results = await fetchSchools(searchQuery);
-            setSchools(results);
-        } finally {
-            setIsLoading(false);
-        }
-    }, [searchQuery]);
+        let isCancelled = false;
+        const timeoutId = setTimeout(async () => {
+            setIsLoading(true);
+            setError(null);
+            try {
+                const results = await fetchSchools(searchQuery);
+                if (!isCancelled) {
+                    setSchools(results);
+                }
+            } catch (err) {
+                if (!isCancelled) {
+                    setSchools([]);
+                    setError(err instanceof Error ? err.message : "Failed to search for schools.");
+                }
+            } finally {
+                if (!isCancelled) {
+                    setIsLoading(false);
+                }
+            }
+        }, 350);
+
+        return () => {
+            isCancelled = true;
+            clearTimeout(timeoutId);
+        };
+    }, [searchQuery, selectedSchool]);
 
     return (
         <div className="flex flex-col justify-center items-center">
@@ -82,40 +79,28 @@ export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => v
                                         setSearchQuery(e.target.value);
                                     }
                                 }}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && !selectedSchool) {
-                                        e.preventDefault();
-                                        handleSearch();
-                                    }
-                                }}
                                 disabled={selectedSchool !== null}
                                 className="w-full bg-transparent outline-none text-indigo font-medium disabled:text-indigo"
                             />
                             {selectedSchool ? (
                                 <Icon type="tick" className="shrink-0 ml-3" width={20} height={20} />
                             ) : (
-                                <button
-                                    type="button"
-                                    onClick={handleSearch}
-                                    disabled={!searchQuery.trim() || isLoading}
-                                    className="shrink-0 ml-3 p-1 rounded-lg hover:bg-indigo/5 active:bg-indigo/10 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                                >
+                                <div className="shrink-0 ml-3 p-1">
                                     <Icon type="search-II" width={20} height={20} />
-                                </button>
+                                </div>
                             )}
                         </div>
-
-                        {cooldown > 0 && (
-                            <p className="text-[11px] text-lavender font-medium mt-2 text-center">
-                                Search again in {cooldown}s
-                            </p>
-                        )}
 
                         {!selectedSchool && searchQuery && (
                             <div className="mt-2 w-full bg-white border border-indigo-10 rounded-xl overflow-hidden shadow-sm">
                                 {isLoading ? (
                                     <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
                                         <p className="text-sm text-graphite">Searching...</p>
+                                    </div>
+                                ) : error ? (
+                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
+                                        <p className="text-sm text-[#E57661]">{error}</p>
+                                        <p className="text-[13px] text-graphite mt-1">Please try again in a moment.</p>
                                     </div>
                                 ) : schools.length > 0 ? (
                                     <div className="flex flex-col">
@@ -149,7 +134,8 @@ export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => v
                                 <button 
                                     onClick={() => {
                                         setSelectedSchool(null);
-                                        setSearchQuery("");
+                                        setSchools([]);
+                                        setError(null);
                                     }}
                                     className="text-xs text-lavender hover:opacity-100 transition-opacity"
                                 >

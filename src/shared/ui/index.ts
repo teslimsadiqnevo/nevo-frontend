@@ -6,3 +6,5 @@ export * from "./Input";
 export * from "./HorizontalCard";
 export * from "./DashboardCard";
 export { UserAvatar } from "./UserAvatar";
+export { Toaster, useToastStore, toast } from "./Toast";
+export type { Toast as ToastEntry, ToastVariant } from "./Toast";
