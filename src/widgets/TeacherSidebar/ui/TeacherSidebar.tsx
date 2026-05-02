@@ -26,6 +26,10 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
     const role = searchParams.get('role');
     const displayName = user?.name?.trim() || '';
     const isProfileActive = currentView === 'profile';
+    const askPage = currentView || 'home';
+    const askContext = `You are on Teacher Dashboard > ${
+        currentView ? currentView.charAt(0).toUpperCase() + currentView.slice(1) : 'Home'
+    }`;
 
     const buildHref = (view: string | null) => {
         const params = new URLSearchParams();
@@ -93,7 +97,13 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
                 </Link>
             </div>
 
-            <AskNevoDrawer open={showAskNevo} onClose={() => setShowAskNevo(false)} leftInset={200} />
+            <AskNevoDrawer
+                open={showAskNevo}
+                onClose={() => setShowAskNevo(false)}
+                leftInset={200}
+                page={askPage}
+                context={askContext}
+            />
         </aside>
     );
 }

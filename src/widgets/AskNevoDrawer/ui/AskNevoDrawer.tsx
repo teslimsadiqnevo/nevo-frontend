@@ -13,6 +13,7 @@ type AskNevoDrawerProps = {
     open: boolean;
     onClose: () => void;
     context?: string | null;
+    page?: string | null;
     lessonId?: string | null;
     leftInset?: number;
 };
@@ -21,6 +22,7 @@ export function AskNevoDrawer({
     open,
     onClose,
     context,
+    page,
     lessonId,
     leftInset = 0,
 }: AskNevoDrawerProps) {
@@ -78,6 +80,9 @@ export function AskNevoDrawer({
                 body: JSON.stringify({
                     message,
                     ...(lessonId ? { lesson_id: lessonId } : {}),
+                    ...(context ? { context } : {}),
+                    ...(page ? { page } : {}),
+                    ...(messages.length > 0 ? { history: messages } : {}),
                 }),
             });
 

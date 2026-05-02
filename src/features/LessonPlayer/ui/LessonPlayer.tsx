@@ -219,6 +219,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
                 open={showAskNevoDrawer}
                 onClose={() => setShowAskNevoDrawer(false)}
                 context={askContext}
+                page={`lesson-${stage}`}
                 lessonId={lessonId}
             />
         </>
