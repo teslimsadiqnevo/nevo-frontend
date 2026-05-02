@@ -1,10 +1,13 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { StudentSidebar } from "@/widgets/StudentSidebar";
 import { getStudentDashboard, getStudentLessons, getStudentProfile, getStudentProgress, getStudentConnections, updateStudentSettings } from '../api/student';
 import { useRegistrationStore } from '@/shared/store/useRegistrationStore';
 import { signOut } from 'next-auth/react';
+import { StudentProgressPanel } from './StudentProgressPanel';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export type Lesson = {
@@ -17,6 +20,11 @@ export type Lesson = {
     status: 'completed' | 'in_progress' | 'not_started';
     objectives?: string[];
     bannerColor?: string;
+    stepProgress?: {
+        currentStep: number;
+        totalSteps: number;
+        progressPercentage: number;
+    };
 }
 
 // ─── Subject pill color map ────────────────────────────────────────────────────
@@ -33,6 +41,7 @@ const subjectColors: Record<string, { bg: string; text: string; banner: string }
 export function StudentDashboard({ view = 'home', user }: { view?: string; user?: any }) {
     const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
     const [loading, setLoading] = useState(true);
+    const [studentName, setStudentName] = useState('');
     
     // States for real data mapped to local format
     const [assignedLessons, setAssignedLessons] = useState<Lesson[]>([]);
@@ -59,6 +68,7 @@ export function StudentDashboard({ view = 'home', user }: { view?: string; user?
     useEffect(() => {
         if (!userIdentity) {
             resetStudentState();
+            setStudentName('');
             setLoading(false);
             return;
         }
@@ -80,60 +90,64 @@ export function StudentDashboard({ view = 'home', user }: { view?: string; user?
                 ]);
                 
                 if (profRes.data) setProfile(profRes.data);
-                console.log("profile", profile)
                 if (progRes.data) setProgressData(progRes.data);
                 if (connRes.data) {
                     setProfile((prev: any) => ({ ...(prev || {}), connections: connRes.data }));
-                    console.log("profile", profRes.data )
                 }
 
-                console.log("dashRes", dashRes);
-                
-                // Map dashboard / lessons data robustly
                 const rawDashboard = dashRes.data || {};
-                const rawLessons = lessRes.data || [];
-                const rawProgress = progRes.data || {};
-                
-                // Extract assignments and sessions robustly
-                const extractedAssignments = Array.isArray(rawLessons) ? rawLessons.filter((l: any) => l.status === 'not_started' || !l.status) : (rawLessons.assigned || rawLessons.assignments || rawDashboard.assigned || rawDashboard.assignments || []);
-                const extractedSessions = Array.isArray(rawLessons) ? rawLessons.filter((l: any) => l.status === 'completed' || l.completed_at) : (rawLessons.sessions || rawDashboard.sessions || rawProgress.sessions || []);
-                const extractedRecommended = Array.isArray(rawDashboard.recommended) ? rawDashboard.recommended : (Array.isArray(rawLessons.recommended) ? rawLessons.recommended : []);
-                
-                const assignments = Array.isArray(extractedAssignments) ? extractedAssignments : [];
-                const sessions = Array.isArray(extractedSessions) ? extractedSessions : [];
-                const recommended = Array.isArray(extractedRecommended) ? extractedRecommended : [];
-                
-                const mapLesson = (a: any, status: any) => ({
-                    id: a.lesson_id || a.id || Math.random(),
-                    title: a.title || 'Lesson',
-                    subject: a.subject || 'Subject',
-                    topic: a.topic || 'Topic',
-                    grade: 'Grade ' + (a.target_grade_level || 3),
-                    duration: `~${a.estimated_duration_minutes || 20} min`,
-                    status: a.status || status,
-                    objectives: a.objectives || []
-                });
+                const rawLessons = lessRes.data || {};
 
-                if (assignments.length > 0 || sessions.length > 0 || recommended.length > 0) {
-                    const mappedAssignments = assignments.map((a: any) => mapLesson(a, 'not_started'));
-                    setAssignedLessons(mappedAssignments);
-                    setTeacherLessons(mappedAssignments); // using assignments as teacher lessons for now
-                    setCurrentLesson(mappedAssignments[0] || null);
+                const toLessonCard = (item: any): Lesson => {
+                    const estimatedMinutes = Number(item?.estimated_duration_minutes ?? item?.estimatedDurationMinutes ?? item?.duration_minutes ?? item?.durationMinutes ?? 30);
+                    return {
+                        id: item?.lesson_id || item?.id || item?.lessonId || `${item?.title || 'lesson'}-${estimatedMinutes}`,
+                        title: item?.title || 'Lesson',
+                        subject: item?.subject || 'Subject',
+                        topic: item?.topic || 'Topic',
+                        grade: item?.grade || `~${estimatedMinutes} min`,
+                        duration: `${estimatedMinutes} min`,
+                        status: item?.status || 'not_started',
+                        objectives: item?.objectives || [],
+                        stepProgress: item?.progress_percentage != null || item?.current_step != null || item?.total_steps != null ? {
+                            currentStep: Number(item?.current_step ?? item?.currentStep ?? 0),
+                            totalSteps: Number(item?.total_steps ?? item?.totalSteps ?? 0),
+                            progressPercentage: Number(item?.progress_percentage ?? item?.progressPercentage ?? 0),
+                        } : undefined,
+                    };
+                };
 
-                    const completed = sessions
-                        .filter((s: any) => s.completed_at || s.status === 'completed')
-                        .map((s: any) => mapLesson(s, 'completed'));
-                    setCompletedLessons(completed);
+                const currentLessonSource = rawDashboard.current_lesson || rawLessons.current_lesson || null;
+                const assignedSource = Array.isArray(rawDashboard.assigned_lessons)
+                    ? rawDashboard.assigned_lessons
+                    : Array.isArray(rawLessons.teacher_lessons)
+                        ? rawLessons.teacher_lessons
+                        : [];
+                const recommendedSource = Array.isArray(rawDashboard.recommended_lessons)
+                    ? rawDashboard.recommended_lessons
+                    : Array.isArray(rawLessons.recommended_lessons)
+                        ? rawLessons.recommended_lessons
+                        : [];
+                const completedSource = Array.isArray(rawLessons.completed_lessons)
+                    ? rawLessons.completed_lessons
+                    : [];
 
-                    const mappedRecommended = recommended.map((a: any) => mapLesson(a, 'not_started'));
-                    setRecommendedLessons(mappedRecommended);
-                } else {
-                    setAssignedLessons([]);
-                    setRecommendedLessons([]);
-                    setCurrentLesson(null);
-                    setTeacherLessons([]);
-                    setCompletedLessons([]);
-                }
+                const mappedAssigned = assignedSource.map(toLessonCard);
+                const mappedRecommended = recommendedSource.map(toLessonCard);
+                const mappedCompleted = completedSource.map((item: any) => ({
+                    ...toLessonCard(item),
+                    status: 'completed' as const,
+                }));
+
+                setStudentName(rawDashboard.student_name || user?.name || 'Student');
+                setCurrentLesson(currentLessonSource ? {
+                    ...toLessonCard(currentLessonSource),
+                    status: 'in_progress',
+                } : null);
+                setAssignedLessons(mappedAssigned);
+                setTeacherLessons(mappedAssigned);
+                setCompletedLessons(mappedCompleted);
+                setRecommendedLessons(mappedRecommended);
             } catch (err) {
                 console.error("Failed to fetch dashboard data", err);
             } finally {
@@ -152,35 +166,42 @@ export function StudentDashboard({ view = 'home', user }: { view?: string; user?
     return (
         <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
             <StudentSidebar />
-            <main className="flex-1 overflow-y-auto relative">
+            <main className="flex-1 overflow-y-auto relative px-[44px] py-[32px]">
                 {selectedLesson ? (
                     <LessonDetailView
                         lesson={selectedLesson}
                         onBack={() => setSelectedLesson(null)}
                     />
                 ) : view === 'lessons' ? (
-                    <div className="px-[48px] py-[48px]">
+                    <div>
                         <StudentLessonsView onSelectLesson={setSelectedLesson} currentLesson={currentLesson} teacherLessons={teacherLessons} completedLessons={completedLessons} />
                     </div>
                 ) : view === 'downloads' ? (
-                    <div className="px-[48px] py-[48px]">
+                    <div>
                         <StudentDownloadsView />
                     </div>
                 ) : view === 'progress' ? (
-                    <div className="px-[48px] py-[48px]">
-                        <StudentProgressView progressData={progressData} />
+                    <div>
+                        <StudentProgressPanel progressData={progressData} />
                     </div>
                 ) : view === 'connect' ? (
-                    <div className="px-[48px] py-[48px]">
+                    <div>
                         <StudentConnectView profile={profile} />
                     </div>
                 ) : view === 'profile' ? (
-                    <div className="px-[48px] py-[48px]">
+                    <div>
                         <StudentProfileView user={user} profile={profile} onLogout={handleStudentLogout} />
                     </div>
                 ) : (
-                    <div className="px-[48px] py-[48px]">
-                        <StudentHomeView onSelectLesson={setSelectedLesson} user={user} assignedLessons={assignedLessons} recommendedLessons={recommendedLessons} currentLesson={currentLesson} />
+                    <div>
+                        <StudentHomeView
+                            onSelectLesson={setSelectedLesson}
+                            user={user}
+                            studentName={studentName}
+                            assignedLessons={assignedLessons}
+                            recommendedLessons={recommendedLessons}
+                            currentLesson={currentLesson}
+                        />
                     </div>
                 )}
             </main>
@@ -189,83 +210,171 @@ export function StudentDashboard({ view = 'home', user }: { view?: string; user?
 }
 
 // ─── Home View ─────────────────────────────────────────────────────────────────
-function StudentHomeView({ onSelectLesson, user, assignedLessons, recommendedLessons, currentLesson }: { onSelectLesson: (lesson: Lesson) => void; user?: any; assignedLessons: Lesson[]; recommendedLessons: Lesson[]; currentLesson: Lesson | null }) {
-    const firstName = user?.name?.split(' ')[0] || 'Student';
+function StudentHomeView({ onSelectLesson, user, studentName, assignedLessons, recommendedLessons, currentLesson }: { onSelectLesson: (lesson: Lesson) => void; user?: any; studentName?: string; assignedLessons: Lesson[]; recommendedLessons: Lesson[]; currentLesson: Lesson | null }) {
+    const firstName = (studentName || user?.name || 'Student').split(' ')[0] || 'Student';
+    const progress = currentLesson?.stepProgress || {
+        currentStep: 2,
+        totalSteps: 5,
+        progressPercentage: 40,
+    };
 
     return (
-        <div className="max-w-[820px]">
+        <div className="w-[716px] flex flex-col gap-[40px]">
             {/* Greeting */}
-            <h1 className="text-[32px] font-bold text-[#3B3F6E] leading-tight tracking-[-0.02em]">
-                Hi, {firstName}.
-            </h1>
-            <p className="text-graphite-60 text-[15px] mt-2 mb-8">
-                Ready to continue where you left off?
-            </p>
+            <div>
+                <h1 className="text-[40px] font-bold text-[#2B2B2F] leading-[50px]">
+                    Hi, {firstName}.
+                </h1>
+                <p className="text-[18px] font-medium text-[#2B2B2F]/80 leading-[27px] mt-1">
+                    Ready to continue where you left off?
+                </p>
+            </div>
 
             {/* Continue Lesson Hero */}
-            {currentLesson && (
+            {currentLesson ? (
                 <div
-                    className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.04)] p-6 mb-10 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow"
+                    className="w-full bg-[#FCFCFC] rounded-[24px] border border-black/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] p-[33px] flex flex-col gap-6 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow box-border"
                     onClick={() => onSelectLesson(currentLesson)}
                 >
-                    {/* Subject breadcrumb */}
-                    <span className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.06em] uppercase">
-                        {currentLesson.subject} · {currentLesson.topic}
-                    </span>
+                    <div className="flex flex-col gap-2">
+                        <span className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.3px] uppercase">
+                            {currentLesson.subject} · {currentLesson.topic}
+                        </span>
+                        <h2 className="text-[32px] font-bold text-[#2B2B2F] leading-[40px]">
+                            {currentLesson.title}
+                        </h2>
+                    </div>
 
-                    {/* Title */}
-                    <h2 className="text-[22px] font-bold text-[#2B2B2F] mt-2 mb-4 tracking-[-0.01em]">
-                        {currentLesson.title}
-                    </h2>
-
-                    {/* Progress thumbnail bar */}
-                    <div className="bg-[#F3F0EA] rounded-xl px-5 py-4 flex items-center gap-4 mb-5">
-                        {/* Play button */}
-                        <div className="w-10 h-10 rounded-full bg-[#3B3F6E] flex items-center justify-center shrink-0">
-                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                                <path d="M3 1.5L12 7L3 12.5V1.5Z" fill="white"/>
-                            </svg>
-                        </div>
-                        <div className="flex items-center gap-3">
-                            <span className="text-[13px] font-semibold text-[#3B3F6E]">Step 2 of 5</span>
-                            <div className="w-[120px] h-[4px] bg-[#E0DDD7] rounded-full overflow-hidden">
-                                <div className="h-full bg-[#3B3F6E] rounded-full" style={{ width: '40%' }} />
+                    <div className="w-[622px] h-[120px] bg-[#F7F1E6] rounded-[16px] relative overflow-hidden border border-black/5">
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#F7F1E6] via-[#F7F1E6]/80 to-transparent flex items-center px-8 z-10">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-full bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
+                                    <div className="w-8 h-8 bg-[#3B3F6E] rounded-full flex items-center justify-center relative">
+                                        <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-[#FCFCFC] border-b-[5px] border-b-transparent ml-1" />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col gap-1">
+                                    <span className="text-[14px] font-bold text-[#3B3F6E]">Step {progress.currentStep} of {progress.totalSteps}</span>
+                                    <div className="w-[128px] h-[6px] bg-black/10 rounded-full overflow-hidden relative">
+                                        <div className="absolute left-0 top-0 h-full bg-[#3B3F6E] rounded-full" style={{ width: `${Math.max(0, Math.min(100, progress.progressPercentage))}%` }} />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Footer */}
-                    <div className="flex items-center justify-between">
-                        <span className="text-[13px] text-graphite-60">Pick up from Step 2</span>
+                    <div className="flex items-center justify-between w-[622px] pt-2">
+                        <span className="text-[14px] font-medium text-black/60">Pick up from Step {progress.currentStep}</span>
                         <button
-                            className="px-6 py-[10px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[13.5px] font-semibold transition-colors cursor-pointer"
+                            className="px-8 py-4 bg-[#3B3F6E] hover:bg-[#2C2F52] text-[#FCFCFC] rounded-2xl text-[16px] font-semibold transition-colors cursor-pointer shadow-[0_4px_6px_-1px_rgba(59,63,110,0.2),0_2px_4px_-2px_rgba(59,63,110,0.2)]"
                             onClick={(e) => { e.stopPropagation(); onSelectLesson(currentLesson); }}
                         >
                             Continue Lesson
                         </button>
                     </div>
                 </div>
+            ) : (
+                <DashboardEmptyState
+                    variant="book"
+                    className="h-[364px]"
+                    title="Your lessons will appear here"
+                    description="Your teacher will assign lessons soon."
+                />
             )}
 
             {/* Assigned Section */}
-            <section className="mb-10">
-                <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-5">Assigned</h3>
-                <div className="grid grid-cols-3 gap-5">
-                    {assignedLessons.map((lesson) => (
-                        <LessonCard key={lesson.id} lesson={lesson} onClick={() => onSelectLesson(lesson)} />
-                    ))}
-                </div>
+            <section className="w-[720px]">
+                <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Assigned</h3>
+                {assignedLessons.length > 0 ? (
+                    <div className="flex gap-4">
+                        {assignedLessons.map((lesson) => (
+                            <LessonCard key={lesson.id} lesson={lesson} onClick={() => onSelectLesson(lesson)} />
+                        ))}
+                    </div>
+                ) : (
+                    <DashboardEmptyState
+                        variant="book"
+                        className="h-[208px]"
+                        title="No lessons assigned yet"
+                        description="Check back soon — your teacher will send lessons your way."
+                    />
+                )}
             </section>
 
             {/* Recommended Section */}
-            <section className="mb-10">
-                <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-5">Recommended for you</h3>
-                <div className="grid grid-cols-4 gap-5">
-                    {recommendedLessons.map((lesson) => (
-                        <LessonCard key={lesson.id} lesson={lesson} onClick={() => onSelectLesson(lesson)} />
-                    ))}
-                </div>
+            <section className="w-[720px] pb-12">
+                <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Recommended for you</h3>
+                {recommendedLessons.length > 0 ? (
+                    <div className="flex gap-4">
+                        {recommendedLessons.map((lesson) => (
+                            <LessonCard key={lesson.id} lesson={lesson} onClick={() => onSelectLesson(lesson)} />
+                        ))}
+                    </div>
+                ) : (
+                    <DashboardEmptyState
+                        variant="lightbulb"
+                        className="h-[208px]"
+                        title="Recommendations loading"
+                        description="Complete a lesson first and we'll suggest what's next."
+                    >
+                        <button className="px-6 py-[6px] border border-[#3B3F6E] rounded-xl text-[14px] font-medium text-[#3B3F6E] mt-1 hover:bg-[#3B3F6E] hover:text-[#FCFCFC] transition-colors cursor-pointer">
+                            Browse all lessons
+                        </button>
+                    </DashboardEmptyState>
+                )}
             </section>
+        </div>
+    );
+}
+
+function DashboardEmptyState({
+    variant,
+    title,
+    description,
+    className = '',
+    children,
+}: {
+    variant: 'book' | 'lightbulb';
+    title: string;
+    description: string;
+    className?: string;
+    children?: React.ReactNode;
+}) {
+    return (
+        <div className={`w-full bg-[#FCFCFC] rounded-[16px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] flex flex-col items-center justify-center border border-black/5 box-border ${className}`}>
+            <DashboardEmptyIcon variant={variant} />
+            <h3 className={`font-semibold text-[#2B2B2F] text-center ${variant === 'book' ? 'text-[16px] mb-2' : 'text-[14px] mb-1'}`}>
+                {title}
+            </h3>
+            <p className={`text-[#2B2B2F]/55 text-center ${variant === 'book' ? 'text-[14px]' : 'text-[12px]'}`}>
+                {description}
+            </p>
+            {children}
+        </div>
+    );
+}
+
+function DashboardEmptyIcon({ variant }: { variant: 'book' | 'lightbulb' }) {
+    if (variant === 'book') {
+        return (
+            <div className="w-20 h-20 bg-[#9A9CCB]/30 rounded-[12px] flex items-center justify-center mb-4 border-[2.5px] border-[#9A9CCB]">
+                <svg width="40" height="40" viewBox="0 0 80 96" fill="none" className="scale-[0.85]" aria-hidden="true">
+                    <path d="M0 12C0 5.37258 5.37258 0 12 0H68C74.6274 0 80 5.37258 80 12V68C80 74.6274 74.6274 80 68 80H12C5.37258 80 0 74.6274 0 68V12Z" fill="#9A9CCB" fillOpacity="0.3" />
+                    <path d="M40 32.5C41.25 27.5656 45.9711 25.0461 56.25 25C56.4143 24.9994 56.5772 25.0313 56.7291 25.0939C56.881 25.1565 57.0191 25.2485 57.1353 25.3647C57.2515 25.4809 57.3435 25.619 57.4061 25.7709C57.4687 25.9229 57.5006 26.0857 57.5 26.25V48.75C57.5 49.0815 57.3683 49.3995 57.1339 49.6339C56.8995 49.8683 56.5815 50 56.25 50C46.25 50 42.3867 52.0164 40 55M40 32.5C38.75 27.5656 34.0289 25.0461 23.75 25C23.5857 24.9994 23.4229 25.0313 23.2709 25.0939C23.119 25.1565 22.9809 25.2485 22.8647 25.3647C22.7485 25.4809 22.6565 25.619 22.5939 25.7709C22.5313 25.9229 22.4994 26.0857 22.5 26.25V48.5992C22.5 49.3711 22.9781 50 23.75 50C33.75 50 37.6274 52.0313 40 55M40 32.5V55" stroke="#9A9CCB" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-20 h-20 bg-[#9A9CCB]/30 rounded-[12px] flex items-center justify-center mb-3 border-[2.5px] border-[#9A9CCB]">
+            <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                <path d="M20 4C13.3726 4 8 9.37258 8 16C8 20.3869 10.385 24.2018 14 26.2361V31C14 32.1046 14.8954 33 16 33H24C25.1046 33 26 32.1046 26 31V26.2361C29.615 24.2018 32 20.3869 32 16C32 9.37258 26.6274 4 20 4Z" stroke="#9A9CCB" strokeWidth="2.2" strokeLinejoin="round" />
+                <path d="M17 36H23" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M20 10V14" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M13.5 16H17.5" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" />
+                <path d="M22.5 16H26.5" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" />
+            </svg>
         </div>
     );
 }
@@ -276,129 +385,130 @@ function LessonCard({ lesson, onClick }: { lesson: Lesson; onClick: () => void }
 
     return (
         <div
-            className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow cursor-pointer group"
+            className="w-[160px] h-[200px] bg-[#F7F1E6] rounded-[12px] border border-[#E0D9CE] p-[1px] box-border cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow group flex flex-col"
             onClick={onClick}
         >
-            {/* Image placeholder */}
-            <div className="w-full h-[100px] bg-[#E8E5DF] group-hover:bg-[#DDD9D2] transition-colors" />
+            {/* Image placeholder / top box */}
+            <div className="w-[156px] h-[80px] bg-[#9A9CCB]/15 rounded-t-[10px] shrink-0" />
 
             {/* Content */}
-            <div className="p-4">
-                <h4 className="text-[13.5px] font-semibold text-[#2B2B2F] leading-snug mb-2">
+            <div className="flex flex-col px-4 py-3 gap-2 flex-1">
+                <h4 className="text-[14px] font-semibold text-[#3B3F6E] leading-[21px] line-clamp-2">
                     {lesson.title}
                 </h4>
-                <span
-                    className="inline-block px-2.5 py-[3px] rounded-full text-[11px] font-semibold"
-                    style={{ backgroundColor: pill.bg, color: pill.text }}
-                >
-                    {lesson.subject}
-                </span>
-                <p className="text-[12px] text-graphite-40 mt-2">{lesson.duration}</p>
+                <div className="mt-auto flex flex-col items-start gap-1">
+                    <span 
+                        className="inline-flex px-3 py-1 rounded-full text-[11px] font-medium"
+                        style={{ backgroundColor: pill.bg, color: pill.text }}
+                    >
+                        {lesson.subject}
+                    </span>
+                    <p className="text-[12px] text-black/60 mt-1">{lesson.duration}</p>
+                </div>
             </div>
         </div>
     );
 }
+
 
 // ─── Lessons View ──────────────────────────────────────────────────────────────
 function StudentLessonsView({ onSelectLesson, currentLesson, teacherLessons, completedLessons }: { onSelectLesson: (lesson: Lesson) => void; currentLesson: Lesson | null; teacherLessons: Lesson[]; completedLessons: Lesson[] }) {
     const [completedOpen, setCompletedOpen] = useState(false);
 
     return (
-        <div className="max-w-[820px]">
+        <div className="w-full max-w-[688px]">
             {/* Header */}
-            <h1 className="text-[32px] font-bold text-[#3B3F6E] leading-tight tracking-[-0.02em]">
+            <h1 className="text-40px font-extrabold text-[#2B2B2F] leading-12.5 tracking-[-1px]">
                 Lessons
             </h1>
-            <p className="text-graphite-60 text-[15px] mt-2 mb-8">
+            <p className="text-[18px] font-medium text-[#2B2B2F]/80 leading-6.75 mt-2 mb-8">
                 Your current learning steps.
             </p>
 
             {/* Current Lesson Hero */}
-            {currentLesson && (
-                <div
-                    className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-hidden mb-10 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow"
-                    onClick={() => onSelectLesson(currentLesson)}
-                >
-                    <div className="flex">
-                        {/* Left content */}
-                        <div className="flex-1 p-6">
-                            <span className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.06em] uppercase">
-                                {currentLesson.subject} · {currentLesson.topic}
-                            </span>
+            <section className="mb-10">
+                {currentLesson ? (
+                    <div
+                        className="w-full rounded-3xl border border-black/5 bg-[#FCFCFC] p-8 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)]"
+                        onClick={() => onSelectLesson(currentLesson)}
+                    >
+                        <div className="flex items-start justify-between gap-8">
+                            <div className="flex w-[312px] flex-col justify-between min-h-[221px]">
+                                <div className="w-full">
+                                    <span className="text-[12px] font-bold uppercase tracking-[0.6px] text-[#3B3F6E]">
+                                        {currentLesson.subject} · {currentLesson.topic}
+                                    </span>
+                                    <h2 className="mt-4 text-[32px] font-bold leading-[35px] text-[#2B2B2F]">
+                                        {currentLesson.title}
+                                    </h2>
 
-                            <h2 className="text-[22px] font-bold text-[#2B2B2F] mt-2 mb-3 tracking-[-0.01em]">
-                                {currentLesson.title}
-                            </h2>
+                                    <span className="mt-6 inline-flex items-center rounded-full bg-[#F7F1E6] px-3 py-1 text-[14px] font-medium leading-[21px] text-[#2B2B2F]/60">
+                                        Step {currentLesson.stepProgress?.currentStep || 2} in progress
+                                    </span>
+                                </div>
 
-                            {/* Step pill */}
-                            <span className="inline-block px-3 py-[4px] bg-[#E8F5E9] text-[#2D6A4F] rounded-full text-[12px] font-semibold mb-5">
-                                Step 2 in progress
-                            </span>
-
-                            {/* Continue button */}
-                            <div>
                                 <button
-                                    className="flex items-center gap-2 px-6 py-[10px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[13.5px] font-semibold transition-colors cursor-pointer"
+                                    className="mt-4 flex h-[56px] w-[158px] items-center gap-2 rounded-2xl bg-[#3B3F6E] px-8 text-[16px] font-semibold text-white shadow-[0_4px_6px_-1px_rgba(59,63,110,0.2),0_2px_4px_-2px_rgba(59,63,110,0.2)] cursor-pointer"
                                     onClick={(e) => { e.stopPropagation(); onSelectLesson(currentLesson); }}
                                 >
-                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                                        <path d="M3 1.5L12 7L3 12.5V1.5Z" fill="white"/>
+                                    <svg width="16" height="16" viewBox="0 0 14 14" fill="none">
+                                        <path d="M3 1.5L12 7L3 12.5V1.5Z" fill="white" />
                                     </svg>
                                     Continue
                                 </button>
                             </div>
-                        </div>
 
-                        {/* Right image area */}
-                        <div className="w-[220px] min-h-[200px] bg-[#2B2B2F] flex items-center justify-center relative overflow-hidden">
-                            {/* Decorative math-themed overlay */}
-                            <div className="absolute inset-0 opacity-20">
-                                <svg viewBox="0 0 220 200" fill="none" className="w-full h-full">
-                                    <text x="20" y="40" fill="white" fontSize="14" fontFamily="serif" opacity="0.5">x² + 2x = 0</text>
-                                    <text x="80" y="80" fill="white" fontSize="12" fontFamily="serif" opacity="0.4">∫ f(x)dx</text>
-                                    <text x="30" y="120" fill="white" fontSize="16" fontFamily="serif" opacity="0.3">Σ n=1</text>
-                                    <text x="100" y="150" fill="white" fontSize="13" fontFamily="serif" opacity="0.45">π r²</text>
-                                    <text x="50" y="180" fill="white" fontSize="11" fontFamily="serif" opacity="0.35">y = mx + b</text>
-                                    <line x1="10" y1="90" x2="210" y2="90" stroke="white" strokeWidth="0.5" opacity="0.15"/>
-                                    <line x1="110" y1="10" x2="110" y2="190" stroke="white" strokeWidth="0.5" opacity="0.15"/>
-                                    <rect x="60" y="55" width="100" height="85" rx="4" stroke="white" strokeWidth="0.5" opacity="0.2"/>
-                                </svg>
+                            <div className="relative h-[180px] w-[280px] overflow-hidden rounded-2xl bg-[#F7F1E6]">
+                                <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(59,63,110,0.1)_0%,rgba(0,0,0,0)_100%)]" />
+                                <Image
+                                    src="/images/lessons.png"
+                                    alt="Lesson preview"
+                                    fill
+                                    className="object-cover opacity-90"
+                                    sizes="280px"
+                                />
                             </div>
-                            {/* Center icon */}
-                            <svg width="40" height="40" viewBox="0 0 48 48" fill="none" className="relative z-10 opacity-40">
-                                <path d="M8 8H40V40H8V8Z" stroke="white" strokeWidth="1.5" rx="4"/>
-                                <line x1="14" y1="16" x2="34" y2="16" stroke="white" strokeWidth="1"/>
-                                <line x1="14" y1="24" x2="34" y2="24" stroke="white" strokeWidth="1"/>
-                                <line x1="14" y1="32" x2="26" y2="32" stroke="white" strokeWidth="1"/>
-                            </svg>
+                        </div>
+
+                        <div className="mt-3 flex items-center justify-between px-0 pt-2">
+                            <div>
+                                <span className="text-[12px] font-semibold text-black/40">Progress</span>
+                            </div>
+                            <span className="text-[12px] font-semibold text-black/40">{Math.round(currentLesson.stepProgress?.progressPercentage || 40)}%</span>
+                        </div>
+                        <div className="mt-2 h-2 w-full rounded-full bg-black/10 overflow-hidden">
+                            <div className="h-full rounded-full bg-[#3B3F6E]" style={{ width: `${Math.max(20, currentLesson.stepProgress?.progressPercentage || 40)}%` }} />
                         </div>
                     </div>
-
-                    {/* Progress bar */}
-                    <div className="px-6 pb-5 pt-2">
-                        <div className="flex items-center justify-between mb-2">
-                            <span className="text-[12px] text-graphite-60 font-medium">Progress</span>
-                            <span className="text-[12px] text-graphite-60 font-medium">40%</span>
-                        </div>
-                        <div className="w-full h-[6px] bg-[#E9E7E2] rounded-full overflow-hidden">
-                            <div className="h-full bg-[#3B3F6E] rounded-full transition-all duration-500" style={{ width: '40%' }} />
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* From your teacher */}
-            <section className="mb-10">
-                <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-5">From your teacher</h3>
-                <div className="grid grid-cols-2 gap-5">
-                    {teacherLessons.map((lesson) => (
-                        <TeacherLessonCard key={lesson.id} lesson={lesson} onClick={() => onSelectLesson(lesson)} />
-                    ))}
-                </div>
+                ) : (
+                    <StudentLessonsEmptyState
+                        variant="book"
+                        className="h-[351px]"
+                        title="No active lesson yet"
+                        description="Your teacher will assign the next lesson here."
+                    />
+                )}
             </section>
 
-            {/* Completed (collapsible) */}
-            <section className="border-t border-[#E9E7E2] pt-5">
+            <section className="mb-10">
+                <h3 className="mb-5 text-[20px] font-bold text-[#2B2B2F]">From your teacher</h3>
+                {teacherLessons.length > 0 ? (
+                    <div className="grid grid-cols-2 gap-5">
+                        {teacherLessons.map((lesson) => (
+                            <TeacherLessonCard key={lesson.id} lesson={lesson} onClick={() => onSelectLesson(lesson)} />
+                        ))}
+                    </div>
+                ) : (
+                    <StudentLessonsEmptyState
+                        variant="lightbulb"
+                        className="h-[240px]"
+                        title="No teacher lessons yet"
+                        description="Assigned lessons will appear here once your teacher publishes them."
+                    />
+                )}
+            </section>
+
+            <section className="border-t border-black/5 pt-5">
                 <div className="flex items-center justify-between">
                     <button
                         onClick={() => setCompletedOpen(!completedOpen)}
@@ -415,7 +525,7 @@ function StudentLessonsView({ onSelectLesson, currentLesson, teacherLessons, com
                         </svg>
                         <span className="text-[15px] font-bold text-[#3B3F6E] group-hover:text-[#2C2F52]">Completed</span>
                     </button>
-                    <a href="#" className="text-[13px] font-semibold text-[#3B3F6E] hover:text-[#2C2F52] flex items-center gap-1 transition-colors">
+                    <a href="#" className="flex items-center gap-1 text-[13px] font-semibold text-[#3B3F6E] transition-colors hover:text-[#2C2F52]">
                         View past lessons
                         <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                             <path d="M6 4L10 8L6 12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -425,13 +535,22 @@ function StudentLessonsView({ onSelectLesson, currentLesson, teacherLessons, com
 
                 {completedOpen && (
                     <div className="mt-4 flex flex-col gap-3 animate-fade-in">
-                        {completedLessons.map((lesson) => (
-                            <CompletedLessonRow
-                                key={lesson.id}
-                                lesson={lesson}
-                                onClick={() => onSelectLesson(lesson)}
+                        {completedLessons.length > 0 ? (
+                            completedLessons.map((lesson) => (
+                                <CompletedLessonRow
+                                    key={lesson.id}
+                                    lesson={lesson}
+                                    onClick={() => onSelectLesson(lesson)}
+                                />
+                            ))
+                        ) : (
+                            <StudentLessonsEmptyState
+                                variant="lightbulb"
+                                className="h-[240px]"
+                                title="No completed lessons yet"
+                                description="Finished lessons will show up here after you complete them."
                             />
-                        ))}
+                        )}
                     </div>
                 )}
             </section>
@@ -439,45 +558,87 @@ function StudentLessonsView({ onSelectLesson, currentLesson, teacherLessons, com
     );
 }
 
+function StudentLessonsEmptyState({
+    variant,
+    title,
+    description,
+    className = '',
+}: {
+    variant: 'book' | 'lightbulb';
+    title: string;
+    description: string;
+    className?: string;
+}) {
+    return (
+        <div className={`w-full rounded-[16px] border border-black/5 bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)] ${className} flex flex-col items-center justify-center`}> 
+            {variant === 'book' ? (
+                <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-xl border-[2.5px] border-[#9A9CCB] bg-[#9A9CCB]/30">
+                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+                        <path d="M20 8C15.5817 8 12 11.5817 12 16V28C12 29.1046 12.8954 30 14 30H20" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M20 8C24.4183 8 28 11.5817 28 16V28C28 29.1046 27.1046 30 26 30H20" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+                        <path d="M20 8V30" stroke="#9A9CCB" strokeWidth="2.2" strokeLinecap="round" />
+                    </svg>
+                </div>
+            ) : (
+                <div className="mb-3 flex h-20 w-20 items-center justify-center rounded-xl border-[2.5px] border-[#9A9CCB] bg-[#9A9CCB]/30">
+                    <svg width="38" height="38" viewBox="0 0 38 38" fill="none" aria-hidden="true">
+                        <path d="M19 9C22.866 9 26 12.134 26 16C26 21 19 29 19 29C19 29 12 21 12 16C12 12.134 15.134 9 19 9Z" stroke="#9A9CCB" strokeWidth="2.2"/>
+                        <circle cx="19" cy="16" r="2.5" fill="#9A9CCB" />
+                    </svg>
+                </div>
+            )}
+            <h3 className={`text-center font-semibold text-[#2B2B2F] ${variant === 'book' ? 'text-[16px] mb-2' : 'text-[14px] mb-1'}`}>
+                {title}
+            </h3>
+            <p className={`max-w-[320px] text-center text-[#2B2B2F]/55 ${variant === 'book' ? 'text-[14px]' : 'text-[12px]'}`}>
+                {description}
+            </p>
+            {variant === 'lightbulb' ? (
+                <button className="mt-4 rounded-xl border border-[#3B3F6E] bg-transparent px-5 py-1.5 text-[14px] font-medium text-[#3B3F6E] cursor-pointer">
+                    Browse all lessons
+                </button>
+            ) : null}
+        </div>
+    );
+}
+
 // ─── Teacher Lesson Card ───────────────────────────────────────────────────────
 function TeacherLessonCard({ lesson, onClick }: { lesson: Lesson; onClick: () => void }) {
-    const colors = ['#E8D5C4', '#C9B896', '#D4CBBA', '#BFC8A0'];
-    const idNum = typeof lesson.id === 'number' ? lesson.id : String(lesson.id).charCodeAt(0);
-    const color = colors[idNum % colors.length];
+    const imageUrl = getLessonImageUrl(lesson);
 
     return (
         <div
-            className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] p-5 flex items-center gap-4 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow"
+            className="box-border flex h-[184px] flex-col justify-between rounded-[20px] border border-black/5 bg-[#FCFCFC] p-[25px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] cursor-pointer"
             onClick={onClick}
         >
-            {/* Circular icon */}
-            <div
-                className="w-12 h-12 rounded-full flex items-center justify-center shrink-0"
-                style={{ backgroundColor: color }}
-            >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                    <rect x="4" y="3" width="16" height="18" rx="2" stroke="#5C4A32" strokeWidth="1.5"/>
-                    <line x1="8" y1="8" x2="16" y2="8" stroke="#5C4A32" strokeWidth="1.5" strokeLinecap="round"/>
-                    <line x1="8" y1="12" x2="16" y2="12" stroke="#5C4A32" strokeWidth="1.5" strokeLinecap="round"/>
-                    <line x1="8" y1="16" x2="13" y2="16" stroke="#5C4A32" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
+            <div className="flex items-start gap-4">
+                <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#F7F1E6] shrink-0">
+                    <Image
+                        src={imageUrl}
+                        alt={lesson.title}
+                        fill
+                        className="object-cover opacity-90"
+                        sizes="64px"
+                    />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <h4 className="text-[18px] font-bold leading-[25px] text-[#2B2B2F]">
+                        {lesson.title}
+                    </h4>
+                    <p className="mt-1 text-[13px] font-medium text-[#2B2B2F]/50">
+                        {lesson.subject}
+                    </p>
+                </div>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
-                <h4 className="text-[14px] font-semibold text-[#2B2B2F] leading-snug">
-                    {lesson.title}
-                </h4>
-                <p className="text-[12px] text-graphite-60 mt-0.5">{lesson.subject}</p>
+            <div className="flex justify-end">
+                <button
+                    className="flex h-[41px] items-center justify-center rounded-xl border-2 border-[rgba(59,63,110,0.1)] bg-transparent px-5 text-[14px] font-bold text-[#3B3F6E] cursor-pointer"
+                    onClick={(e) => { e.stopPropagation(); onClick(); }}
+                >
+                    Start
+                </button>
             </div>
-
-            {/* Start button */}
-            <button
-                className="px-5 py-[7px] border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-[13px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer shrink-0"
-                onClick={(e) => { e.stopPropagation(); onClick(); }}
-            >
-                Start
-            </button>
         </div>
     );
 }
@@ -488,7 +649,7 @@ function CompletedLessonRow({ lesson, onClick }: { lesson: Lesson; onClick: () =
 
     return (
         <div
-            className="flex items-center gap-4 bg-white rounded-xl border border-[#E9E7E2] px-5 py-4 cursor-pointer hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-shadow"
+            className="flex items-center gap-3 bg-white rounded-xl border border-[#E9E7E2] px-5 py-4 cursor-pointer hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-shadow"
             onClick={onClick}
         >
             {/* Check icon */}
@@ -508,6 +669,11 @@ function CompletedLessonRow({ lesson, onClick }: { lesson: Lesson; onClick: () =
             <span className="text-[12px] text-graphite-40 shrink-0">{dateMap[lesson.id as number] || ''}</span>
         </div>
     );
+}
+
+function getLessonImageUrl(lesson: Lesson) {
+    const lessonAny = lesson as Lesson & { image_url?: string; media_url?: string; imageUrl?: string };
+    return lessonAny.image_url || lessonAny.media_url || lessonAny.imageUrl || '/images/lessons.png';
 }
 
 // ─── Lesson Detail View ────────────────────────────────────────────────────────
@@ -620,35 +786,50 @@ function LessonDetailView({ lesson, onBack }: { lesson: Lesson; onBack: () => vo
 
             {/* Bottom action bar */}
             <div className="border-t border-[#E9E7E2] bg-[#F7F1E6] px-[48px] py-5 shrink-0">
-                <LessonActionBar status={lesson.status} />
+                <LessonActionBar lesson={lesson} />
             </div>
         </div>
     );
 }
 
 // ─── Lesson Action Bar ─────────────────────────────────────────────────────────
-function LessonActionBar({ status }: { status: Lesson['status'] }) {
-    switch (status) {
+function LessonActionBar({ lesson }: { lesson: Lesson }) {
+    const router = useRouter();
+    const lessonPath = `/lesson/${lesson.id}`;
+
+    switch (lesson.status) {
         case 'not_started':
             return (
-                <button className="w-full py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer">
+                <button
+                    onClick={() => router.push(lessonPath)}
+                    className="w-full py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer"
+                >
                     Start lesson
                 </button>
             );
         case 'in_progress':
             return (
                 <div className="flex gap-4">
-                    <button className="flex-[2] py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer">
+                    <button
+                        onClick={() => router.push(`${lessonPath}/notice`)}
+                        className="flex-[2] py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer"
+                    >
                         Resume
                     </button>
-                    <button className="flex-1 py-[14px] bg-transparent border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[15px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer">
+                    <button
+                        onClick={() => router.push(lessonPath)}
+                        className="flex-1 py-[14px] bg-transparent border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[15px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer"
+                    >
                         Restart
                     </button>
                 </div>
             );
         case 'completed':
             return (
-                <button className="w-full py-[14px] bg-transparent border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[15px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer">
+                <button
+                    onClick={() => router.push(`${lessonPath}/complete`)}
+                    className="w-full py-[14px] bg-transparent border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[15px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer"
+                >
                     Review lesson
                 </button>
             );
@@ -667,7 +848,6 @@ interface DownloadedLesson {
 
 // ─── Downloads View ────────────────────────────────────────────────────────────
 function StudentDownloadsView() {
-    const [hasDownloads, setHasDownloads] = useState(false);
     const [lessons, setLessons] = useState<DownloadedLesson[]>([]);
     const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
     const [removeTarget, setRemoveTarget] = useState<DownloadedLesson | null>(null);
@@ -682,21 +862,22 @@ function StudentDownloadsView() {
         }
     };
 
-    if (!hasDownloads || lessons.length === 0) {
+    if (lessons.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-[calc(100vh-96px)]">
-                {/* Illustration */}
-                <div className="w-[160px] h-[140px] bg-[#EEECEA] rounded-2xl flex items-center justify-center mb-6 relative">
-                    <div className="w-[90px] h-[75px] bg-[#E0DDD7] rounded-xl flex items-center justify-center">
-                        <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
-                            <path d="M18 6V22" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round"/>
-                            <path d="M12 18L18 24L24 18" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            <rect x="6" y="26" width="24" height="4" rx="1" stroke="#3B3F6E" strokeWidth="1.5"/>
-                        </svg>
-                    </div>
-                    {/* Small dot accent */}
-                    <div className="absolute bottom-6 left-1/2 translate-x-2 w-[5px] h-[5px] rounded-full bg-[#3B3F6E]" />
-                </div>
+                <svg width="200" height="160" viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg" className="mb-6">
+                    <path d="M0 16C0 7.16345 7.16344 0 16 0H184C192.837 0 200 7.16344 200 16V144C200 152.837 192.837 160 184 160H16C7.16344 160 0 152.837 0 144V16Z" fill="#9A9CCB" fillOpacity="0.15"/>
+                    <g clipPath="url(#clip0_762_11150)">
+                        <path d="M152 30H48C43.5817 30 40 33.5817 40 38V102C40 106.418 43.5817 110 48 110H152C156.418 110 160 106.418 160 102V38C160 33.5817 156.418 30 152 30Z" stroke="#3B3F6E" strokeWidth="2"/>
+                        <path d="M100 119C101.657 119 103 117.657 103 116C103 114.343 101.657 113 100 113C98.3431 113 97 114.343 97 116C97 117.657 98.3431 119 100 119Z" fill="#3B3F6E"/>
+                        <path d="M100 55V85M100 85L90 75M100 85L110 75" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </g>
+                    <defs>
+                        <clipPath id="clip0_762_11150">
+                            <rect width="160" height="120" fill="white" transform="translate(20 20)"/>
+                        </clipPath>
+                    </defs>
+                </svg>
 
                 <p className="text-[14px] text-graphite-60 font-medium text-center mb-6">
                     Download lessons to access them offline.
@@ -1146,17 +1327,41 @@ function StudentConnectView({ profile }: { profile?: any }) {
                     </div>
                     <p className="text-[12px] text-graphite-60">Use this to log in or connect with a teacher.</p>
                 </div>
-                {/* Phone illustration */}
-                <div className="w-[100px] h-[100px] bg-[#EEECEA] rounded-2xl flex items-center justify-center shrink-0 ml-6">
-                    <svg width="44" height="56" viewBox="0 0 44 56" fill="none">
-                        <rect x="4" y="2" width="36" height="52" rx="6" stroke="#3B3F6E" strokeWidth="1.5" fill="white"/>
-                        <rect x="10" y="12" width="24" height="28" rx="2" stroke="#A9A5D1" strokeWidth="1" fill="#EEECEA"/>
-                        <circle cx="22" cy="48" r="2" stroke="#3B3F6E" strokeWidth="1"/>
-                        <rect x="16" y="18" width="12" height="12" rx="1" stroke="#3B3F6E" strokeWidth="0.8"/>
-                        <rect x="18" y="20" width="3" height="3" fill="#3B3F6E" opacity="0.4"/>
-                        <rect x="23" y="20" width="3" height="3" fill="#3B3F6E" opacity="0.4"/>
-                        <rect x="18" y="25" width="3" height="3" fill="#3B3F6E" opacity="0.4"/>
-                        <rect x="23" y="25" width="3" height="3" fill="#3B3F6E" opacity="0.4"/>
+                {/* Connect illustration */}
+                <div className="w-[200px] h-[160px] flex items-center justify-center shrink-0 ml-6">
+                    <svg width="200" height="160" viewBox="0 0 200 160" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M20 80C20 35.8172 55.8172 0 100 0C144.183 0 180 35.8172 180 80C180 124.183 144.183 160 100 160C55.8172 160 20 124.183 20 80Z" fill="#3B3F6E" fillOpacity="0.05"/>
+                        <path d="M40 80C40 46.8629 66.8629 20 100 20C133.137 20 160 46.8629 160 80C160 113.137 133.137 140 100 140C66.8629 140 40 113.137 40 80Z" fill="#3B3F6E" fillOpacity="0.1"/>
+                        <g filter="url(#connect-card-shadow)">
+                            <path d="M55.6088 43.1584C56.5325 34.3703 64.4055 27.9949 73.1936 28.9185L136.843 35.6083C145.631 36.532 152.007 44.405 151.083 53.1931L144.393 116.843C143.469 125.631 135.596 132.006 126.808 131.082L63.1589 124.393C54.3708 123.469 47.9953 115.596 48.919 106.808L55.6088 43.1584Z" fill="#FCFCFC" shapeRendering="crispEdges"/>
+                            <path d="M73.1413 29.4158L136.791 36.1056C145.304 37.0004 151.48 44.6274 150.586 53.1409L143.896 116.79C143.001 125.304 135.374 131.48 126.861 130.585L63.2112 123.895C54.6977 123.001 48.5215 115.374 49.4163 106.86L56.1061 43.2107C57.0009 34.6972 64.6278 28.521 73.1413 29.4158Z" stroke="#2B2B2F" strokeOpacity="0.05" shapeRendering="crispEdges"/>
+                            <g clipPath="url(#connect-clip-a)">
+                                <g clipPath="url(#connect-clip-b)">
+                                    <path d="M112.638 60.2162L91.7527 58.0212C89.281 57.7614 87.0667 59.5545 86.807 62.0261L83.3575 94.8454C83.0978 97.317 84.8908 99.5313 87.3625 99.7911L108.247 101.986C110.719 102.246 112.933 100.453 113.193 97.9812L116.643 65.162C116.902 62.6903 115.109 60.476 112.638 60.2162Z" stroke="#3B3F6E" strokeWidth="3" strokeLinejoin="round"/>
+                                    <path d="M97.25 63.1211L106.201 64.0618" stroke="#3B3F6E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
+                                    <path d="M106.946 83.4195C106.634 83.0077 106.239 82.6655 105.787 82.415C105.334 82.1644 104.835 82.0109 104.32 81.9642C103.239 81.8506 102.217 82.1589 101.444 82.8337C100.671 83.5084 100.213 84.5066 100.176 85.6227C100.106 87.8286 101.587 89.7838 103.477 89.9826C105.368 90.1813 107.221 88.5764 107.612 86.4061C107.809 85.3164 107.572 84.2554 106.946 83.4195ZM108.907 99.0372L96.2843 97.7105C96.1197 97.6959 95.9603 97.6453 95.8174 97.5623C95.6745 97.4794 95.5515 97.3661 95.4571 97.2305C95.3553 97.0787 95.2889 96.9059 95.2629 96.725C95.2368 96.5441 95.2519 96.3596 95.3068 96.1853C95.7819 94.5799 96.8709 93.3039 98.4566 92.495C99.8651 91.7767 101.585 91.4805 103.301 91.6608C105.017 91.8411 106.638 92.4885 107.866 93.4839C109.249 94.6049 110.049 96.0794 110.18 97.7485C110.197 97.9305 110.174 98.114 110.111 98.2856C110.048 98.4571 109.947 98.6123 109.816 98.7396C109.695 98.8527 109.551 98.9379 109.394 98.9893C109.237 99.0407 109.071 99.0571 108.907 99.0372Z" fill="#3B3F6E"/>
+                                </g>
+                            </g>
+                            <path d="M119.89 82.0914C120.121 79.8943 122.09 78.3005 124.287 78.5314C126.484 78.7623 128.078 80.7306 127.847 82.9276C127.616 85.1246 125.647 86.7185 123.45 86.4876C121.253 86.2567 119.66 84.2884 119.89 82.0914Z" fill="#9A9CCB"/>
+                        </g>
+                        <defs>
+                            <filter id="connect-card-shadow" x="45.2461" y="26.2461" width="109.508" height="109.508" filterUnits="userSpaceOnUse" colorInterpolationFilters="sRGB">
+                                <feFlood floodOpacity="0" result="BackgroundImageFix"/>
+                                <feColorMatrix in="SourceAlpha" type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 127 0" result="hardAlpha"/>
+                                <feOffset dy="1"/>
+                                <feGaussianBlur stdDeviation="1"/>
+                                <feComposite in2="hardAlpha" operator="out"/>
+                                <feColorMatrix type="matrix" values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.05 0"/>
+                                <feBlend mode="normal" in2="BackgroundImageFix" result="effect1_dropShadow"/>
+                                <feBlend mode="normal" in="SourceGraphic" in2="effect1_dropShadow" result="shape"/>
+                            </filter>
+                            <clipPath id="connect-clip-a">
+                                <rect width="48" height="48" fill="white" transform="translate(78.6406 53.625) rotate(5.99997)"/>
+                            </clipPath>
+                            <clipPath id="connect-clip-b">
+                                <rect width="48" height="48" fill="white" transform="translate(78.6406 53.625) rotate(5.99997)"/>
+                            </clipPath>
+                        </defs>
                     </svg>
                 </div>
             </div>

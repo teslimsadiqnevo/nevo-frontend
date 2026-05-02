@@ -1,234 +1,520 @@
 'use client';
 
-import { useState } from 'react';
+import type { RefObject } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { deleteSchoolAccount, getSchoolSettings, updateSchoolSettings } from '../api/school';
 
-const SETTINGS_TABS = ['School profile', 'Features', 'Permissions', 'Data & Privacy', 'Danger zone'] as const;
-type SettingsTab = typeof SETTINGS_TABS[number];
+type SectionId = 'school-profile' | 'features' | 'permissions' | 'data-privacy' | 'danger-zone';
 
-const NIGERIAN_STATES = ['Abia', 'Adamawa', 'Akwa Ibom', 'Anambra', 'Bauchi', 'Bayelsa', 'Benue', 'Borno', 'Cross River', 'Delta', 'Ebonyi', 'Edo', 'Ekiti', 'Enugu', 'Gombe', 'Imo', 'Jigawa', 'Kaduna', 'Kano', 'Katsina', 'Kebbi', 'Kogi', 'Kwara', 'Lagos State', 'Nasarawa', 'Niger', 'Ogun', 'Ondo', 'Osun', 'Oyo', 'Plateau', 'Rivers', 'Sokoto', 'Taraba', 'Yobe', 'Zamfara', 'FCT'];
-const SCHOOL_TYPES = ['Primary School', 'Secondary School', 'Primary & Secondary', 'Tertiary'];
+type SettingsForm = {
+    schoolName: string;
+    region: string;
+    schoolType: string;
+};
+
+type FeatureState = {
+    camera: boolean;
+    messaging: boolean;
+    offlineAccess: boolean;
+};
+
+const SECTION_ITEMS: { id: SectionId; label: string }[] = [
+    { id: 'school-profile', label: 'School profile' },
+    { id: 'features', label: 'Features' },
+    { id: 'permissions', label: 'Permissions' },
+    { id: 'data-privacy', label: 'Data & Privacy' },
+    { id: 'danger-zone', label: 'Danger zone' },
+];
 
 export function SettingsView() {
-    const [activeTab, setActiveTab] = useState<SettingsTab>('School profile');
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [savingFeature, setSavingFeature] = useState<keyof FeatureState | null>(null);
+    const [deletingSchool, setDeletingSchool] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [success, setSuccess] = useState<string | null>(null);
+    const [settings, setSettings] = useState<any | null>(null);
+    const [activeSection, setActiveSection] = useState<SectionId>('school-profile');
+    const [deleteStep, setDeleteStep] = useState<'idle' | 'confirm'>('idle');
+    const [form, setForm] = useState<SettingsForm>({
+        schoolName: '',
+        region: '',
+        schoolType: '',
+    });
+    const [features, setFeatures] = useState<FeatureState>({
+        camera: true,
+        messaging: true,
+        offlineAccess: false,
+    });
 
-    return (
-        <div className="w-full flex gap-8">
-            {/* Left nav */}
-            <nav className="w-[160px] shrink-0 flex flex-col gap-1 pt-1">
-                {SETTINGS_TABS.map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`text-left px-3 py-2 rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${
-                            activeTab === tab
-                                ? 'text-[#3B3F6E] bg-[#EAE8F2]'
-                                : 'text-graphite-40 hover:text-[#3B3F6E] hover:bg-black/5'
-                        }`}
-                    >
-                        {tab}
-                    </button>
-                ))}
-            </nav>
+    const sectionRefs: Record<SectionId, RefObject<HTMLElement | null>> = {
+        'school-profile': useRef<HTMLElement>(null),
+        features: useRef<HTMLElement>(null),
+        permissions: useRef<HTMLElement>(null),
+        'data-privacy': useRef<HTMLElement>(null),
+        'danger-zone': useRef<HTMLElement>(null),
+    };
 
-            {/* Content */}
-            <div className="flex-1 min-w-0 w-full">
-                {activeTab === 'School profile' && <SchoolProfileSection />}
-                {activeTab === 'Features' && <FeaturesSection />}
-                {activeTab === 'Permissions' && <PermissionsSection />}
-                {activeTab === 'Data & Privacy' && <DataPrivacySection />}
-                {activeTab === 'Danger zone' && <DangerZoneSection />}
+    useEffect(() => {
+        let mounted = true;
+
+        void (async () => {
+            const res = await getSchoolSettings();
+            if (!mounted) return;
+
+            if ('error' in res && res.error) {
+                setError(res.error);
+                setLoading(false);
+                return;
+            }
+
+            const data = 'data' in res ? res.data : null;
+            setSettings(data);
+            setForm({
+                schoolName: data?.school_name || '',
+                region: data?.state || data?.region || 'Lagos State',
+                schoolType: data?.school_type || inferSchoolType(data) || 'Secondary School',
+            });
+            setFeatures({
+                camera: data?.camera_enabled ?? true,
+                messaging: data?.messaging_enabled ?? true,
+                offlineAccess: data?.offline_access_enabled ?? false,
+            });
+            setLoading(false);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            const entries = SECTION_ITEMS.map((item) => {
+                const rect = sectionRefs[item.id].current?.getBoundingClientRect();
+                return {
+                    id: item.id,
+                    top: rect?.top ?? Number.POSITIVE_INFINITY,
+                };
+            });
+
+            const current =
+                entries
+                    .filter((entry) => entry.top <= 180)
+                    .sort((a, b) => b.top - a.top)[0]?.id || 'school-profile';
+
+            setActiveSection(current);
+        };
+
+        handleScroll();
+        window.addEventListener('scroll', handleScroll, { passive: true });
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, [sectionRefs]);
+
+    async function handleSaveProfile() {
+        setSaving(true);
+        setError(null);
+        setSuccess(null);
+
+        const res = await updateSchoolSettings({
+            name: form.schoolName,
+            state: form.region,
+            school_type: form.schoolType,
+        });
+
+        setSaving(false);
+
+        if ('error' in res && res.error) {
+            setError(res.error);
+            return;
+        }
+
+        const nextData = 'data' in res ? res.data : null;
+        if (nextData) {
+            setSettings(nextData);
+        }
+        setSuccess('School profile updated.');
+    }
+
+    async function handleToggleFeature(key: keyof FeatureState) {
+        const previousValue = features[key];
+        const nextValue = !previousValue;
+
+        setFeatures((current) => ({ ...current, [key]: nextValue }));
+        setSavingFeature(key);
+        setError(null);
+        setSuccess(null);
+
+        const fieldMap: Record<keyof FeatureState, string> = {
+            camera: 'camera_enabled',
+            messaging: 'messaging_enabled',
+            offlineAccess: 'offline_access_enabled',
+        };
+
+        const res = await updateSchoolSettings({
+            [fieldMap[key]]: nextValue,
+        });
+
+        setSavingFeature(null);
+
+        if ('error' in res && res.error) {
+            setFeatures((current) => ({ ...current, [key]: previousValue }));
+            setError(res.error);
+            return;
+        }
+
+        const nextData = 'data' in res ? res.data : null;
+        if (nextData) {
+            setSettings(nextData);
+        }
+        setSuccess('Feature settings updated.');
+    }
+
+    async function handleDeleteSchool() {
+        if (!settings?.school_name) {
+            setError('School details are unavailable.');
+            return;
+        }
+
+        setDeletingSchool(true);
+        setError(null);
+        setSuccess(null);
+
+        const res = await deleteSchoolAccount(settings.school_name);
+
+        setDeletingSchool(false);
+
+        if ('error' in res && res.error) {
+            setError(res.error);
+            return;
+        }
+
+        setSuccess('School account deleted.');
+        window.location.assign('/');
+    }
+
+    function jumpToSection(sectionId: SectionId) {
+        setActiveSection(sectionId);
+        sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    if (loading) {
+        return (
+            <div className="flex min-h-[70vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
+                Loading settings...
             </div>
-        </div>
-    );
-}
+        );
+    }
 
-// ─── School Profile ───
-
-function SchoolProfileSection() {
-    const [schoolName, setSchoolName] = useState('Lagos International Academy');
-    const [state, setState] = useState('Lagos State');
-    const [schoolType, setSchoolType] = useState('Secondary School');
-    const [showStateDropdown, setShowStateDropdown] = useState(false);
-    const [showTypeDropdown, setShowTypeDropdown] = useState(false);
+    if (error && !settings) {
+        return (
+            <div className="mx-auto flex w-full max-w-[1136px] flex-col gap-3 rounded-[12px] border border-[#E0D9CE] bg-white px-6 py-8 text-center">
+                <h1 className="text-[22px] font-bold text-[#3B3F6E]">Settings</h1>
+                <p className="text-[14px] text-[#2B2B2F]/60">{error}</p>
+            </div>
+        );
+    }
 
     return (
-        <div className="flex flex-col gap-8">
-            <section>
-                <h2 className="text-[18px] font-bold text-[#3B3F6E] mb-5">School profile</h2>
-                <div className="flex flex-col gap-4">
-                    <input
-                        type="text"
-                        value={schoolName}
-                        onChange={e => setSchoolName(e.target.value)}
-                        className="w-full px-4 py-3 border border-[#E9E7E2] rounded-xl text-[14px] text-[#3B3F6E] bg-white focus:outline-none focus:border-[#3B3F6E] transition-colors"
-                    />
+        <div className="mx-auto flex w-full max-w-[1136px] gap-8">
+            <aside className="sticky top-8 h-fit w-[200px] shrink-0">
+                <nav className="flex flex-col">
+                    {SECTION_ITEMS.map((item) => {
+                        const active = activeSection === item.id;
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => jumpToSection(item.id)}
+                                className={`flex h-[44px] items-center border-l-[3px] px-4 text-left text-[15px] font-medium transition-colors ${
+                                    active
+                                        ? 'border-[#3B3F6E] text-[#3B3F6E]'
+                                        : 'border-transparent text-[#2B2B2F]/55 hover:text-[#3B3F6E]'
+                                }`}
+                            >
+                                {item.label}
+                            </button>
+                        );
+                    })}
+                </nav>
+            </aside>
 
-                    {/* Logo upload */}
-                    <div className="flex items-center gap-4">
-                        <div className="w-[56px] h-[56px] rounded-full bg-[#EAE8F2] flex items-center justify-center">
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="#A29ECA" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M10 4V16M4 10H16" />
-                            </svg>
+            <div className="flex min-w-0 flex-1 flex-col gap-10 pb-10">
+                {success ? <Banner tone="success" text={success} /> : null}
+                {error && settings ? <Banner tone="error" text={error} /> : null}
+
+                <section ref={sectionRefs['school-profile']} className="scroll-mt-8">
+                    <h1 className="mb-6 text-[20px] font-bold leading-[30px] text-[#3B3F6E]">School profile</h1>
+                    <div className="rounded-[12px] border border-[#E0D9CE] bg-white p-7 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <div className="flex flex-col gap-6">
+                            <TextInput
+                                value={form.schoolName}
+                                onChange={(value) => setForm((current) => ({ ...current, schoolName: value }))}
+                            />
+
+                            <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full bg-[#3B3F6E]/10 text-center text-[13px] leading-5 text-[#3B3F6E]/60">
+                                <UploadLogoIcon />
+                                <span>Upload logo</span>
+                            </div>
+
+                            <SelectLikeInput
+                                value={form.region}
+                                onClick={() => setForm((current) => ({ ...current, region: current.region || 'Lagos State' }))}
+                            />
+
+                            <SelectLikeInput
+                                value={form.schoolType}
+                                onClick={() => setForm((current) => ({ ...current, schoolType: current.schoolType || 'Secondary School' }))}
+                            />
+
+                            <div>
+                                <button
+                                    onClick={handleSaveProfile}
+                                    disabled={saving}
+                                    className="flex h-12 items-center justify-center rounded-[12px] bg-[#3B3F6E] px-8 text-[15px] font-semibold text-[#F7F1E6] disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {saving ? 'Saving...' : 'Save changes'}
+                                </button>
+                            </div>
                         </div>
-                        <button className="text-[12px] font-medium text-[#3B3F6E] hover:underline cursor-pointer">Upload logo</button>
                     </div>
+                </section>
 
-                    {/* State dropdown */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setShowStateDropdown(!showStateDropdown)}
-                            className="w-full px-4 py-3 border border-[#E9E7E2] rounded-xl text-[14px] bg-white flex items-center justify-between cursor-pointer"
-                        >
-                            <span className="text-[#3B3F6E] font-medium">{state}</span>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9a9ccb" strokeWidth="2" strokeLinecap="round" className={`transition-transform ${showStateDropdown ? 'rotate-180' : ''}`}>
-                                <path d="M4 6L8 10L12 6" />
-                            </svg>
-                        </button>
-                        {showStateDropdown && (
-                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E9E7E2] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.08)] z-10 max-h-[200px] overflow-y-auto">
-                                {NIGERIAN_STATES.map(s => (
-                                    <button key={s} onClick={() => { setState(s); setShowStateDropdown(false); }} className="w-full px-4 py-3 text-left text-[13px] font-medium text-[#3B3F6E] hover:bg-[#F7F1E6] cursor-pointer transition-colors">
-                                        {s}
-                                    </button>
-                                ))}
+                <section ref={sectionRefs.features} className="scroll-mt-8">
+                    <h2 className="mb-6 text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Features</h2>
+                    <div className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <FeatureRow
+                            title="Learning camera"
+                            description="Allow teachers to enable camera-based learning signals"
+                            enabled={features.camera}
+                            disabled={savingFeature !== null}
+                            onToggle={() => void handleToggleFeature('camera')}
+                        />
+                        <FeatureRow
+                            title="Student-teacher messaging"
+                            description="Enable direct messaging between students and teachers"
+                            enabled={features.messaging}
+                            disabled={savingFeature !== null}
+                            onToggle={() => void handleToggleFeature('messaging')}
+                        />
+                        <FeatureRow
+                            title="Offline lesson access"
+                            description="Allow students to access lesson materials without internet"
+                            enabled={features.offlineAccess}
+                            disabled={savingFeature !== null}
+                            onToggle={() => void handleToggleFeature('offlineAccess')}
+                            last
+                        />
+                    </div>
+                </section>
+
+                <section ref={sectionRefs.permissions} className="scroll-mt-8">
+                    <h2 className="mb-6 text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Permissions</h2>
+                    <div className="rounded-[12px] border border-[#E0D9CE] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <div className="space-y-4">
+                            <InfoRow
+                                label="Primary admin"
+                                value={settings?.admin_name || 'School administrator'}
+                            />
+                            <InfoRow
+                                label="Admin email"
+                                value={settings?.admin_email || settings?.email || 'Not available'}
+                            />
+                            <InfoRow
+                                label="Access scope"
+                                value="Admins can manage school profile, classes, teachers, students, and reporting."
+                                muted
+                            />
+                        </div>
+                    </div>
+                </section>
+
+                <section ref={sectionRefs['data-privacy']} className="scroll-mt-8">
+                    <h2 className="mb-6 text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Data & Privacy</h2>
+                    <div className="rounded-[12px] border border-[#E0D9CE] bg-white p-6 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <div className="space-y-6">
+                            <p className="text-[15px] leading-[22px] text-[#2B2B2F]/70">
+                                Data retention policy: {settings?.data_retention_policy || '7 years'}
+                            </p>
+                            <p className="text-[15px] leading-[22px] text-[#2B2B2F]/70">
+                                Consent acknowledgment: {formatConsentDate(settings)}
+                            </p>
+                            <a href="#" className="text-[15px] leading-[22px] text-[#3B3F6E] underline">
+                                Privacy policy
+                            </a>
+                        </div>
+                    </div>
+                </section>
+
+                <section ref={sectionRefs['danger-zone']} className="scroll-mt-8">
+                    <h2 className="mb-6 text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Danger zone</h2>
+                    <div className="rounded-[12px] border border-[#C0392B] bg-[#FDF0F0] p-6">
+                        <h3 className="text-[15px] font-semibold leading-[22px] text-[#2B2B2F]">Delete school account</h3>
+                        <p className="mt-3 text-[13px] leading-5 text-[#2B2B2F]/65">
+                            This will permanently remove all school data, classes, teacher and student accounts.
+                        </p>
+
+                        {deleteStep === 'idle' ? (
+                            <button
+                                onClick={() => setDeleteStep('confirm')}
+                                className="mt-5 flex h-11 items-center justify-center rounded-[12px] border border-[#C0392B] px-5 text-[14px] font-medium text-[#C0392B]"
+                            >
+                                Delete school account
+                            </button>
+                        ) : (
+                            <div className="mt-5 flex flex-wrap items-center gap-3">
+                                <button
+                                    onClick={() => void handleDeleteSchool()}
+                                    disabled={deletingSchool}
+                                    className="flex h-11 items-center justify-center rounded-[12px] border border-[#C0392B] px-5 text-[14px] font-medium text-[#C0392B] disabled:cursor-not-allowed disabled:text-[#C0392B]/60"
+                                >
+                                    {deletingSchool ? 'Deleting school...' : 'Confirm delete school account'}
+                                </button>
+                                <button
+                                    onClick={() => setDeleteStep('idle')}
+                                    className="text-[13px] font-medium text-[#3B3F6E]"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         )}
                     </div>
-
-                    {/* School type dropdown */}
-                    <div className="relative">
-                        <button
-                            onClick={() => setShowTypeDropdown(!showTypeDropdown)}
-                            className="w-full px-4 py-3 border border-[#E9E7E2] rounded-xl text-[14px] bg-white flex items-center justify-between cursor-pointer"
-                        >
-                            <span className="text-[#3B3F6E] font-medium">{schoolType}</span>
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#9a9ccb" strokeWidth="2" strokeLinecap="round" className={`transition-transform ${showTypeDropdown ? 'rotate-180' : ''}`}>
-                                <path d="M4 6L8 10L12 6" />
-                            </svg>
-                        </button>
-                        {showTypeDropdown && (
-                            <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#E9E7E2] rounded-xl shadow-[0_8px_24px_rgba(0,0,0,0.08)] z-10">
-                                {SCHOOL_TYPES.map(t => (
-                                    <button key={t} onClick={() => { setSchoolType(t); setShowTypeDropdown(false); }} className="w-full px-4 py-3 text-left text-[13px] font-medium text-[#3B3F6E] hover:bg-[#F7F1E6] cursor-pointer transition-colors first:rounded-t-xl last:rounded-b-xl">
-                                        {t}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <button className="self-start px-5 py-[10px] bg-[#3B3F6E] text-white rounded-lg text-[13px] font-semibold hover:bg-[#2C2F52] transition-colors cursor-pointer">
-                        Save changes
-                    </button>
-                </div>
-            </section>
-
-            <FeaturesSection />
-            <DataPrivacySection />
-            <DangerZoneSection />
+                </section>
+            </div>
         </div>
     );
 }
 
-// ─── Features ───
-
-function FeaturesSection() {
-    const [learningCamera, setLearningCamera] = useState(true);
-    const [messaging, setMessaging] = useState(true);
-    const [offlineAccess, setOfflineAccess] = useState(false);
-
-    return (
-        <section>
-            <h2 className="text-[18px] font-bold text-[#3B3F6E] mb-5">Features</h2>
-            <div className="bg-white border border-[#E9E7E2] rounded-xl divide-y divide-[#F0EDE6]">
-                <ToggleRow
-                    label="Learning camera"
-                    description="Allow teachers to enable camera-based learning signals"
-                    enabled={learningCamera}
-                    onToggle={() => setLearningCamera(!learningCamera)}
-                />
-                <ToggleRow
-                    label="Student-teacher messaging"
-                    description="Enable direct messaging between students and teachers"
-                    enabled={messaging}
-                    onToggle={() => setMessaging(!messaging)}
-                />
-                <ToggleRow
-                    label="Offline lesson access"
-                    description="Allow students to access lesson materials without internet"
-                    enabled={offlineAccess}
-                    onToggle={() => setOfflineAccess(!offlineAccess)}
-                />
-            </div>
-        </section>
-    );
-}
-
-function ToggleRow({ label, description, enabled, onToggle }: {
-    label: string; description: string; enabled: boolean; onToggle: () => void;
+function TextInput({
+    value,
+    onChange,
+}: {
+    value: string;
+    onChange: (value: string) => void;
 }) {
     return (
-        <div className="flex items-center justify-between px-5 py-4">
+        <input
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="h-14 w-full rounded-[12px] border border-[#3B3F6E]/40 bg-white px-4 text-[15px] leading-[22px] text-[#2B2B2F] outline-none"
+        />
+    );
+}
+
+function SelectLikeInput({
+    value,
+    onClick,
+}: {
+    value: string;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            onClick={onClick}
+            className="flex h-14 w-full items-center justify-between rounded-[12px] border border-[#3B3F6E]/40 bg-white px-4 text-left text-[15px] leading-[22px] text-[#2B2B2F]"
+        >
+            <span>{value}</span>
+            <ChevronDownIcon />
+        </button>
+    );
+}
+
+function FeatureRow({
+    title,
+    description,
+    enabled,
+    onToggle,
+    disabled = false,
+    last = false,
+}: {
+    title: string;
+    description: string;
+    enabled: boolean;
+    onToggle: () => void;
+    disabled?: boolean;
+    last?: boolean;
+}) {
+    return (
+        <div className={`flex min-h-[64px] items-center justify-between px-7 py-4 ${last ? '' : 'border-b border-[#E0D9CE]'}`}>
             <div>
-                <p className="text-[13px] font-semibold text-[#3B3F6E]">{label}</p>
-                <p className="text-[12px] text-graphite-40">{description}</p>
+                <p className="text-[15px] leading-[22px] text-[#2B2B2F]">{title}</p>
+                <p className="mt-1 text-[13px] leading-5 text-[#2B2B2F]/55">{description}</p>
             </div>
-            <button onClick={onToggle} className={`w-[44px] h-[24px] rounded-full transition-colors cursor-pointer relative shrink-0 ${enabled ? 'bg-[#3B3F6E]' : 'bg-[#D1D0D6]'}`}>
-                <div className={`w-[20px] h-[20px] rounded-full bg-white shadow-sm absolute top-[2px] transition-transform ${enabled ? 'translate-x-[22px]' : 'translate-x-[2px]'}`} />
-            </button>
+            <div className="flex items-center gap-3">
+                <span className="text-[13px] leading-5 text-[#2B2B2F]/55">{enabled ? 'Enabled' : 'Disabled'}</span>
+                <button
+                    onClick={onToggle}
+                    disabled={disabled}
+                    className={`relative h-[31px] w-[51px] rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${enabled ? 'bg-[#34C759]' : 'bg-[#8E8E93]'}`}
+                >
+                    <span
+                        className={`absolute top-[2px] h-[27px] w-[27px] rounded-full bg-white transition-all ${enabled ? 'left-[22px]' : 'left-[2px]'}`}
+                    />
+                </button>
+            </div>
         </div>
     );
 }
 
-// ─── Permissions (placeholder) ───
-
-function PermissionsSection() {
+function InfoRow({
+    label,
+    value,
+    muted = false,
+}: {
+    label: string;
+    value: string;
+    muted?: boolean;
+}) {
     return (
-        <section>
-            <h2 className="text-[18px] font-bold text-[#3B3F6E] mb-5">Permissions</h2>
-            <div className="bg-[#FDFBF9] border border-[#E9E7E2] rounded-xl px-6 py-8 flex items-center justify-center">
-                <p className="text-[13px] text-graphite-40">Permission settings coming soon.</p>
-            </div>
-        </section>
+        <div className="space-y-1">
+            <p className="text-[12px] font-medium uppercase tracking-[0.03em] text-[#2B2B2F]/45">{label}</p>
+            <p className={`text-[15px] leading-[22px] ${muted ? 'text-[#2B2B2F]/70' : 'text-[#2B2B2F]'}`}>{value}</p>
+        </div>
     );
 }
 
-// ─── Data & Privacy ───
-
-function DataPrivacySection() {
+function Banner({ tone, text }: { tone: 'success' | 'error'; text: string }) {
     return (
-        <section>
-            <h2 className="text-[18px] font-bold text-[#3B3F6E] mb-5">Data & Privacy</h2>
-            <div className="bg-[#FDFBF9] border border-[#E9E7E2] rounded-xl px-5 py-4">
-                <div className="flex flex-col gap-2">
-                    <p className="text-[13px] text-[#3B3F6E]">
-                        <span className="text-graphite-40">Data retention policy:</span> <span className="font-medium">7 years</span>
-                    </p>
-                    <p className="text-[13px] text-[#3B3F6E]">
-                        <span className="text-graphite-40">Consent acknowledgment:</span> <span className="font-medium">January 15, 2024</span>
-                    </p>
-                    <button className="text-[13px] font-medium text-[#3B3F6E] underline self-start cursor-pointer hover:opacity-70">
-                        Privacy policy
-                    </button>
-                </div>
-            </div>
-        </section>
+        <div
+            className={`rounded-[12px] px-4 py-3 text-[13px] font-medium ${
+                tone === 'success'
+                    ? 'bg-[#E5F6E9] text-[#1D6B34]'
+                    : 'bg-[#FCE8E6] text-[#B3261E]'
+            }`}
+        >
+            {text}
+        </div>
     );
 }
 
-// ─── Danger Zone ───
-
-function DangerZoneSection() {
+function UploadLogoIcon() {
     return (
-        <section>
-            <h2 className="text-[18px] font-bold text-[#3B3F6E] mb-5">Danger zone</h2>
-            <div className="bg-[#FFF5F0] border border-[#F0D9CC] rounded-xl px-5 py-5">
-                <p className="text-[14px] font-bold text-[#3B3F6E] mb-1">Delete school account</p>
-                <p className="text-[12px] text-graphite-60 mb-4">This will permanently remove all school data, classes, teacher and student accounts.</p>
-                <button className="px-4 py-[8px] border border-[#D4534A] rounded-lg text-[13px] font-semibold text-[#D4534A] hover:bg-[#FDEAEA] transition-colors cursor-pointer">
-                    Delete school account
-                </button>
-            </div>
-        </section>
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M3.125 12.5V13.75C3.125 14.7449 3.52009 15.699 4.22335 16.4022C4.92661 17.1055 5.88071 17.5006 6.875 17.5006H13.125C14.1193 17.5006 15.0734 17.1055 15.7766 16.4022C16.4799 15.699 16.875 14.7449 16.875 13.75V12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M6.875 7.5L10 4.375L13.125 7.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M10 4.375V12.5" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
     );
+}
+
+function ChevronDownIcon() {
+    return (
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <path d="M5 7.5L10 12.5L15 7.5" stroke="rgba(43,43,47,0.6)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+    );
+}
+
+function inferSchoolType(settings: any) {
+    const raw = `${settings?.school_level || ''} ${settings?.category || ''}`.toLowerCase();
+    if (raw.includes('primary')) return 'Primary School';
+    if (raw.includes('secondary')) return 'Secondary School';
+    return '';
+}
+
+function formatConsentDate(settings: any) {
+    const value = settings?.consent_acknowledgment_date || settings?.dpa_accepted_at || settings?.created_at;
+    if (!value) return 'January 15, 2024';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }

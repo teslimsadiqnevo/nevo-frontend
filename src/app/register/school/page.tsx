@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Icon } from "@/shared/ui";
+import { registerSchool } from "@/features/SchoolRegistration/api/registerSchool";
 
 export default function SchoolRegistrationPage() {
     const router = useRouter();
@@ -36,18 +38,39 @@ export default function SchoolRegistrationPage() {
         selectedState !== "";
 
     const handleSubmit = (e: React.FormEvent) => {
+        void (async () => {
         e.preventDefault();
         setError(null);
         setIsLoading(true);
+        const result = await registerSchool({
+            schoolName,
+            adminName: fullName,
+            adminEmail: email,
+            password,
+            state: selectedState,
+        });
 
-        setTimeout(() => {
+        if (result?.error) {
+            setError(result.error);
             setIsLoading(false);
-            if (email.toLowerCase().trim() === "chidinma.adeyemi@fgclagos.edu.ng") {
-                setError("An account with this email already exists.");
-            } else {
-                router.push('/register/school/data-agreement');
-            }
-        }, 1000);
+            return;
+        }
+
+        const loginResult = await signIn("credentials", {
+            email,
+            password,
+            loginType: "school",
+            redirect: false,
+        });
+
+        if (loginResult?.error) {
+            setError("School account created, but automatic sign-in failed. Please sign in.");
+            setIsLoading(false);
+            return;
+        }
+
+        router.push('/register/school/data-agreement');
+        })();
     };
 
     return (

@@ -44,7 +44,8 @@ async function teacherContext() {
 
 function isAuthExpiredResponse(status: number, detail: unknown) {
   if (status !== 401 && status !== 403) return false;
-  const text = typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
+  const text =
+    typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
   return /invalid|expired|unauthorized|token/i.test(text);
 }
 
@@ -77,7 +78,11 @@ async function unwrap(res: Response, label: string) {
       await clearAuthState();
     }
 
-    return { error: `${label}: ${detailText || res.statusText}`, data, authExpired };
+    return {
+      error: `${label}: ${detailText || res.statusText}`,
+      data,
+      authExpired,
+    };
   }
   return { data };
 }
@@ -97,6 +102,39 @@ export async function getTeacherDashboard() {
     const { headers } = await teacherContext();
     const res = await apiFetch("/teachers/dashboard", { headers });
     return unwrap(res, "Failed to fetch teacher dashboard");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function getTeacherLessons(params?: {
+  search?: string;
+  status?: string;
+  subject?: string;
+  level?: string;
+  sort_by?: string;
+  sort_order?: string;
+  page?: number;
+  page_size?: number;
+}) {
+  try {
+    const { headers } = await teacherContext();
+    const query = new URLSearchParams();
+
+    if (params?.search) query.set("search", params.search);
+    if (params?.status) query.set("status", params.status);
+    if (params?.subject) query.set("subject", params.subject);
+    if (params?.level) query.set("level", params.level);
+    if (params?.sort_by) query.set("sort_by", params.sort_by);
+    if (params?.sort_order) query.set("sort_order", params.sort_order);
+    if (typeof params?.page === "number")
+      query.set("page", String(params.page));
+    if (typeof params?.page_size === "number")
+      query.set("page_size", String(params.page_size));
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const res = await apiFetch(`/lessons/teacher/manage${suffix}`, { headers });
+    return unwrap(res, "Failed to fetch teacher lessons");
   } catch (e: any) {
     return { error: e.message };
   }
@@ -156,14 +194,20 @@ export async function getTeacherConnectionRequests() {
   }
 }
 
-export async function updateTeacherConnectionRequest(connectionId: string, action: "accept" | "reject") {
+export async function updateTeacherConnectionRequest(
+  connectionId: string,
+  action: "accept" | "reject",
+) {
   try {
     const { headers } = await teacherContext();
-    const res = await apiFetch(`/teachers/me/connection-requests/${connectionId}`, {
-      method: "PATCH",
-      headers,
-      body: JSON.stringify({ action }),
-    });
+    const res = await apiFetch(
+      `/teachers/me/connection-requests/${connectionId}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ action }),
+      },
+    );
     return unwrap(res, "Failed to update connection request");
   } catch (e: any) {
     return { error: e.message };
@@ -208,7 +252,9 @@ export async function updateTeachingContext(payload: Record<string, any>) {
   }
 }
 
-export async function completeTeacherProfileSetup(payload: Record<string, any>) {
+export async function completeTeacherProfileSetup(
+  payload: Record<string, any>,
+) {
   try {
     const { headers } = await teacherContext();
     const res = await apiFetch("/teachers/me/profile-setup", {
@@ -265,7 +311,8 @@ export async function createTeacherLesson(payload: {
 
     formData.append("title", payload.title);
     formData.append("content", payload.content);
-    if (payload.description) formData.append("description", payload.description);
+    if (payload.description)
+      formData.append("description", payload.description);
     if (payload.subject) formData.append("subject", payload.subject);
     if (payload.topic) formData.append("topic", payload.topic);
     if (typeof payload.target_grade_level === "number") {
@@ -290,9 +337,38 @@ export async function createTeacherLesson(payload: {
         res.statusText;
       const detailText =
         typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
-      return { error: `Failed to create lesson: ${detailText || res.statusText}`, data };
+      return {
+        error: `Failed to create lesson: ${detailText || res.statusText}`,
+        data,
+      };
     }
     return { data };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function archiveTeacherLesson(lessonId: string) {
+  try {
+    const { headers } = await teacherContext();
+    const res = await apiFetch(`/lessons/${lessonId}/archive`, {
+      method: "PUT",
+      headers,
+    });
+    return unwrap(res, "Failed to archive lesson");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function duplicateTeacherLesson(lessonId: string) {
+  try {
+    const { headers } = await teacherContext();
+    const res = await apiFetch(`/lessons/${lessonId}/duplicate`, {
+      method: "POST",
+      headers,
+    });
+    return unwrap(res, "Failed to duplicate lesson");
   } catch (e: any) {
     return { error: e.message };
   }

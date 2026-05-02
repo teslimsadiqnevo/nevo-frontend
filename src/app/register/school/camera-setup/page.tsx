@@ -1,19 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getSchoolOnboardingStatus, updateSchoolConsent } from "@/features/Dashboard/api/school";
 
 export default function CameraSetupPage() {
     const router = useRouter();
     const [selectedOption, setSelectedOption] = useState<"enable" | "later" | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [pageLoading, setPageLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = () => {
+    useEffect(() => {
+        let mounted = true;
+        void (async () => {
+            const res = await getSchoolOnboardingStatus();
+            if (!mounted) return;
+            if ("error" in res && res.error) {
+                setError(res.error);
+            } else {
+                const data = "data" in res ? res.data : null;
+                if (!data?.data_protection_consent) {
+                    router.replace("/register/school/data-agreement");
+                    return;
+                }
+                if (typeof data?.camera_consent === "boolean") {
+                    setSelectedOption(data.camera_consent ? "enable" : "later");
+                }
+            }
+            setPageLoading(false);
+        })();
+        return () => {
+            mounted = false;
+        };
+    }, [router]);
+
+    const handleSubmit = async () => {
         setIsLoading(true);
-        setTimeout(() => {
-            router.push("/register/school/ready"); 
-        }, 1500);
+        setError(null);
+        const res = await updateSchoolConsent("camera", selectedOption === "enable");
+        if ("error" in res && res.error) {
+            setError(res.error);
+            setIsLoading(false);
+            return;
+        }
+        router.push("/register/school/ready");
     };
+
+    if (pageLoading) {
+        return <div className="min-h-screen flex items-center justify-center bg-[#F6F5F2] text-[#3B3F6E] text-sm">Loading setup...</div>;
+    }
 
     return (
         <div className="flex-1 w-full flex flex-col items-center p-6 bg-[#F6F5F2] min-h-screen relative">
@@ -138,6 +174,9 @@ export default function CameraSetupPage() {
                     >
                         {isLoading ? 'Saving...' : 'Continue'}
                     </button>
+                    {error ? (
+                        <p className="text-[11px] text-[#E57661] font-bold text-center mt-4">{error}</p>
+                    ) : null}
                 </div>
             </div>
         </div>

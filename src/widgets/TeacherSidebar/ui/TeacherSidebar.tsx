@@ -1,43 +1,53 @@
 'use client';
 
-import { Icon } from "@/shared/ui";
+import { Icon, NevoLogo, UserAvatar } from "@/shared/ui";
+import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 
 const navItems = [
-    { name: 'Dashboard', view: null, icon: '📊' },
-    { name: 'Lessons', view: 'lessons', icon: '📄' },
-    { name: 'Students', view: 'students', icon: '👥' },
-    { name: 'Insights', view: 'insights', icon: '📈' },
-    { name: 'Connect', view: 'connect', icon: '💬' },
+    { name: 'Dashboard', view: null },
+    { name: 'Lessons', view: 'lessons' },
+    { name: 'Students', view: 'students' },
+    { name: 'Insights', view: 'insights' },
+    { name: 'Connect', view: 'connect' },
 ] as const;
 
-export function TeacherSidebar({ user }: { user?: any }) {
+type SidebarUser = {
+    name?: string | null;
+    avatarUrl?: string | null;
+};
+
+export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
+    const [showAskNevo, setShowAskNevo] = useState(false);
     const searchParams = useSearchParams();
     const currentView = searchParams.get('view') || null;
+    const role = searchParams.get('role');
+    const displayName = user?.name?.trim() || '';
+    const isProfileActive = currentView === 'profile';
+
+    const buildHref = (view: string | null) => {
+        const params = new URLSearchParams();
+        if (view) params.set('view', view);
+        if (role) params.set('role', role);
+        const query = params.toString();
+        return query ? `/dashboard?${query}` : '/dashboard';
+    };
 
     return (
         <aside className="w-[200px] min-w-[200px] bg-[#3B3F6E] flex flex-col h-full">
-            {/* Logo */}
             <div className="px-6 pt-8 pb-6">
-                <div className="flex items-center gap-2">
-                    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M16 4C10 4 6 8 4 12C2 16 4 22 8 26C12 30 20 30 24 26C28 22 30 16 28 12C26 8 22 4 16 4Z" stroke="white" strokeWidth="2" fill="none"/>
-                        <path d="M12 14C12 14 14 18 16 18C18 18 20 14 20 14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                    <span className="text-white text-xl font-bold tracking-tight">Nevo</span>
-                </div>
+                <NevoLogo className="h-8 w-auto" width={172} height={32} />
             </div>
 
-            {/* Navigation */}
             <nav className="flex flex-col gap-1 px-3 flex-1">
                 {navItems.map((item) => {
                     const isActive = item.view === currentView;
-                    const href = item.view ? `/dashboard?view=${item.view}` : '/dashboard';
                     return (
                         <Link
                             key={item.name}
-                            href={href}
+                            href={buildHref(item.view)}
                             className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[13px] ${
                                 isActive
                                     ? 'bg-white/15 text-white font-semibold'
@@ -51,36 +61,39 @@ export function TeacherSidebar({ user }: { user?: any }) {
                 })}
             </nav>
 
-            {/* Ask Nevo Button */}
-            {/* <div className="px-4 pb-4">
-                <button className="flex justify-center items-center gap-2 w-full bg-white/15 text-white py-[12px] rounded-[20px] font-semibold text-[13px] hover:bg-white/20 transition-colors cursor-pointer backdrop-blur-sm">
+            <div className="px-4 pb-6 pt-2">
+                <button
+                    type="button"
+                    onClick={() => setShowAskNevo(true)}
+                    className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[9999px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer"
+                >
                     <Icon type="galaxy" width={16} height={16} className="invert brightness-200" />
                     <span>Ask Nevo</span>
                 </button>
-            </div> */}
+            </div>
 
-            {/* User Profile */}
             <div className="px-4 pb-6 pt-2">
                 <Link
-                    href="/dashboard?view=profile"
-                    className="flex items-center gap-3 px-2 py-2 -mx-2 rounded-xl hover:bg-white/8 transition-colors cursor-pointer"
+                    href={buildHref('profile')}
+                    className={`flex items-center gap-3 px-2 py-2 -mx-2 rounded-xl transition-colors cursor-pointer ${
+                        isProfileActive ? 'bg-white/15' : 'hover:bg-white/8'
+                    }`}
                 >
-                    <div className="w-8 h-8 rounded-full bg-[#5D6199] overflow-hidden flex items-center justify-center text-white text-xs font-bold uppercase">
-                        {user?.avatarUrl ? (
-                            <img
-                                src={user.avatarUrl}
-                                alt="Teacher avatar"
-                                className="w-full h-full object-cover"
-                            />
-                        ) : (
-                            user?.name ? user.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2) : 'MA'
-                        )}
-                    </div>
+                    <UserAvatar
+                        name={displayName || 'Teacher'}
+                        avatarUrl={user?.avatarUrl}
+                        size={32}
+                        bg="#5D6199"
+                        fg="#FFFFFF"
+                        fontClassName="text-[11px] font-bold"
+                    />
                     <span className="text-white/80 text-[13px] font-medium truncate">
-                        {user?.name || 'Mrs. Adeyemi'}
+                        {displayName || 'Teacher'}
                     </span>
                 </Link>
             </div>
+
+            <AskNevoDrawer open={showAskNevo} onClose={() => setShowAskNevo(false)} leftInset={200} />
         </aside>
     );
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/features/Auth/api/auth";
 import { cookies } from "next/headers";
-import { API_BASE_URL } from "@/shared/lib/api";
+import { createClient } from "@supabase/supabase-js";
 
 async function teacherAuthHeader() {
   const session = await auth();
@@ -32,71 +32,49 @@ export async function POST(req: Request) {
       return NextResponse.json({ detail: "No file provided." }, { status: 400 });
     }
 
+    if (file.type && !file.type.startsWith("image/")) {
+      return NextResponse.json({ detail: "Only image files are supported." }, { status: 400 });
+    }
+
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseKey) {
+      return NextResponse.json(
+        { detail: "Server storage is not configured." },
+        { status: 500 },
+      );
+    }
+
     const safeExt = (file.name.split(".").pop() || "jpg").toLowerCase();
-    const generatedFileName = `teacher-avatar-${Date.now()}.${safeExt}`;
+    const safeBaseName = file.name.replace(/[^a-zA-Z0-9._-]/g, "-");
+    const generatedFileName = `${Date.now()}-${safeBaseName || `teacher-avatar.${safeExt}`}`;
     const contentType = file.type || "image/jpeg";
+    const objectPath = `teacher-avatars/${generatedFileName}`;
 
-    const presignRes = await fetch(`${API_BASE_URL}/teachers/me/upload-url`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...authHeader,
-      },
-      body: JSON.stringify({
-        bucket: "avatars",
-        file_name: generatedFileName,
-        content_type: contentType,
-      }),
+    const supabase = createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+      global: { headers: {} },
     });
-
-    const presignData = await presignRes.json().catch(() => ({}));
-    if (!presignRes.ok) {
-      return NextResponse.json(
-        { detail: (presignData as any)?.detail || "Could not get upload URL." },
-        { status: presignRes.status },
-      );
-    }
-
-    const uploadUrl =
-      (presignData as any)?.upload_url ||
-      (presignData as any)?.uploadUrl ||
-      (presignData as any)?.signed_url ||
-      (presignData as any)?.signedUrl ||
-      "";
-    const publicUrl =
-      (presignData as any)?.public_url ||
-      (presignData as any)?.publicUrl ||
-      (presignData as any)?.file_url ||
-      (presignData as any)?.url ||
-      "";
-
-    if (!uploadUrl || !publicUrl) {
-      return NextResponse.json(
-        { detail: "Upload response missing upload/public URL." },
-        { status: 502 },
-      );
-    }
 
     const fileBuffer = Buffer.from(await file.arrayBuffer());
-    const uploadRes = await fetch(uploadUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Type": contentType,
-      },
-      body: fileBuffer,
+    const { error } = await supabase.storage.from("avatars").upload(objectPath, fileBuffer, {
+      contentType,
+      upsert: true,
     });
 
-    if (!uploadRes.ok) {
-      const storageErrorText = await uploadRes.text().catch(() => "");
+    if (error) {
       return NextResponse.json(
         {
-          detail: "Could not upload file to storage.",
-          storage_status: uploadRes.status,
-          storage_error: storageErrorText || null,
+          detail: "Could not upload avatar image.",
+          storage_error: error.message,
         },
         { status: 502 },
       );
     }
+
+    const { data } = supabase.storage.from("avatars").getPublicUrl(objectPath);
+    const publicUrl =
+      data?.publicUrl || `${supabaseUrl}/storage/v1/object/public/avatars/${objectPath}`;
 
     return NextResponse.json({ public_url: publicUrl });
   } catch (error: any) {

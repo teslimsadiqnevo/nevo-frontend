@@ -3,16 +3,15 @@ import type { NextRequest } from 'next/server'
  
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
-  
-  const isExcludedPath = 
-    pathname === '/waitlist' || 
-    pathname.startsWith('/_next') || 
-    pathname.startsWith('/api') || 
+
+  const isInternalAsset =
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/api') ||
     pathname.includes('.');
 
-  if (!isExcludedPath) {
-    return NextResponse.redirect(new URL('/waitlist', request.url))
-  }
+  if (isInternalAsset) return;
+
+  return NextResponse.next();
 }
  
 export const config = {

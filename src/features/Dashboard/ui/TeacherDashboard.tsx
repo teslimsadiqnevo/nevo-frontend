@@ -12,6 +12,17 @@ import { ProfileView } from "./ProfileView";
 import { AddLessonWizard } from "./AddLessonWizard";
 import { AssignLessonWizard } from "./AssignLessonWizard";
 import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
+import { normalizeTeacherProfile } from "../lib/teacherProfile";
+
+function getUserDisplayName(user?: any) {
+    return (
+        user?.name ||
+        user?.full_name ||
+        user?.display_name ||
+        `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
+        'Teacher'
+    );
+}
 
 export function TeacherDashboard({ view = 'home', user }: { view?: string; user?: any }) {
     const router = useRouter();
@@ -35,13 +46,11 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
             const res = await getTeacherProfile();
             if (await handleExpiredTeacherSession(res)) return;
             if (!mounted || !('data' in res)) return;
-            const payload = res.data || {};
-            const p = payload.teacher || payload.profile || payload.data || payload;
-            const name = p.name || `${p.first_name || ''} ${p.last_name || ''}`.trim();
+            const normalized = normalizeTeacherProfile(res.data);
             setProfileIdentity({
-                name,
-                email: p.email || '',
-                avatarUrl: p.avatar_url || p.avatarUrl || '',
+                name: normalized.fullName,
+                email: normalized.email,
+                avatarUrl: normalized.avatarUrl,
             });
         })();
         return () => {
@@ -53,8 +62,9 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
         () => ({
             ...(user || {}),
             ...(profileIdentity || {}),
-            name: profileIdentity?.name || user?.name,
-            email: profileIdentity?.email || user?.email,
+            name: profileIdentity?.name || getUserDisplayName(user),
+            email: profileIdentity?.email || user?.email || '',
+            avatarUrl: profileIdentity?.avatarUrl || user?.avatarUrl || user?.avatar_url || user?.image || '',
         }),
         [user, profileIdentity],
     );

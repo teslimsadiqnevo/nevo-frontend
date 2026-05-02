@@ -6,18 +6,25 @@ export async function registerSchool(data: {
   schoolName: string;
   adminName: string;
   adminEmail: string;
-  password?: string;
+  password: string;
+  state: string;
   schoolType?: string;
 }) {
   try {
-    const res = await apiFetch("/auth/register/school-admin", {
+    const nameParts = data.adminName.trim().split(/\s+/).filter(Boolean);
+    const adminFirstName = nameParts[0] || data.adminName.trim();
+    const adminLastName = nameParts.slice(1).join(" ") || "Admin";
+
+    const res = await apiFetch("/auth/school/register", {
       method: "POST",
       body: JSON.stringify({
-        email: data.adminEmail,
-        full_name: data.adminName, 
-        password: data.password,
         school_name: data.schoolName,
-        school_type: data.schoolType,
+        admin_first_name: adminFirstName,
+        admin_last_name: adminLastName,
+        admin_email: data.adminEmail,
+        admin_password: data.password,
+        state: data.state,
+        country: "Nigeria",
       }),
     });
 
