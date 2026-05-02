@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { getSchoolSettings } from "@/features/Dashboard/api/school";
 import { getInitials } from "@/shared/lib";
+import { NevoLogo } from "@/shared/ui";
 
 const navItems = [
     { name: 'Overview', view: null },
@@ -56,10 +57,7 @@ export function SchoolAdminSidebar({ user }: { user?: any }) {
     return (
         <aside className="w-[240px] min-w-[240px] h-full bg-[#FCFCFC] border-r border-[#E0D9CE] flex flex-col">
             <div className="px-6 pt-6 pb-8">
-                <div className="flex items-center gap-2.5 text-[#3B3F6E]">
-                    <NevoLogo />
-                    <span className="text-[20px] font-bold leading-[1] tracking-[-0.03em]">Nevo</span>
-                </div>
+                <NevoLogo className="h-8 w-auto" width={172} height={32} />
                 <p className="mt-3 max-w-[170px] text-[14px] font-semibold leading-[20px] text-[#3B3F6E]">
                     {schoolName}
                 </p>
@@ -103,31 +101,6 @@ export function SchoolAdminSidebar({ user }: { user?: any }) {
                 </div>
             </div>
         </aside>
-    );
-}
-
-function NevoLogo() {
-    return (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path
-                d="M6.5 18.5V7.25C6.5 6.00736 7.50736 5 8.75 5C9.39268 5 10.0024 5.2752 10.4296 5.75648L13.5704 9.29352C13.9976 9.7748 14.6073 10.05 15.25 10.05C16.4926 10.05 17.5 9.04264 17.5 7.8V5.5"
-                stroke="#3B3F6E"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-            <path
-                d="M17.5 18.5V13.25C17.5 12.0074 16.4926 11 15.25 11C14.6073 11 13.9976 11.2752 13.5704 11.7565L10.4296 15.2935C10.0024 15.7748 9.39268 16.05 8.75 16.05C7.50736 16.05 6.5 15.0426 6.5 13.8V12.25"
-                stroke="#3B3F6E"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            />
-            <circle cx="6.5" cy="18.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
-            <circle cx="17.5" cy="18.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
-            <circle cx="17.5" cy="5.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
-            <circle cx="6.5" cy="5.5" r="1.75" stroke="#3B3F6E" strokeWidth="1.9" />
-        </svg>
     );
 }
 

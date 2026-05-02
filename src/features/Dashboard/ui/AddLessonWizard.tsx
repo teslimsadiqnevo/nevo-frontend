@@ -63,41 +63,6 @@ async function uploadFileToStorage(uploadUrl: string, file: File, onProgress: (p
     });
 }
 
-// Upload via server-side proxy to avoid CORS and use service-role key
-async function uploadFileViaProxy(file: File, onProgress: (percent: number) => void) {
-    return new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                onProgress(percentComplete);
-            }
-        });
-
-        xhr.addEventListener('load', () => {
-            try {
-                const statusOk = xhr.status >= 200 && xhr.status < 300;
-                if (!statusOk) {
-                    const text = xhr.responseText || xhr.statusText;
-                    reject(new Error('Upload failed: ' + text));
-                    return;
-                }
-                resolve();
-            } catch (e) {
-                reject(e);
-            }
-        });
-
-        xhr.addEventListener('error', () => reject(new Error('Upload error')));
-
-        xhr.open('POST', '/api/teacher/upload-proxy', true);
-        const fd = new FormData();
-        fd.append('file', file, file.name);
-        fd.append('bucket', 'lesson-media');
-        xhr.send(fd);
-    });
-}
-
 // Concepts are automatically extracted during lesson publication on the backend.
 // This provides helpful suggestions for manual entry in Step 3.
 function getDefaultConceptSuggestions(): string[] {
@@ -176,15 +141,24 @@ export function AddLessonWizard({ onClose, onAssign }: { onClose: () => void; on
         }
     };
 
-    /* Real upload with presigned URLs */
+    /* Direct-to-storage upload via backend-issued presigned URL */
     const realUpload = async (file: File, fileName: string, fileSize: string) => {
         setUploadedFile({ file, name: fileName, size: fileSize });
         setUploadState('uploading');
         setUploadProgress(0);
 
         try {
-            // Upload via server-side proxy (avoids CORS and uses service role key)
-            await uploadFileViaProxy(file, (percent) => {
+            const uploadConfig = await getPresignedUploadUrl(file.name, file.size);
+            const uploadUrl =
+                (uploadConfig as any)?.upload_url ||
+                (uploadConfig as any)?.signed_url ||
+                (uploadConfig as any)?.url;
+
+            if (!uploadUrl) {
+                throw new Error('Could not get a valid upload URL');
+            }
+
+            await uploadFileToStorage(uploadUrl, file, (percent) => {
                 setUploadProgress(Math.min(95, percent));
             });
 

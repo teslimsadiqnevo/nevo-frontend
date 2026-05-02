@@ -1,13 +1,8 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-inter",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
+  metadataBase: new URL("https://nevolearning.com"),
   title: "Nevo | Learning, your way",
   description: "Nevo is a calm, adaptive learning platform built around how each mind learns, focuses, and progresses — not around rigid systems.",
   icons: {
@@ -89,9 +84,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${inter.className} bg-parchment text-graphite antialiased`}
-      >
+      <body className="bg-parchment text-graphite antialiased">
         {children}
       </body>
     </html>

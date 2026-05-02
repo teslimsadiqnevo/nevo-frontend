@@ -1,6 +1,6 @@
 "use client";
 
-import { Icon } from "@/shared/ui";
+import { Icon, NevoLogo } from "@/shared/ui";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -21,31 +21,7 @@ export function StudentSidebar() {
     <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
       {/* Logo */}
       <div className="px-6 pt-6 pb-5">
-        <div className="flex items-center gap-2">
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 32 32"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              d="M16 4C10 4 6 8 4 12C2 16 4 22 8 26C12 30 20 30 24 26C28 22 30 16 28 12C26 8 22 4 16 4Z"
-              stroke="white"
-              strokeWidth="2"
-              fill="none"
-            />
-            <path
-              d="M12 14C12 14 14 18 16 18C18 18 20 14 20 14"
-              stroke="white"
-              strokeWidth="2"
-              strokeLinecap="round"
-            />
-          </svg>
-          <span className="text-white text-xl font-bold tracking-tight">
-            Nevo
-          </span>
-        </div>
+        <NevoLogo className="h-8 w-auto" width={172} height={32} />
       </div>
 
       {/* Navigation */}

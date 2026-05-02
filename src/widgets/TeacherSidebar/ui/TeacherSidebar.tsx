@@ -1,6 +1,6 @@
 'use client';
 
-import { Icon, UserAvatar } from "@/shared/ui";
+import { Icon, NevoLogo, UserAvatar } from "@/shared/ui";
 import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -38,13 +38,7 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
     return (
         <aside className="w-[200px] min-w-[200px] bg-[#3B3F6E] flex flex-col h-full">
             <div className="px-6 pt-8 pb-6">
-                <div className="flex items-center gap-2">
-                    <svg width="28" height="28" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M16 4C10 4 6 8 4 12C2 16 4 22 8 26C12 30 20 30 24 26C28 22 30 16 28 12C26 8 22 4 16 4Z" stroke="white" strokeWidth="2" fill="none"/>
-                        <path d="M12 14C12 14 14 18 16 18C18 18 20 14 20 14" stroke="white" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                    <span className="text-white text-xl font-bold tracking-tight">Nevo</span>
-                </div>
+                <NevoLogo className="h-8 w-auto" width={172} height={32} />
             </div>
 
             <nav className="flex flex-col gap-1 px-3 flex-1">
