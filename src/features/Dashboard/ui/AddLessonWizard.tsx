@@ -23,68 +23,6 @@ const LEVELS = ['Primary', 'Secondary', 'Tertiary'];
 const DURATIONS = ['Under 15 mins', '15–30 mins', '30+ mins'];
 const TOTAL_STEPS = 5;
 
-async function getPresignedUploadUrl(filename: string, filesize: number) {
-    const res = await fetch('/api/teacher/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            bucket: 'lesson-media',
-            file_name: filename,
-            content_type: 'application/octet-stream',
-        }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-        throw new Error((data as any)?.detail || 'Could not get upload URL');
-    }
-    return data;
-}
-
-async function uploadFileToStorage(uploadUrl: string, file: File, onProgress: (percent: number) => void) {
-    return new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.upload.addEventListener('progress', (e) => {
-            if (e.lengthComputable) {
-                const percentComplete = (e.loaded / e.total) * 100;
-                onProgress(percentComplete);
-            }
-        });
-        xhr.addEventListener('load', () => {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                resolve();
-            } else {
-                reject(new Error('Upload failed: ' + xhr.statusText));
-            }
-        });
-        xhr.addEventListener('error', () => reject(new Error('Upload error')));
-        xhr.open('PUT', uploadUrl, true);
-        xhr.setRequestHeader('Content-Type', file.type);
-        xhr.send(file);
-    });
-}
-
-// Concepts are automatically extracted during lesson publication on the backend.
-// This provides helpful suggestions for manual entry in Step 3.
-function getDefaultConceptSuggestions(): string[] {
-    return [
-        'Key concepts and definitions',
-        'Main principles and theories',
-        'Real-world applications and examples',
-    ];
-}
-
-async function getAssignableStudentsForTeacher() {
-    const res = await fetch('/api/teacher/students/assignable', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-        throw new Error((data as any)?.detail || 'Could not fetch students');
-    }
-    return data;
-}
-
 async function publishLessonFromClient(payload: {
     title: string;
     content: string;
@@ -92,19 +30,22 @@ async function publishLessonFromClient(payload: {
     subject?: string;
     topic?: string;
     target_grade_level?: number;
+    file?: File | null;
 }) {
-    // Send as JSON to Next.js API route (not FormData)
+    const formData = new FormData();
+    formData.append('title', payload.title);
+    formData.append('content', payload.content);
+    if (payload.description) formData.append('description', payload.description);
+    if (payload.subject) formData.append('subject', payload.subject);
+    if (payload.topic) formData.append('topic', payload.topic);
+    if (typeof payload.target_grade_level === 'number') {
+        formData.append('target_grade_level', String(payload.target_grade_level));
+    }
+    if (payload.file) formData.append('file', payload.file);
+
     const res = await fetch('/api/teacher/lessons', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            title: payload.title,
-            content: payload.content,
-            description: payload.description,
-            subject: payload.subject,
-            topic: payload.topic,
-            target_grade_level: payload.target_grade_level,
-        }),
+        body: formData,
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -141,33 +82,28 @@ export function AddLessonWizard({ onClose, onAssign }: { onClose: () => void; on
         }
     };
 
-    /* Direct-to-storage upload via backend-issued presigned URL */
-    const realUpload = async (file: File, fileName: string, fileSize: string) => {
+    /* Simulate upload */
+    const simulateUpload = (file: File, fileName: string, fileSize: string) => {
         setUploadedFile({ file, name: fileName, size: fileSize });
         setUploadState('uploading');
         setUploadProgress(0);
 
-        try {
-            const uploadConfig = await getPresignedUploadUrl(file.name, file.size);
-            const uploadUrl =
-                (uploadConfig as any)?.upload_url ||
-                (uploadConfig as any)?.signed_url ||
-                (uploadConfig as any)?.url;
+        // If file is > 50MB, fail it
+        const sizeVal = parseFloat(fileSize);
+        const willFail = sizeVal > 50 || fileName.toLowerCase().endsWith('.txt');
 
-            if (!uploadUrl) {
-                throw new Error('Could not get a valid upload URL');
+        let progress = 0;
+        const interval = setInterval(() => {
+            progress += Math.random() * 20 + 5;
+            if (progress >= 100) {
+                progress = 100;
+                clearInterval(interval);
+                setUploadProgress(100);
+                setTimeout(() => setUploadState(willFail ? 'error' : 'done'), 400);
+            } else {
+                setUploadProgress(progress);
             }
-
-            await uploadFileToStorage(uploadUrl, file, (percent) => {
-                setUploadProgress(Math.min(95, percent));
-            });
-
-            setUploadProgress(100);
-            setTimeout(() => setUploadState('done'), 400);
-        } catch (error: any) {
-            console.error('Upload error:', error);
-            setUploadState('error');
-        }
+        }, 300);
     };
 
     if (showSuccess) {
@@ -205,14 +141,13 @@ export function AddLessonWizard({ onClose, onAssign }: { onClose: () => void; on
                     uploadState={uploadState}
                     uploadedFile={uploadedFile}
                     uploadProgress={uploadProgress}
-                    onFileSelect={realUpload}
+                    onFileSelect={simulateUpload}
                     onContinue={handleContinue}
                 />
             )}
 
             {step === 3 && (
                 <Step3Learning
-                    uploadedFile={uploadedFile}
                     initialObjectives={learningObjectives}
                     initialConcepts={keyConcepts}
                     onContinue={(objectives, concepts) => {
@@ -254,6 +189,7 @@ export function AddLessonWizard({ onClose, onAssign }: { onClose: () => void; on
                             subject: meta.subject || undefined,
                             topic: topic || undefined,
                             target_grade_level: levelMap[meta.educationLevel] ?? 3,
+                            file: uploadedFile?.file || null,
                         });
 
                         if ('error' in result) {
@@ -519,22 +455,30 @@ function Step2Upload({
 
 /* ─── Step 3: What will students learn? ─── */
 function Step3Learning({
-    uploadedFile,
     initialObjectives,
     initialConcepts,
     onContinue,
 }: {
-    uploadedFile: UploadedFile | null;
     initialObjectives: string;
     initialConcepts: string[];
     onContinue: (objectives: string, concepts: string[]) => void;
 }) {
-    const [concepts, setConcepts] = useState<string[]>(initialConcepts);
+    const [loading, setLoading] = useState(true);
+    const [concepts, setConcepts] = useState<string[]>(initialConcepts.length ? initialConcepts : ['Variables', 'Equations']);
     const [newConcept, setNewConcept] = useState('');
     const [objectives, setObjectives] = useState(initialObjectives);
-    const suggestedObjectives = getDefaultConceptSuggestions();
+    const suggestedObjectives = [
+        'Understand algebraic expressions',
+        'Solve simple equations',
+        'Apply algebra to problems',
+    ];
 
-    // Concepts are extracted during lesson publication
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setLoading(false);
+        }, 3000);
+        return () => clearTimeout(timer);
+    }, []);
 
     const handleAddConcept = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter' && newConcept.trim()) {
@@ -563,18 +507,42 @@ function Step3Learning({
         setObjectives(`${current}\n- ${text}`);
     };
 
+    if (loading) {
+        return (
+            <div className="flex flex-col h-full flex-1">
+                <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">What will students learn?</h2>
+                
+                <div className="flex items-center gap-3 bg-[#E8E6F5] px-4 py-3 rounded-xl mb-16">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#8E86C8] animate-pulse" />
+                    <span className="text-[13px] font-medium text-[#6E74AA]">Nevo is reading your lesson...</span>
+                </div>
 
+                <div className="flex flex-col items-center justify-center flex-1 pb-20">
+                    <div className="w-[140px] h-[100px] bg-white rounded-xl shadow-sm border border-[#E0DDD8] flex items-center justify-center mb-6 relative overflow-hidden animate-pulse">
+                        <div className="absolute inset-x-4 top-4 h-1.5 bg-[#EEECEA] rounded-full" />
+                        <div className="absolute inset-x-4 top-8 h-1.5 bg-[#EEECEA] rounded-full w-2/3" />
+                        <div className="absolute inset-x-4 top-12 h-1.5 bg-[#EEECEA] rounded-full w-3/4" />
+                        <div className="absolute inset-x-4 top-16 h-1.5 bg-[#EEECEA] rounded-full w-1/2" />
+                        {/* More stacked pages effect */}
+                        <div className="absolute -bottom-2 -right-2 w-full h-[20px] bg-white shadow-sm border border-[#E0DDD8] rotate-2 rounded-xl" />
+                        <div className="absolute -bottom-4 -left-2 w-full h-[20px] bg-white shadow-sm border border-[#E0DDD8] -rotate-3 rounded-xl" />
+                    </div>
+                    <p className="text-[13px] text-[#3B3F6E]">This usually takes 5–10 seconds</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex flex-col h-full flex-1">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">What will students learn?</h2>
 
-            {/* Info Banner */}
+            {/* Success Banner */}
             <div className="flex items-center gap-2.5 bg-[#E8F5E9] border border-[#C8E6C9] px-4 py-3 rounded-xl mb-8">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#2E7D32" strokeWidth="1.5">
-                    <path d="M13 8.5L10 11.5L3 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M3 8.5L6 11.5L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
-                <span className="text-[13px] font-medium text-[#2E7D32]">Add learning objectives and key concepts for your lesson.</span>
+                <span className="text-[13px] font-medium text-[#2E7D32]">Key concepts identified. Review below.</span>
             </div>
 
             {/* Learning Objectives */}
@@ -788,35 +756,14 @@ function Step5Review({
     isPublishing: boolean;
     publishError: string | null;
 }) {
-    const [selectedStudents, setSelectedStudents] = useState<{ id: string; name: string }[]>([]);
-    const [availableStudents, setAvailableStudents] = useState<{ id: string; first_name: string; last_name: string; email: string }[]>([]);
-    const [loadingStudents, setLoadingStudents] = useState(false);
-    const [showStudentPicker, setShowStudentPicker] = useState(false);
-
-    useEffect(() => {
-        const fetchStudents = async () => {
-            setLoadingStudents(true);
-            try {
-                const data = await getAssignableStudentsForTeacher();
-                setAvailableStudents(data.students || []);
-            } catch (error: any) {
-                console.error('Failed to fetch students:', error);
-            } finally {
-                setLoadingStudents(false);
-            }
-        };
-        fetchStudents();
-    }, []);
+    const [classes, setClasses] = useState<string[]>([]);
     
-    const handleToggleStudent = (student: any) => {
-        const studentId = student.id;
-        const studentName = `${student.first_name} ${student.last_name}`;
-        const isSelected = selectedStudents.some(s => s.id === studentId);
-        
-        if (isSelected) {
-            setSelectedStudents(selectedStudents.filter(s => s.id !== studentId));
+    // Simulate toggling a class
+    const handlePickClass = () => {
+        if (classes.length === 0) {
+            setClasses(['JSS 2 Mathematics (24 students)']);
         } else {
-            setSelectedStudents([...selectedStudents, { id: studentId, name: studentName }]);
+            setClasses([]);
         }
     };
 
@@ -855,23 +802,22 @@ function Step5Review({
             {/* Assign Card */}
             <div className="bg-white rounded-xl border border-[#E0DDD8] p-5 mb-8">
                 <span className="block text-[14px] font-semibold text-[#3B3F6E] mb-1">Ready to send to</span>
-                <p className="text-[12px] text-graphite-60 mb-4">Select students to assign this lesson (optional).</p>
+                <p className="text-[12px] text-graphite-60 mb-4">Select students or classes below to assign.</p>
                 
-                {selectedStudents.length === 0 ? (
+                {classes.length === 0 ? (
                     <button
-                        onClick={() => setShowStudentPicker(!showStudentPicker)}
-                        disabled={loadingStudents}
-                        className="w-full py-4 rounded-xl border border-dashed border-[#D0CCC5] text-[#3B3F6E] text-[13px] font-semibold hover:bg-gray-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5 disabled:opacity-50"
+                        onClick={handlePickClass}
+                        className="w-full py-4 rounded-xl border border-dashed border-[#D0CCC5] text-[#3B3F6E] text-[13px] font-semibold hover:bg-gray-50 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                     >
-                        {loadingStudents ? 'Loading...' : '+ Select students'}
+                        + Add class or students
                     </button>
                 ) : (
                     <div>
                         <div className="flex flex-wrap gap-2 mb-2">
-                            {selectedStudents.map((student) => (
-                                <div key={student.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B3F6E] text-white rounded-lg text-[13px] font-medium">
-                                    {student.name}
-                                    <button onClick={() => setSelectedStudents(selectedStudents.filter(s => s.id !== student.id))} className="text-white/70 hover:text-white mt-px cursor-pointer">
+                            {classes.map((cls) => (
+                                <div key={cls} className="flex items-center gap-1.5 px-3 py-1.5 bg-[#3B3F6E] text-white rounded-lg text-[13px] font-medium">
+                                    {cls}
+                                    <button onClick={() => setClasses([])} className="text-white/70 hover:text-white mt-px cursor-pointer">
                                         <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
                                             <path d="M3 3L9 9M9 3L3 9" strokeLinecap="round" />
                                         </svg>
@@ -879,28 +825,7 @@ function Step5Review({
                                 </div>
                             ))}
                         </div>
-                        <button onClick={() => setShowStudentPicker(!showStudentPicker)} className="text-[12px] text-[#6E74AA] hover:text-[#3B3F6E] transition-colors cursor-pointer">+ Add more</button>
-                    </div>
-                )}
-                
-                {/* Student Picker Dropdown */}
-                {showStudentPicker && (
-                    <div className="mt-4 border border-[#E0DDD8] rounded-lg p-3 max-h-[200px] overflow-y-auto">
-                        {availableStudents.length === 0 ? (
-                            <p className="text-[12px] text-graphite-60">No students available for assignment.</p>
-                        ) : (
-                            availableStudents.map((student) => (
-                                <label key={student.id} className="flex items-center gap-2 py-2 cursor-pointer hover:bg-gray-50 px-2 rounded">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedStudents.some(s => s.id === student.id)}
-                                        onChange={() => handleToggleStudent(student)}
-                                        className="cursor-pointer"
-                                    />
-                                    <span className="text-[13px] text-[#2B2B2F]">{student.first_name} {student.last_name}</span>
-                                </label>
-                            ))
-                        )}
+                        <button className="text-[12px] text-[#6E74AA] hover:text-[#3B3F6E] transition-colors cursor-pointer">+ Add more</button>
                     </div>
                 )}
             </div>
