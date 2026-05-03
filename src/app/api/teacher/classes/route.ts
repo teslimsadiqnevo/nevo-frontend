@@ -55,7 +55,27 @@ async function getTeacherSchoolId(accessToken?: string) {
 export async function GET() {
   try {
     const accessToken = await getAccessToken();
-    const schoolId = await getTeacherSchoolId(accessToken || undefined);
+    let schoolId = await getTeacherSchoolId(accessToken || undefined);
+
+    // Fall back to the live teacher profile so assigned classes still resolve
+    // even when the local session/cookie shape doesn't expose school_id.
+    if (!schoolId && accessToken) {
+      const session = await auth();
+      const teacherId = (session?.user as any)?.id;
+      if (teacherId) {
+        const teacherRes = await fetch(`${API_BASE_URL}/teachers/${teacherId}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+          cache: "no-store",
+        });
+        const teacherData = await teacherRes.json().catch(() => ({}));
+        if (teacherRes.ok && teacherData?.school_id) {
+          schoolId = String(teacherData.school_id);
+        }
+      }
+    }
 
     if (!schoolId) {
       // Teacher has no school — return an empty class list instead of an error
@@ -64,6 +84,12 @@ export async function GET() {
 
     const backendRes = await fetch(`${API_BASE_URL}/schools/${schoolId}/classes`, {
       method: "GET",
+      headers: accessToken
+        ? {
+            Authorization: `Bearer ${accessToken}`,
+          }
+        : undefined,
+      cache: "no-store",
     });
 
     const data = await backendRes.json().catch(() => ({}));

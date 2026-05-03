@@ -301,6 +301,10 @@ function TeacherStudentDetailView({ studentId, onBack }: { studentId: string; on
     profile?.name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(' ').trim() ||
     'Student';
+  const className = profile?.class_name || profile?.class?.name || 'Unassigned class';
+  const lastActive = formatTeacherLastActive(profile?.last_activity_at || profile?.last_seen_at || profile?.updated_at || null);
+  const averageScoreValue = Number(progress?.average_score ?? 0);
+  const supportSignal = averageScoreValue >= 75 ? 'On track' : averageScoreValue >= 50 ? 'Some signals' : 'Needs attention';
 
   const summaryStats = [
     { label: 'Lessons completed', value: humanizeValue(progress?.completed_lessons ?? profile?.completed_lessons ?? 0) },
@@ -353,17 +357,27 @@ function TeacherStudentDetailView({ studentId, onBack }: { studentId: string; on
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         <div className="flex w-[736px] flex-col gap-4">
           <div className="rounded-[20px] border border-[#E0D9CE] bg-[#FAF6EE] px-6 py-5">
-            <div className="flex items-center gap-4">
-              <div className="flex h-[56px] w-[56px] items-center justify-center rounded-full bg-[#3B3F6E] text-[20px] font-semibold text-[#F7F1E6]">
-                {getNameInitials(studentName)}
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="flex h-[56px] w-[56px] items-center justify-center rounded-full bg-[#3B3F6E] text-[20px] font-semibold text-[#F7F1E6]">
+                  {getNameInitials(studentName)}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-[22px] font-bold leading-[30px] text-[#3B3F6E]">{studentName}</h2>
+                  <p className="text-[14px] leading-5 text-[#1A1A1A]/60">
+                    {className}
+                    {profile?.nevo_id ? ` · ${profile.nevo_id}` : ''}
+                    {` · Last active: ${lastActive}`}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <h2 className="text-[22px] font-bold leading-[30px] text-[#3B3F6E]">{studentName}</h2>
-                <p className="text-[14px] leading-5 text-[#1A1A1A]/60">
-                  {profile?.class_name || profile?.class?.name || 'Unassigned class'}
-                  {profile?.nevo_id ? ` · ${profile.nevo_id}` : ''}
-                  {` · Last active: ${formatTeacherLastActive(profile?.last_activity_at || profile?.last_seen_at || profile?.updated_at || null)}`}
-                </p>
+              <div className="mt-1 flex items-center gap-2 rounded-full border border-[#E0D9CE] bg-[#F7F1E6] px-3 py-1.5">
+                <span
+                  className={`h-[8px] w-[8px] rounded-full ${
+                    averageScoreValue >= 75 ? 'bg-[#7AB87A]' : averageScoreValue >= 50 ? 'bg-[#E8A84A]' : 'bg-[#9A9CCB]'
+                  }`}
+                />
+                <span className="text-[12px] font-medium leading-4 text-[#3B3F6E]">{supportSignal}</span>
               </div>
             </div>
           </div>
@@ -374,16 +388,27 @@ function TeacherStudentDetailView({ studentId, onBack }: { studentId: string; on
             ))}
           </div>
 
-          <TeacherStudentPanel title="Student profile">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-              <TeacherStudentDetailRow label="Class" value={profile?.class_name || profile?.class?.name || 'Unassigned'} />
-              <TeacherStudentDetailRow label="Age" value={humanizeValue(profile?.age)} />
-              <TeacherStudentDetailRow label="School" value={humanizeValue(profile?.school_name)} />
-              <TeacherStudentDetailRow label="Guardian" value={humanizeValue(profile?.parent_name || profile?.guardian_name)} />
-              <TeacherStudentDetailRow label="Strength signal" value={humanizeValue(profile?.strength_signal || profile?.strengths)} />
-              <TeacherStudentDetailRow label="Support signal" value={humanizeValue(profile?.support_signal || profile?.support_needs)} />
-            </div>
-          </TeacherStudentPanel>
+          <div className="grid grid-cols-[1.15fr_0.85fr] gap-4">
+            <TeacherStudentPanel title="Student profile">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                <TeacherStudentDetailRow label="Class" value={className} />
+                <TeacherStudentDetailRow label="Age" value={humanizeValue(profile?.age)} />
+                <TeacherStudentDetailRow label="School" value={humanizeValue(profile?.school_name)} />
+                <TeacherStudentDetailRow label="Guardian" value={humanizeValue(profile?.parent_name || profile?.guardian_name)} />
+                <TeacherStudentDetailRow label="Strength signal" value={humanizeValue(profile?.strength_signal || profile?.strengths)} />
+                <TeacherStudentDetailRow label="Support signal" value={humanizeValue(profile?.support_signal || profile?.support_needs)} />
+              </div>
+            </TeacherStudentPanel>
+
+            <TeacherStudentPanel title="Learning snapshot">
+              <div className="flex flex-col gap-3">
+                <TeacherStudentSnapshotRow label="Preferred style" value={humanizeValue(profile?.preferred_learning_style || profile?.learning_style || 'Not set')} />
+                <TeacherStudentSnapshotRow label="Subjects" value={humanizeValue(profile?.subjects)} />
+                <TeacherStudentSnapshotRow label="Last session" value={lastActive} />
+                <TeacherStudentSnapshotRow label="Current focus" value={humanizeValue(progress?.current_topic || profile?.current_topic || 'No active topic')} />
+              </div>
+            </TeacherStudentPanel>
+          </div>
 
           <TeacherStudentPanel title="Recent lesson progress">
             {Array.isArray(progress?.recent_lessons) && progress.recent_lessons.length > 0 ? (
@@ -396,9 +421,14 @@ function TeacherStudentDetailView({ studentId, onBack }: { studentId: string; on
                       </p>
                       <p className="text-[13px] leading-5 text-[#1A1A1A]/55">{humanizeValue(lesson.subject || lesson.topic)}</p>
                     </div>
-                    <p className="text-[13px] font-medium leading-5 text-[#3B3F6E]">
-                      {lesson.score != null ? `${Math.round(Number(lesson.score))}%` : humanizeValue(lesson.status || 'In progress')}
-                    </p>
+                    <div className="text-right">
+                      <p className="text-[13px] font-medium leading-5 text-[#3B3F6E]">
+                        {lesson.score != null ? `${Math.round(Number(lesson.score))}%` : humanizeValue(lesson.status || 'In progress')}
+                      </p>
+                      <p className="text-[12px] leading-4 text-[#1A1A1A]/45">
+                        {formatSessionDate(lesson.completed_at || lesson.updated_at || lesson.created_at)}
+                      </p>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -457,6 +487,15 @@ function TeacherStudentPanel({ title, children }: { title: string; children: Rea
 function TeacherStudentDetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
+      <p className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#1A1A1A]/45">{label}</p>
+      <p className="mt-1 text-[14px] leading-5 text-[#1A1A1A]">{value}</p>
+    </div>
+  );
+}
+
+function TeacherStudentSnapshotRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[14px] bg-[#F7F1E6] px-4 py-3">
       <p className="text-[12px] font-medium uppercase tracking-[0.04em] text-[#1A1A1A]/45">{label}</p>
       <p className="mt-1 text-[14px] leading-5 text-[#1A1A1A]">{value}</p>
     </div>
