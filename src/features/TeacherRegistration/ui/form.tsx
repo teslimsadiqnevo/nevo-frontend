@@ -52,7 +52,7 @@ export function TeacherForm({ onSuccess }: { onSuccess: (payload: TeacherRegistr
         <form className="flex flex-col gap-4 w-full mx-auto" onSubmit={handleSubmit}>
             <input
                 type="text"
-                placeholder="Your full name"
+                placeholder="Your full name (i.e First Name and Surname)"
                 value={fullName}
                 onChange={(e) => { setFullName(e.target.value); setError(null); }}
                 className="w-full bg-transparent border border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50 rounded-[10px] px-4 py-[14px] outline-none transition-colors text-[13.5px] font-medium placeholder:text-[#3B3F6E]/60"
