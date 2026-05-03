@@ -16,19 +16,49 @@ interface ConnectionRequestItem {
     name: string;
     initials: string;
     classInfo: string;
-    time: string;
     status: 'pending' | 'accepted' | 'rejected';
+}
+
+interface TeacherQrClassItem {
+    class_id: string;
+    class_name: string;
+    class_code: string;
 }
 
 export function ConnectView() {
     const [screen, setScreen] = useState<ConnectScreen>('list');
     const [qrData, setQrData] = useState<any>(null);
     const [requests, setRequests] = useState<ConnectionRequestItem[]>([]);
+    const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [actingId, setActingId] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [fetchError, setFetchError] = useState<string | null>(null);
     const guardAuth = useAuthGuard('teacher');
+
+    const classItems = useMemo<TeacherQrClassItem[]>(
+        () =>
+            Array.isArray(qrData?.classes)
+                ? qrData.classes
+                      .map((item: any) => ({
+                          class_id: String(item?.class_id || ''),
+                          class_name: String(item?.class_name || item?.name || 'Class'),
+                          class_code: String(item?.class_code || ''),
+                      }))
+                      .filter((item: TeacherQrClassItem) => item.class_id && item.class_code)
+                : [],
+        [qrData],
+    );
+
+    useEffect(() => {
+        if (!classItems.length) {
+            setSelectedClassId(null);
+            return;
+        }
+        if (!selectedClassId || !classItems.some((item) => item.class_id === selectedClassId)) {
+            setSelectedClassId(classItems[0].class_id);
+        }
+    }, [classItems, selectedClassId]);
 
     const refresh = async () => {
         const [qrRes, reqRes] = await Promise.all([getTeacherQr(), getTeacherConnectionRequests()]);
@@ -36,7 +66,11 @@ export function ConnectView() {
 
         const qr = 'data' in qrRes ? qrRes.data : null;
         const reqPayload = 'data' in reqRes ? reqRes.data : null;
-        const reqList = Array.isArray(reqPayload) ? reqPayload : Array.isArray(reqPayload?.requests) ? reqPayload.requests : [];
+        const reqList = Array.isArray(reqPayload)
+            ? reqPayload
+            : Array.isArray(reqPayload?.requests)
+              ? reqPayload.requests
+              : [];
         const qrError = 'error' in qrRes ? qrRes.error : null;
         const reqError = 'error' in reqRes ? reqRes.error : null;
 
@@ -52,11 +86,10 @@ export function ConnectView() {
                     .map((part: string) => part[0]?.toUpperCase() || '')
                     .join('') || 'ST';
                 return {
-                    id: String(r.id ?? `req-${i}`),
+                    id: String(r.connection_id ?? r.id ?? `req-${i}`),
                     name,
                     initials,
                     classInfo: r.class_name || r.class || 'Class not specified',
-                    time: r.created_at || r.requested_at || 'Recently',
                     status: (r.status === 'accepted' || r.status === 'rejected') ? r.status : 'pending',
                 } as ConnectionRequestItem;
             }),
@@ -65,7 +98,7 @@ export function ConnectView() {
 
     useEffect(() => {
         let mounted = true;
-        (async () => {
+        void (async () => {
             await refresh();
             if (mounted) setLoading(false);
         })();
@@ -82,6 +115,8 @@ export function ConnectView() {
     };
 
     const pendingRequests = useMemo(() => requests.filter((r) => r.status === 'pending'), [requests]);
+    const selectedClass = classItems.find((item) => item.class_id === selectedClassId) || null;
+    const hasActiveClasses = Boolean(qrData?.has_active_classes) && classItems.length > 0;
 
     const handleNewMessage = () => {
         setNotice('Messaging composer is not enabled yet for this backend flow.');
@@ -89,17 +124,29 @@ export function ConnectView() {
     };
 
     if (screen === 'qr-full') {
-        return <FullQRView qrData={qrData} onBack={() => setScreen('list')} />;
+        return (
+            <FullQRView
+                selectedClass={selectedClass}
+                hasActiveClasses={hasActiveClasses}
+                emptyStateMessage={qrData?.empty_state_message}
+                onBack={() => setScreen('list')}
+            />
+        );
     }
 
     return (
         <ConnectList
-            qrData={qrData}
+            selectedClassId={selectedClassId}
+            selectedClass={selectedClass}
+            classItems={classItems}
+            hasActiveClasses={hasActiveClasses}
+            emptyStateMessage={qrData?.empty_state_message}
             pendingRequests={pendingRequests}
             loading={loading}
             actingId={actingId}
             notice={notice}
             fetchError={fetchError}
+            onSelectClass={setSelectedClassId}
             onViewQR={() => setScreen('qr-full')}
             onNewMessage={handleNewMessage}
             onAccept={(id) => handleRequestAction(id, 'accept')}
@@ -109,23 +156,33 @@ export function ConnectView() {
 }
 
 function ConnectList({
-    qrData,
+    selectedClassId,
+    selectedClass,
+    classItems,
+    hasActiveClasses,
+    emptyStateMessage,
     pendingRequests,
     loading,
     actingId,
     notice,
     fetchError,
+    onSelectClass,
     onViewQR,
     onNewMessage,
     onAccept,
     onReject,
 }: {
-    qrData: any;
+    selectedClassId: string | null;
+    selectedClass: TeacherQrClassItem | null;
+    classItems: TeacherQrClassItem[];
+    hasActiveClasses: boolean;
+    emptyStateMessage?: string | null;
     pendingRequests: ConnectionRequestItem[];
     loading: boolean;
     actingId: string | null;
     notice: string | null;
     fetchError: string | null;
+    onSelectClass: (classId: string | null) => void;
     onViewQR: () => void;
     onNewMessage: () => void;
     onAccept: (id: string) => void;
@@ -144,18 +201,26 @@ function ConnectList({
                 </button>
             </div>
 
-            {notice && (
+            {notice ? (
                 <div className="mb-4 px-4 py-2.5 rounded-lg bg-[#E8E4DC] text-[#3B3F6E] text-[12px] font-medium">
                     {notice}
                 </div>
-            )}
-            {fetchError && (
+            ) : null}
+            {fetchError ? (
                 <div className="mb-4 px-4 py-2.5 rounded-lg bg-[#FCEAE7] text-[#9D3A2C] text-[12px] font-medium">
                     {fetchError}
                 </div>
-            )}
+            ) : null}
 
-            <QRSection qrData={qrData} onViewFullQR={onViewQR} />
+            <QRSection
+                selectedClassId={selectedClassId}
+                selectedClass={selectedClass}
+                classItems={classItems}
+                hasActiveClasses={hasActiveClasses}
+                emptyStateMessage={emptyStateMessage}
+                onSelectClass={onSelectClass}
+                onViewFullQR={onViewQR}
+            />
 
             <section>
                 <h3 className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">Messages</h3>
@@ -214,111 +279,155 @@ function ConnectList({
     );
 }
 
-function QRSection({ qrData, onViewFullQR }: { qrData: any; onViewFullQR: () => void }) {
+function QRSection({
+    selectedClassId,
+    selectedClass,
+    classItems,
+    hasActiveClasses,
+    emptyStateMessage,
+    onSelectClass,
+    onViewFullQR,
+}: {
+    selectedClassId: string | null;
+    selectedClass: TeacherQrClassItem | null;
+    classItems: TeacherQrClassItem[];
+    hasActiveClasses: boolean;
+    emptyStateMessage?: string | null;
+    onSelectClass: (classId: string | null) => void;
+    onViewFullQR: () => void;
+}) {
     const [classOpen, setClassOpen] = useState(false);
-    const classes = Array.isArray(qrData?.classes) ? qrData.classes : [];
-    const [selectedClass, setSelectedClass] = useState<string>('');
-    const classCode =
-        qrData?.class_code ||
-        qrData?.code ||
-        qrData?.teacher_code ||
-        qrData?.classCode ||
-        qrData?.teacherCode ||
-        qrData?.connection_code ||
-        qrData?.connect_code ||
-        '';
-    const isIndependentTeacher =
-        qrData?.independent === true ||
-        qrData?.teaching_mode === 'independent' ||
-        qrData?.teachingMode === 'independent' ||
-        qrData?.teacher_type === 'independent' ||
-        (!qrData?.school_id && !qrData?.schoolId && !qrData?.class_name && classes.length === 0);
-    const fallbackClassLabel = isIndependentTeacher ? 'Independent Teacher' : 'Class not available';
+    const [copied, setCopied] = useState(false);
+    const emptyMessage = emptyStateMessage || 'No active classes are assigned to you yet.';
 
-    useEffect(() => {
-        if (
-            !selectedClass ||
-            selectedClass === 'Class not available' ||
-            selectedClass === 'Independent Teacher'
-        ) {
-            const first = classes[0]?.name || classes[0] || qrData?.class_name || fallbackClassLabel;
-            setSelectedClass(first);
+    const handleCopyClassCode = async () => {
+        if (!selectedClass?.class_code || !hasActiveClasses) return;
+        try {
+            await navigator.clipboard.writeText(selectedClass.class_code);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1500);
+        } catch {
+            setCopied(false);
         }
-    }, [classes, qrData, selectedClass, fallbackClassLabel]);
+    };
 
     return (
         <section className="mb-8">
             <h3 className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">Share your class QR</h3>
             <div className="bg-white rounded-2xl border border-[#E9E7E2] px-6 py-5 flex items-start gap-5">
-                <div className="w-[72px] h-[72px] border-2 border-[#3B3F6E] rounded-lg flex items-center justify-center shrink-0 bg-white p-1">
-                    <QRCode
-                        value={classCode || 'NEVO-CLASS-CODE'}
-                        size={52}
-                        fgColor="#3B3F6E"
-                        bgColor="#FFFFFF"
-                    />
-                </div>
-                <div className="flex flex-col">
-                    <p className="text-[13.5px] text-[#2B2B2F] mb-2">Let students scan this to connect with you.</p>
-                    <div className="relative mb-2">
-                        <button
-                            onClick={() => setClassOpen((v) => !v)}
-                            className="flex items-center gap-1.5 px-4 py-2 border border-[#D4D0CA] rounded-lg text-[12.5px] font-medium text-[#3B3F6E] bg-[#F6F5F8] hover:bg-white transition-colors cursor-pointer"
-                        >
-                            Class: {selectedClass}
-                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#3B3F6E" strokeWidth="1.5" className={`transition-transform ${classOpen ? 'rotate-180' : ''}`}>
-                                <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </button>
-                        {classOpen && classes.length > 0 && (
-                            <div className="absolute left-0 top-full mt-1 bg-white border border-[#E0DDD8] rounded-xl shadow-lg py-1 min-w-[220px] z-10">
-                                {classes.map((cls: any, idx: number) => {
-                                    const className = cls?.name || cls || `Class ${idx + 1}`;
-                                    return (
-                                        <button
-                                            key={`${className}-${idx}`}
-                                            onClick={() => {
-                                                setSelectedClass(className);
-                                                setClassOpen(false);
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-graphite-60 hover:bg-gray-50 transition-colors cursor-pointer"
-                                        >
-                                            {className}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
+                <div className="relative shrink-0">
+                    <div className={`w-[72px] h-[72px] border-2 border-[#3B3F6E] rounded-lg flex items-center justify-center bg-white p-1 ${!hasActiveClasses ? 'opacity-30 blur-[1.2px]' : ''}`}>
+                        <QRCode
+                            value={selectedClass?.class_code || 'NO-ACTIVE-CLASS'}
+                            size={52}
+                            fgColor="#3B3F6E"
+                            bgColor="#FFFFFF"
+                        />
                     </div>
-                    <button
-                        onClick={onViewFullQR}
-                        className="text-[12.5px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer text-left w-fit"
-                    >
-                        View full QR
-                    </button>
+                    {!hasActiveClasses ? (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <span className="rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold text-[#3B3F6E]">
+                                No class
+                            </span>
+                        </div>
+                    ) : null}
+                </div>
+
+                <div className="flex flex-col min-w-0">
+                    <p className="text-[13.5px] text-[#2B2B2F] mb-2">
+                        {hasActiveClasses
+                            ? 'Let students scan this to connect with your selected class.'
+                            : emptyMessage}
+                    </p>
+
+                    {hasActiveClasses ? (
+                        <>
+                            <div className="relative mb-2">
+                                <button
+                                    onClick={() => setClassOpen((v) => !v)}
+                                    className="flex items-center gap-1.5 px-4 py-2 border border-[#D4D0CA] rounded-lg text-[12.5px] font-medium text-[#3B3F6E] bg-[#F6F5F8] hover:bg-white transition-colors cursor-pointer"
+                                >
+                                    Class: {selectedClass?.class_name || 'Select class'}
+                                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#3B3F6E" strokeWidth="1.5" className={`transition-transform ${classOpen ? 'rotate-180' : ''}`}>
+                                        <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                </button>
+                                {classOpen ? (
+                                    <div className="absolute left-0 top-full mt-1 bg-white border border-[#E0DDD8] rounded-xl shadow-lg py-1 min-w-[240px] z-10">
+                                        {classItems.map((item) => (
+                                            <button
+                                                key={item.class_id}
+                                                onClick={() => {
+                                                    onSelectClass(item.class_id);
+                                                    setClassOpen(false);
+                                                }}
+                                                className={`w-full text-left px-4 py-2 text-[13px] font-medium transition-colors cursor-pointer ${
+                                                    item.class_id === selectedClassId
+                                                        ? 'bg-[#F7F1E6] text-[#3B3F6E]'
+                                                        : 'text-graphite-60 hover:bg-gray-50'
+                                                }`}
+                                            >
+                                                {item.class_name}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+
+                            <div className="flex items-center gap-3 mb-2">
+                                <span className="text-[12.5px] text-[#2B2B2F]/70">
+                                    Class code: <span className="font-semibold text-[#3B3F6E]">{selectedClass?.class_code}</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => void handleCopyClassCode()}
+                                    className="text-[12px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer"
+                                >
+                                    {copied ? 'Copied' : 'Copy code'}
+                                </button>
+                            </div>
+
+                            <button
+                                onClick={onViewFullQR}
+                                className="text-[12.5px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer text-left w-fit"
+                            >
+                                View full QR
+                            </button>
+                        </>
+                    ) : (
+                        <div className="inline-flex w-fit items-center rounded-lg border border-[#D4D0CA] bg-[#F6F5F8] px-4 py-2 text-[12.5px] font-medium text-[#3B3F6E]/70">
+                            No active classes assigned
+                        </div>
+                    )}
                 </div>
             </div>
         </section>
     );
 }
 
-function FullQRView({ qrData, onBack }: { qrData: any; onBack: () => void }) {
+function FullQRView({
+    selectedClass,
+    hasActiveClasses,
+    emptyStateMessage,
+    onBack,
+}: {
+    selectedClass: TeacherQrClassItem | null;
+    hasActiveClasses: boolean;
+    emptyStateMessage?: string | null;
+    onBack: () => void;
+}) {
     const [copied, setCopied] = useState(false);
-    const teacherCode =
-        qrData?.class_code ||
-        qrData?.code ||
-        qrData?.teacher_code ||
-        qrData?.classCode ||
-        qrData?.teacherCode ||
-        qrData?.connection_code ||
-        qrData?.connect_code ||
-        '';
+    const classCode = selectedClass?.class_code || '';
 
-    const handleCopy = () => {
-        if (!teacherCode) return;
-        navigator.clipboard.writeText(teacherCode).catch(() => {});
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+    const handleCopy = async () => {
+        if (!classCode || !hasActiveClasses) return;
+        try {
+            await navigator.clipboard.writeText(classCode);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            setCopied(false);
+        }
     };
 
     return (
@@ -333,41 +442,54 @@ function FullQRView({ qrData, onBack }: { qrData: any; onBack: () => void }) {
                 Connect
             </button>
 
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">Your QR Code</h2>
-            <p className="text-[13px] text-graphite-60 mb-8">Students scan this to connect with you.</p>
+            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">Your class QR</h2>
+            <p className="text-[13px] text-graphite-60 mb-8">
+                {hasActiveClasses
+                    ? `Students can scan this to join ${selectedClass?.class_name || 'your class'}.`
+                    : (emptyStateMessage || 'No active classes are assigned to you yet.')}
+            </p>
 
             <div className="flex flex-col items-center">
-                <div className="border-2 border-dashed border-[#3B3F6E] rounded-2xl p-8 mb-6 flex flex-col items-center">
+                <div className={`border-2 border-dashed border-[#3B3F6E] rounded-2xl p-8 mb-6 flex flex-col items-center bg-white ${!hasActiveClasses ? 'opacity-35 blur-[1.2px]' : ''}`}>
                     <QRCode
-                        value={teacherCode || 'NEVO-CLASS-CODE'}
+                        value={classCode || 'NO-ACTIVE-CLASS'}
                         size={160}
                         fgColor="#3B3F6E"
                         bgColor="#FFFFFF"
                     />
-                    <p className="text-[15px] font-semibold text-[#2B2B2F] mt-5">Teacher Connect</p>
+                    <p className="text-[15px] font-semibold text-[#2B2B2F] mt-5">
+                        {selectedClass?.class_name || 'No active class'}
+                    </p>
                 </div>
 
-                <p className="text-[11px] font-bold text-graphite-40 tracking-wider uppercase mb-3">Or share your code instead</p>
-                <div className="flex items-center gap-2">
-                    <span className="text-[18px] font-bold text-[#2B2B2F] tracking-wider">{teacherCode || 'Unavailable'}</span>
-                    <button
-                        onClick={handleCopy}
-                        className="p-1.5 hover:bg-white/60 rounded-lg transition-colors cursor-pointer"
-                        title="Copy code"
-                        disabled={!teacherCode}
-                    >
-                        {copied ? (
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#5B8A6E" strokeWidth="1.5">
-                                <path d="M3 8.5L6 11.5L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        ) : (
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6B6B6B" strokeWidth="1.3">
-                                <rect x="5" y="5" width="8" height="8" rx="1.5" />
-                                <path d="M3 11V3.5C3 2.67 3.67 2 4.5 2H11" strokeLinecap="round" />
-                            </svg>
-                        )}
-                    </button>
-                </div>
+                {hasActiveClasses ? (
+                    <>
+                        <p className="text-[11px] font-bold text-graphite-40 tracking-wider uppercase mb-3">Or share your code instead</p>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[18px] font-bold text-[#2B2B2F] tracking-wider">{classCode}</span>
+                            <button
+                                onClick={() => void handleCopy()}
+                                className="p-1.5 hover:bg-white/60 rounded-lg transition-colors cursor-pointer"
+                                title="Copy code"
+                            >
+                                {copied ? (
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#5B8A6E" strokeWidth="1.5">
+                                        <path d="M3 8.5L6 11.5L13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                ) : (
+                                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#6B6B6B" strokeWidth="1.3">
+                                        <rect x="5" y="5" width="8" height="8" rx="1.5" />
+                                        <path d="M3 11V3.5C3 2.67 3.67 2 4.5 2H11" strokeLinecap="round" />
+                                    </svg>
+                                )}
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <div className="rounded-xl border border-[#E0DDD8] bg-white px-4 py-3 text-[13px] text-[#3B3F6E]/70">
+                        Assign this teacher to an active class to generate a shareable class QR.
+                    </div>
+                )}
             </div>
         </div>
     );

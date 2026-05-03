@@ -6,12 +6,12 @@ import { signOut } from 'next-auth/react';
 import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
 import { LessonsView } from "./LessonsView";
-import { StudentsView } from "./StudentsView";
 import { InsightsView } from "./InsightsView";
 import { ConnectView } from "./ConnectView";
 import { ProfileView } from "./ProfileView";
 import { AddLessonWizard } from "./AddLessonWizard";
 import { AssignLessonWizard } from "./AssignLessonWizard";
+import { TeacherStudentsBackendView } from "./TeacherBackendViews";
 import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
 import { useAuthGuard } from "@/shared/lib";
@@ -78,7 +78,7 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
 
     const content = useMemo(() => {
         if (view === 'lessons') return <LessonsView />;
-        if (view === 'students') return <StudentsView />;
+        if (view === 'students') return <TeacherStudentsBackendView />;
         if (view === 'insights') return <InsightsView />;
         if (view === 'connect') return <ConnectView />;
         if (view === 'profile') {

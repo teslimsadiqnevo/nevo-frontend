@@ -1,13 +1,14 @@
 'use client'
 
 import Link from "next/link";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/shared/ui";
 import { loginTeacher } from "../api/loginTeacher";
 
 export function TeacherLoginForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -16,6 +17,23 @@ export function TeacherLoginForm() {
     const [error, setError] = useState<string | null>(null);
 
     const isComplete = email.trim() !== '' && password !== '';
+    const inviteToken = searchParams.get('invite_token') || '';
+    const redirectParam = searchParams.get('redirect') || '';
+
+    const normalizedRedirect = useMemo(() => {
+        if (!redirectParam) return '/dashboard';
+        if (redirectParam.startsWith('/')) return redirectParam;
+        if (typeof window === 'undefined') return '/dashboard';
+        try {
+            const parsed = new URL(redirectParam);
+            if (parsed.origin === window.location.origin) {
+                return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+            }
+        } catch {
+            return '/dashboard';
+        }
+        return '/dashboard';
+    }, [redirectParam]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -26,6 +44,7 @@ export function TeacherLoginForm() {
             const result = await loginTeacher({
                 email,
                 password,
+                redirectTo: normalizedRedirect,
             });
 
             if (result?.error) {
@@ -93,6 +112,12 @@ export function TeacherLoginForm() {
             <a href="/forgot-password" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-[10px]">
                 Forgot your password?
             </a>
+
+            {inviteToken ? (
+                <p className="text-[11px] text-[#3B3F6E]/60 text-center mt-2">
+                    Sign in to accept your school invite and join your assigned class.
+                </p>
+            ) : null}
 
             <Link href="/register/teacher" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-6">
                 Don&apos;t have an account? Sign up

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { StudentDetailView } from './StudentDetailView';
+import { useAuthGuard } from '@/shared/lib';
 import {
   getTeacherDashboard,
   getTeacherDashboardHome,
@@ -288,17 +289,29 @@ export function TeacherLessonsBackendView({
 
 export function TeacherStudentsBackendView() {
   const [students, setStudents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('All classes');
   const [showClassFilter, setShowClassFilter] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState<number | null>(null);
+  const guardAuth = useAuthGuard('teacher');
   useEffect(() => {
     (async () => {
       const res = await getTeacherStudents();
+      if (guardAuth(res)) return;
+      if ('error' in res && res.error) {
+        setError(res.error);
+        setStudents([]);
+        setLoading(false);
+        return;
+      }
       const d = 'data' in res ? res.data : null;
       setStudents(Array.isArray(d) ? d : Array.isArray(d?.students) ? d.students : []);
+      setError(null);
+      setLoading(false);
     })();
-  }, []);
+  }, [guardAuth]);
 
   const normalized = useMemo(
     () =>
@@ -314,9 +327,9 @@ export function TeacherStudentsBackendView() {
           id: Number(s.id) || i + 1,
           name,
           initials: initials || 'ST',
-          className: s.class_name || s.class || s.group_name || 'JSS 1 Mathematics',
-          subject: s.subject || 'Mathematics',
-          lastActive: s.last_active || s.last_seen || 'Today',
+          className: s.class_name || s.class || s.group_name || 'Unassigned class',
+          subject: s.subject || '',
+          lastActive: s.last_activity_at || s.last_active || s.last_seen || 'Recently',
           signal: i % 3 === 0 ? 'green' : i % 3 === 1 ? 'amber' : 'purple',
         };
       }),
@@ -389,7 +402,16 @@ export function TeacherStudentsBackendView() {
         />
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="bg-transparent rounded-2xl border border-[#E9E7E2] px-6 py-12 text-center">
+          <p className="text-[13px] text-graphite-40">Loading students...</p>
+        </div>
+      ) : error ? (
+        <div className="bg-transparent rounded-2xl border border-[#E9E7E2] px-6 py-12 text-center">
+          <p className="text-[15px] font-semibold text-[#3B3F6E] mb-2">Couldn&apos;t load students.</p>
+          <p className="text-[13px] text-graphite-40">{error}</p>
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-[170px] h-[140px] rounded-2xl bg-[#DCD8D8] flex items-center justify-center mb-4">
             <svg width="72" height="72" viewBox="0 0 72 72" fill="none" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round">
@@ -422,7 +444,7 @@ export function TeacherStudentsBackendView() {
                 <div>
                   <p className="text-[30px] leading-tight font-semibold text-[#2B2B2F]">{s.name}</p>
                   <p className="text-[24px] leading-tight text-graphite-40">
-                    {s.className} {s.subject} · Last active: {s.lastActive}
+                    {s.className}{s.subject ? ` · ${s.subject}` : ''} · Last active: {s.lastActive}
                   </p>
                 </div>
               </div>

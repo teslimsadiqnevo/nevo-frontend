@@ -6,13 +6,14 @@ import { AuthError } from "next-auth";
 export async function loginTeacher(data: {
   email: string;
   password?: string;
+  redirectTo?: string;
 }) {
   try {
     await signIn("credentials", {
       email: data.email,
       password: data.password,
       loginType: "teacher",
-      redirectTo: "/dashboard",
+      redirectTo: data.redirectTo || "/dashboard",
     });
     return { success: true };
   } catch (error) {
