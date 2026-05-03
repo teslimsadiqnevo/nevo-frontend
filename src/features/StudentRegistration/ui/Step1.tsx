@@ -5,62 +5,106 @@ import { Icon } from "@/shared/ui";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 export function Step1({ onNext }: { onNext: () => void }) {
-    const { firstName: storeFirstName, age: storeAge, setFirstName, setAge } = useRegistrationStore();
+    const {
+        firstName: storeFirstName,
+        surname: storeSurname,
+        age: storeAge,
+        setFirstName,
+        setSurname,
+        setAge,
+    } = useRegistrationStore();
     const [firstName, setLocalFirstName] = useState(storeFirstName);
+    const [surname, setLocalSurname] = useState(storeSurname);
     const [age, setLocalAge] = useState(storeAge);
 
-    const isFormValid = firstName.trim() !== "" && age.trim() !== "";
+    const isFormValid =
+        firstName.trim() !== "" && surname.trim() !== "" && age.trim() !== "";
+
+    const inputClass =
+        "w-full h-14 bg-transparent border border-indigo/40 rounded-xl px-5 text-[16px] leading-6 text-graphite outline-none focus:border-2 focus:border-indigo placeholder:text-graphite/30 transition-colors";
 
     return (
-        <div className="flex flex-col justify-center items-center">
-            <a href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
+        <div className="w-full max-w-[1024px] mx-auto px-6 pt-12">
+            <a
+                href="/register"
+                className="flex w-11 h-11 items-center justify-center cursor-pointer"
+                aria-label="Back"
+            >
                 <Icon type="back" width={24} height={24} />
             </a>
 
-            <main className="px-6 w-full flex flex-col items-center">
-                <header className="pt-8 flex w-full flex-col gap-2 items-center justify-center pb-10">
-                    <p className="font-semibold text-sm text-indigo opacity-60">Step 1 of 6</p>
-                    <h1 className="font-extrabold text-[22px] text-indigo mt-3">Let's get started</h1>
-                    <h2 className="font-medium text-sm text-graphite-70">Tell us a little about yourself.</h2>
+            <main className="w-full flex flex-col items-center">
+                <header className="pt-6 flex w-full flex-col gap-2 items-center justify-center">
+                    <p className="font-normal text-[13px] leading-5 text-lavender">
+                        Step 1 of 6
+                    </p>
+                    <h1 className="font-bold text-[22px] leading-[33px] text-indigo mt-10">
+                        Let&apos;s get started
+                    </h1>
+                    <h2 className="font-normal text-sm leading-[21px] text-graphite/60">
+                        Tell us a little about yourself.
+                    </h2>
                 </header>
 
-                <form className="flex w-full flex-col gap-4" onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!isFormValid) return;
-                    setFirstName(firstName);
-                    setAge(age);
-                    console.log("Step 1 complete - Data saved to Zustand store:", { firstName, age });
-                    onNext();
-                }}>
-                    <input 
-                        type="text" 
-                        placeholder="Your Full name" 
+                <form
+                    className="w-full flex flex-col gap-5 mt-8"
+                    onSubmit={(e) => {
+                        e.preventDefault();
+                        if (!isFormValid) return;
+                        const cleanFirstName = firstName.trim();
+                        const cleanSurname = surname.trim();
+                        const cleanAge = age.trim();
+                        setFirstName(cleanFirstName);
+                        setSurname(cleanSurname);
+                        setAge(cleanAge);
+                        onNext();
+                    }}
+                >
+                    <input
+                        type="text"
+                        placeholder="Your first name"
                         value={firstName}
                         onChange={(e) => setLocalFirstName(e.target.value)}
-                        className="w-full bg-transparent border border-indigo-20 rounded-xl px-5 py-4 outline-none focus:border-2 focus:border-indigo transition-colors"
+                        className={inputClass}
+                        autoComplete="given-name"
                     />
 
-                    <input 
-                        type="number" 
-                        placeholder="Your age" 
+                    <input
+                        type="text"
+                        placeholder="Your surname"
+                        value={surname}
+                        onChange={(e) => setLocalSurname(e.target.value)}
+                        className={inputClass}
+                        autoComplete="family-name"
+                    />
+
+                    <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="Your age"
                         value={age}
                         onChange={(e) => setLocalAge(e.target.value)}
-                        className="w-full bg-transparent border border-indigo-20 rounded-xl px-5 py-4 outline-none focus:border-2 focus:border-indigo transition-colors"
+                        className={inputClass}
                     />
-                    
-                    <p className="font-medium text-xs text-graphite-50 pb-2">This helps Nevo adjust your experience.</p>
-                    
-                    <button 
-                        type="submit" 
+
+                    <p className="font-normal text-xs leading-[18px] text-graphite/40 -mt-2">
+                        This helps Nevo adjust your experience.
+                    </p>
+
+                    <button
+                        type="submit"
                         disabled={!isFormValid}
-                        className={`w-full text-white font-semibold rounded-xl mt-4 cursor-pointer px-6 py-4 outline-none transition-opacity ${
-                            isFormValid ? "bg-indigo hover:opacity-90" : "bg-indigo opacity-50 cursor-not-allowed"
+                        className={`w-full h-13 bg-indigo text-parchment font-semibold text-[16px] leading-6 rounded-xl mt-4 px-6 outline-none transition-opacity ${
+                            isFormValid
+                                ? "opacity-100 hover:opacity-90 cursor-pointer"
+                                : "opacity-40 cursor-not-allowed"
                         }`}
+                        style={{ height: 52 }}
                     >
                         Continue
                     </button>
                 </form>
             </main>
         </div>
-    )
+    );
 }

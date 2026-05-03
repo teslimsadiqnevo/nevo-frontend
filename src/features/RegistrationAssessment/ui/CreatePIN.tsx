@@ -7,7 +7,7 @@ import { Icon } from "@/shared/ui";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () => void; }) {
-    const { setPin: setGlobalPin, firstName, age, schoolId, classId, assessmentAnswers } = useRegistrationStore();
+    const { setPin: setGlobalPin, firstName, surname, age, schoolId, classId, assessmentAnswers } = useRegistrationStore();
     const [mode, setMode] = useState<"enter" | "confirm">("enter");
     const [pin, setPin] = useState("");
     const [confirmPin, setConfirmPin] = useState("");
@@ -75,7 +75,7 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
 
         try {
             const regResult = await registerStudent({
-                fullName: firstName,
+                fullName: `${firstName.trim()} ${surname.trim()}`.trim(),
                 age,
                 pin: finalPin,
                 schoolId: schoolId || "",

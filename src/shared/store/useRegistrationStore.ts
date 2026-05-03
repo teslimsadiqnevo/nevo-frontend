@@ -5,6 +5,7 @@ export type LearningMode = 'visual' | 'audio' | 'action' | 'reading';
 
 interface RegistrationState {
     firstName: string;
+    surname: string;
     age: string;
     schoolId: string | null;
     classId: string | null;
@@ -15,6 +16,7 @@ interface RegistrationState {
     isAutoAdapt: boolean;
     learningMode: LearningMode;
     setFirstName: (name: string) => void;
+    setSurname: (surname: string) => void;
     setAge: (age: string) => void;
     setSchoolId: (id: string | null) => void;
     setClassId: (id: string | null) => void;
@@ -31,6 +33,7 @@ export const useRegistrationStore = create<RegistrationState>()(
     persist(
         (set) => ({
             firstName: '',
+            surname: '',
             age: '',
             schoolId: null,
             classId: null,
@@ -41,6 +44,7 @@ export const useRegistrationStore = create<RegistrationState>()(
             isAutoAdapt: false,
             learningMode: 'visual',
             setFirstName: (firstName) => set({ firstName }),
+            setSurname: (surname) => set({ surname }),
             setAge: (age) => set({ age }),
             setSchoolId: (schoolId) => set({ schoolId }),
             setClassId: (classId) => set({ classId }),
@@ -58,6 +62,7 @@ export const useRegistrationStore = create<RegistrationState>()(
             setLearningMode: (learningMode) => set({ learningMode }),
             clearRegistration: () => set({
                 firstName: '',
+                surname: '',
                 age: '',
                 schoolId: null,
                 classId: null,
