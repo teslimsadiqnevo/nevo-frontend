@@ -114,6 +114,10 @@ export function SchoolLoginForm() {
             <Link href="/login/school/forgot-password" className="mt-[18px] text-[11.5px] text-[#A29ECA] hover:text-[#3B3F6E] font-medium transition-colors">
                 Forgot your password?
             </Link>
+
+            <Link href="/register/school" className="mt-6 text-[11.5px] text-[#A29ECA] hover:text-[#3B3F6E] font-medium transition-colors">
+                Don&apos;t have an account? Sign up
+            </Link>
         </form>
     )
 }

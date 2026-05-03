@@ -1,5 +1,6 @@
 'use client'
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/shared/ui";
@@ -92,6 +93,10 @@ export function TeacherLoginForm() {
             <a href="/forgot-password" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-[10px]">
                 Forgot your password?
             </a>
+
+            <Link href="/register/teacher" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-6">
+                Don&apos;t have an account? Sign up
+            </Link>
 
             <div className="flex justify-center mt-[24px]">
                 <button type="button" onClick={() => router.back()} className="text-[#3B3F6E] hover:scale-110 opacity-80 hover:opacity-100 transition-all p-2 cursor-pointer">

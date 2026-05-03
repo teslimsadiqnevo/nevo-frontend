@@ -157,6 +157,10 @@ export function StudentLoginForm() {
                  Lost your ID?
              </Link>
 
+             <Link href="/register/student" className="mt-6 text-[10px] text-[#A29ECA] font-medium cursor-pointer transition-colors hover:text-[#3B3F6E]">
+                 Don&apos;t have an account? Sign up
+             </Link>
+
              <button type="button" onClick={() => router.back()} className="mt-4 text-[#A29ECA] cursor-pointer transition-opacity hover:opacity-100 p-2">
                  <Icon type="back" width={16} height={16} />
              </button>
