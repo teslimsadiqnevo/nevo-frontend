@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/shared/ui";
+import { forgotSchoolPassword } from "@/features/TeacherLogin/api/teacherAuth";
 
 export default function SchoolForgotPasswordPage() {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isSent, setIsSent] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [countdown, setCountdown] = useState(45);
 
     useEffect(() => {
@@ -21,16 +23,28 @@ export default function SchoolForgotPasswordPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!email.trim()) return;
         setIsLoading(true);
-        setTimeout(() => {
-            setIsLoading(false);
-            setIsSent(true);
-            setCountdown(45);
-        }, 1500);
+        setError(null);
+
+        const result = await forgotSchoolPassword(email.trim());
+        setIsLoading(false);
+        if (result.error) {
+            setError(result.error);
+            return;
+        }
+        setIsSent(true);
+        setCountdown(45);
     };
 
-    const handleResend = () => {
-        if (countdown > 0) return;
+    const handleResend = async () => {
+        if (countdown > 0 || !email.trim()) return;
+        setError(null);
+        const result = await forgotSchoolPassword(email.trim());
+        if (result.error) {
+            setError(result.error);
+            return;
+        }
         setCountdown(45);
     };
 
@@ -66,7 +80,7 @@ export default function SchoolForgotPasswordPage() {
                 
                 <p className="text-[12.5px] text-graphite opacity-[55%] font-medium text-center max-w-[340px] leading-snug tracking-tight mb-[34px]">
                     {isSent ? (
-                        <>We've sent a password reset link to<br/>{email}</>
+                        <>We&apos;ve sent a password reset link to<br/>{email}</>
                     ) : (
                         "Enter your admin email and we'll send a reset link."
                     )}
@@ -74,6 +88,9 @@ export default function SchoolForgotPasswordPage() {
 
                 {isSent ? (
                     <div className="w-full flex justify-center flex-col gap-[34px] items-center">
+                        {error && (
+                            <span className="text-[10px] font-bold text-[#E57661] tracking-wide">{error}</span>
+                        )}
                         <button 
                             type="button" 
                             onClick={handleResend}
@@ -93,14 +110,19 @@ export default function SchoolForgotPasswordPage() {
                     </div>
                 ) : (
                     <form className="w-full flex justify-center flex-col gap-[22px] items-center" onSubmit={handleSubmit}>
-                        <div className="w-full">
+                        <div className="w-full flex flex-col gap-2">
                             <input
                                 type="email"
                                 placeholder="Admin email address"
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
-                                className="w-full bg-transparent rounded-[8px] px-4 py-[14px] text-[13px] text-[#3B3F6E] font-medium outline-none transition-all placeholder:text-[#3B3F6E]/40 border border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50"
+                                onChange={(e) => { setEmail(e.target.value); setError(null); }}
+                                className={`w-full bg-transparent rounded-[8px] px-4 py-[14px] text-[13px] text-[#3B3F6E] font-medium outline-none transition-all placeholder:text-[#3B3F6E]/40 border ${
+                                    error ? "border-[#E57661]" : "border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50"
+                                }`}
                             />
+                            {error && (
+                                <span className="text-[10px] font-bold text-[#E57661] ml-2 tracking-wide">{error}</span>
+                            )}
                         </div>
 
                         <button

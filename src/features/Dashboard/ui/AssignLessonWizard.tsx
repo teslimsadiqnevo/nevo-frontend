@@ -201,16 +201,25 @@ export function AssignLessonWizard({
             setLoadError(null);
 
             try {
-                const [lessonData, classData, studentData] = await Promise.all([
+                const [lessonResult, classResult, studentResult] = await Promise.allSettled([
                     fetchTeacherLessons(),
                     fetchTeacherClasses(),
                     fetchAssignableStudents(),
                 ]);
 
                 if (!mounted) return;
-                setLessons(lessonData);
-                setClasses(classData);
-                setStudents(studentData);
+
+                // Lessons are required — if they fail, show an error
+                if (lessonResult.status === 'rejected') {
+                    const err = lessonResult.reason;
+                    if (guardAuth(err as any)) return;
+                    setLoadError(err instanceof Error ? err.message : 'Could not load lessons.');
+                    return;
+                }
+
+                setLessons(lessonResult.value);
+                setClasses(classResult.status === 'fulfilled' ? classResult.value : []);
+                setStudents(studentResult.status === 'fulfilled' ? studentResult.value : []);
             } catch (error) {
                 if (!mounted) return;
                 if (guardAuth(error as any)) return;
