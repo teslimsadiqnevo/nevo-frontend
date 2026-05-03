@@ -19,9 +19,9 @@ export async function GET(req: Request) {
     const { searchParams } = new URL(req.url);
     const classId = searchParams.get("class_id");
 
-    let url = `${API_BASE_URL}/teachers/students`;
+    let url = `${API_BASE_URL}/teachers/students/assignable`;
     if (classId) {
-      url += `?class_id=${classId}`;
+      url += `?class_id=${encodeURIComponent(classId)}`;
     }
 
     const backendRes = await fetch(url, {
