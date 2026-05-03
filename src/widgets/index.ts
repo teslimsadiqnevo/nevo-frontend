@@ -6,3 +6,4 @@ export { SchoolAdminSidebar } from "./SchoolAdminSidebar";
 export { TeacherSidebar } from "./TeacherSidebar";
 export { StudentSidebar } from "./StudentSidebar";
 export { LogoutDialog } from "./LogoutDialog";
+export { StaleSessionBanner } from "./StaleSessionBanner";

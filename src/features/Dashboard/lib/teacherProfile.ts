@@ -4,6 +4,7 @@ export type TeacherProfileIdentity = {
   subjects: string[];
   educationLevels: string[];
   avatarUrl: string;
+  schoolId: string | null;
 };
 
 function toStringList(value: unknown): string[] {
@@ -32,6 +33,10 @@ export function normalizeTeacherProfile(data: any): TeacherProfileIdentity {
       "",
   ).trim();
 
+  const rawSchoolId =
+    payload.school_id ?? payload.schoolId ?? payload.teaching_context?.school_id ?? null;
+  const schoolId = rawSchoolId ? String(rawSchoolId).trim() || null : null;
+
   return {
     fullName,
     email: String(payload.email || "").trim(),
@@ -40,5 +45,6 @@ export function normalizeTeacherProfile(data: any): TeacherProfileIdentity {
       payload.education_levels ?? payload.educationLevels ?? payload.teaching_context?.education_levels,
     ),
     avatarUrl,
+    schoolId,
   };
 }

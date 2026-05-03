@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'next-auth/react';
 import { TeacherSidebar } from "@/widgets/TeacherSidebar";
+import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
 import { LessonsView } from "./LessonsView";
 import { StudentsView } from "./StudentsView";
 import { InsightsView } from "./InsightsView";
@@ -29,6 +30,8 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
     const router = useRouter();
     const [actionModal, setActionModal] = useState<'upload' | 'assign' | null>(null);
     const [profileIdentity, setProfileIdentity] = useState<{ name?: string; email?: string; avatarUrl?: string } | null>(null);
+    const [profileSchoolId, setProfileSchoolId] = useState<string | null>(null);
+    const [staleSessionDismissed, setStaleSessionDismissed] = useState(false);
     const guardAuth = useAuthGuard('teacher');
 
     const handleExpiredTeacherSession = (res?: any) => guardAuth(res);
@@ -45,11 +48,22 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
                 email: normalized.email,
                 avatarUrl: normalized.avatarUrl,
             });
+            setProfileSchoolId(normalized.schoolId);
         })();
         return () => {
             mounted = false;
         };
     }, []);
+
+    const sessionSchoolId = useMemo(() => {
+        const raw = (user as any)?.schoolId ?? (user as any)?.school_id ?? null;
+        return raw ? String(raw) : null;
+    }, [user]);
+
+    const sessionIsStale =
+        !staleSessionDismissed &&
+        Boolean(profileSchoolId) &&
+        profileSchoolId !== sessionSchoolId;
 
     const effectiveUser = useMemo(
         () => ({
@@ -88,6 +102,12 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
         <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
             <TeacherSidebar user={effectiveUser} />
             <main className="flex-1 px-[48px] py-[48px] overflow-y-auto">
+                {sessionIsStale ? (
+                    <StaleSessionBanner
+                        callbackUrl="/login/teacher"
+                        onDismiss={() => setStaleSessionDismissed(true)}
+                    />
+                ) : null}
                 {actionModal === 'upload' ? (
                     <AddLessonWizard onClose={() => setActionModal(null)} onAssign={() => setActionModal('assign')} />
                 ) : actionModal === 'assign' ? (

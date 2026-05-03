@@ -173,6 +173,7 @@ function Reveal({
 export default function Home() {
   const year = new Date().getFullYear();
   const ctaTypingStyle = { "--type-characters": 31 } as CSSProperties;
+  const heroTypingStyle = { "--type-characters": 24 } as CSSProperties;
 
   return (
     <div className="bg-parchment text-graphite">
@@ -209,18 +210,26 @@ export default function Home() {
             <div className="flex flex-col items-center gap-10">
               <div className="flex w-full max-w-[560px] flex-col items-center">
                 <Reveal delay={60}>
+                  <p
+                    style={heroTypingStyle}
+                    className="animate-typewriter mb-5 text-center text-[13px] font-semibold uppercase tracking-[0.22em] text-indigo/70 md:text-[14px]"
+                  >
+                    Designed around the learner
+                  </p>
+                </Reveal>
+                <Reveal delay={180}>
                   <h1 className="text-center text-[36px] font-bold leading-[1.08] md:text-[44px] md:leading-[48px]">
                     Learning, your way.
                   </h1>
                 </Reveal>
-                <Reveal delay={180}>
+                <Reveal delay={300}>
                   <p className="pt-5 text-center text-[16px] leading-[26px] opacity-90 md:text-[17px] md:leading-[27px]">
                     Nevo is an adaptive learning platform designed around how each
                     learner focuses, progresses, and builds confidence. It supports
                     stronger learning without forcing every student into the same path.
                   </p>
                 </Reveal>
-                <Reveal delay={300} className="pt-6">
+                <Reveal delay={420} className="pt-6">
                   <PillButton
                     href="/auth"
                     className="animate-pulse-glow hover-lift h-[52px] px-7 text-[16px] font-semibold leading-6 md:w-[146px]"
@@ -230,7 +239,7 @@ export default function Home() {
                 </Reveal>
               </div>
 
-              <Reveal delay={420} className="w-full">
+              <Reveal delay={540} className="w-full">
                 <div className="relative w-full overflow-hidden rounded-[20px]">
                   <Image
                     src="/image.png"
@@ -238,7 +247,7 @@ export default function Home() {
                     width={1856}
                     height={840}
                     priority
-                    className="animate-float-gentle h-auto w-full rounded-[20px] object-cover"
+                    className="h-auto w-full rounded-[20px] object-cover"
                   />
                 </div>
               </Reveal>
