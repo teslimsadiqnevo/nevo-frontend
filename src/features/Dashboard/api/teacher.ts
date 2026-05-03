@@ -150,6 +150,36 @@ export async function getTeacherStudents() {
   }
 }
 
+export async function getTeacherStudentProfile(studentId: string) {
+  try {
+    const { headers } = await teacherContext();
+    const res = await apiFetch(`/students/${studentId}`, { headers });
+    return unwrap(res, "Failed to fetch student profile");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function getTeacherStudentProgress(studentId: string) {
+  try {
+    const { headers } = await teacherContext();
+    const res = await apiFetch(`/students/${studentId}/progress`, { headers });
+    return unwrap(res, "Failed to fetch student progress");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function getTeacherStudentSessions(studentId: string) {
+  try {
+    const { headers } = await teacherContext();
+    const res = await apiFetch(`/students/${studentId}/sessions`, { headers });
+    return unwrap(res, "Failed to fetch student sessions");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 export async function getAssignableStudents() {
   try {
     const { headers } = await teacherContext();

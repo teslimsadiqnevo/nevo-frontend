@@ -2,12 +2,15 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { StudentDetailView } from './StudentDetailView';
 import { useAuthGuard } from '@/shared/lib';
+import { StudentDetailView } from './StudentDetailView';
 import {
   getTeacherDashboard,
   getTeacherDashboardHome,
   getTeacherStudents,
+  getTeacherStudentProfile,
+  getTeacherStudentProgress,
+  getTeacherStudentSessions,
   getTeacherConnectionRequests,
   getTeacherQr,
   updateTeacherConnectionRequest,

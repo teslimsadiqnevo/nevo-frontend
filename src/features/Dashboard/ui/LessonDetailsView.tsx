@@ -1,477 +1,650 @@
 'use client';
 
-import { useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 
-type LessonStatus = 'Published' | 'Draft';
-
-export interface Lesson {
-    id: number | string;
-    title: string;
-    subject: string;
-    level: string;
-    duration: number;
-    status: LessonStatus;
-    lastUpdated: string;
-    signal?: { type: 'warning' | 'success'; text: string };
+interface LessonDetailResponse {
+  id: string;
+  title: string;
+  description?: string | null;
+  subject?: string | null;
+  topic?: string | null;
+  target_grade_level: number;
+  estimated_duration_minutes: number;
+  status: string;
+  media_url?: string | null;
+  teacher_id: string;
+  teacher_name?: string | null;
+  created_at?: string | null;
 }
 
-export function LessonDetailsView({ lesson, onBack }: { lesson: Lesson; onBack: () => void }) {
-    const [mode, setMode] = useState<'view' | 'edit'>('view');
-    const [showDuplicate, setShowDuplicate] = useState(false);
-    const [showArchive, setShowArchive] = useState(false);
-    const [showDelete, setShowDelete] = useState(false);
+interface LessonReviewResponse {
+  lesson_id: string;
+  objectives: string[];
+  key_concepts: string[];
+  processed_at?: string | null;
+}
 
-    if (mode === 'edit') {
-        return <LessonEditView lesson={lesson} onCancel={() => setMode('view')} onSave={() => setMode('view')} />;
+interface LessonAssignmentRow {
+  assignment_id: string;
+  student_name: string;
+  class_name?: string | null;
+  status: string;
+  assigned_at: string;
+  completed_at?: string | null;
+}
+
+function buildErrorMessage(data: any, fallback: string) {
+  if (typeof data?.detail === 'string') return data.detail;
+  if (typeof data?.message === 'string') return data.message;
+  if (typeof data?.error === 'string') return data.error;
+  return fallback;
+}
+
+function normalizeStatus(status: string) {
+  const lowered = status.toLowerCase();
+  if (lowered === 'draft') return 'Draft';
+  if (lowered === 'archived') return 'Archived';
+  return 'Published';
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Recently';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Recently';
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function gradeLabel(grade: number) {
+  if (grade <= 6) return `Primary ${grade}`;
+  if (grade <= 12) return `Secondary ${grade - 6}`;
+  return `Grade ${grade}`;
+}
+
+async function fetchLessonPayload(lessonId: string) {
+  const [detailRes, reviewRes, assignmentsRes] = await Promise.all([
+    fetch(`/api/teacher/lessons/${lessonId}`),
+    fetch(`/api/teacher/lessons/${lessonId}/ai-review`, { method: 'POST' }),
+    fetch(`/api/teacher/lessons/${lessonId}/assignments`),
+  ]);
+
+  const [detailData, reviewData, assignmentsData] = await Promise.all([
+    detailRes.json().catch(() => ({})),
+    reviewRes.json().catch(() => ({})),
+    assignmentsRes.json().catch(() => ({})),
+  ]);
+
+  if (!detailRes.ok) {
+    return {
+      error: buildErrorMessage(detailData, 'Could not load lesson details.'),
+      authExpired: detailRes.status === 401 || detailRes.status === 403,
+    };
+  }
+
+  if (!reviewRes.ok) {
+    return {
+      error: buildErrorMessage(reviewData, 'Could not load lesson review.'),
+      authExpired: reviewRes.status === 401 || reviewRes.status === 403,
+    };
+  }
+
+  if (!assignmentsRes.ok) {
+    return {
+      error: buildErrorMessage(assignmentsData, 'Could not load lesson assignments.'),
+      authExpired: assignmentsRes.status === 401 || assignmentsRes.status === 403,
+    };
+  }
+
+  return {
+    data: {
+      detail: detailData as LessonDetailResponse,
+      review: reviewData as LessonReviewResponse,
+      assignments: Array.isArray(assignmentsData?.assignments) ? assignmentsData.assignments as LessonAssignmentRow[] : [],
+    },
+  };
+}
+
+export function LessonDetailsView({
+  lessonId,
+  onBack,
+  onAssign,
+  onChanged,
+}: {
+  lessonId: string;
+  onBack: () => void;
+  onAssign: (lessonId: string) => void;
+  onChanged?: () => void;
+}) {
+  const guardAuth = useAuthGuard('teacher');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lesson, setLesson] = useState<LessonDetailResponse | null>(null);
+  const [review, setReview] = useState<LessonReviewResponse | null>(null);
+  const [assignments, setAssignments] = useState<LessonAssignmentRow[]>([]);
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [workingAction, setWorkingAction] = useState<'duplicate' | 'archive' | 'delete' | null>(null);
+
+  const loadLesson = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchLessonPayload(lessonId);
+    if (guardAuth(result as any)) return;
+    if ('error' in result) {
+      setError(result.error);
+      setLesson(null);
+      setReview(null);
+      setAssignments([]);
+      setLoading(false);
+      return;
     }
 
+    setLesson(result.data.detail);
+    setReview(result.data.review);
+    setAssignments(result.data.assignments);
+    setError(null);
+    setLoading(false);
+  }, [guardAuth, lessonId]);
+
+  useEffect(() => {
+    void loadLesson();
+  }, [loadLesson]);
+
+  const summary = useMemo(() => {
+    if (!lesson) return null;
+    return {
+      status: normalizeStatus(lesson.status),
+      subject: lesson.subject || 'General',
+      topic: lesson.topic || lesson.title,
+      level: gradeLabel(Number(lesson.target_grade_level || 0)),
+      duration: Number(lesson.estimated_duration_minutes || 0),
+    };
+  }, [lesson]);
+
+  const executeAction = async (action: 'duplicate' | 'archive' | 'delete') => {
+    if (!lesson) return;
+    setActionError(null);
+    setWorkingAction(action);
+
+    const config =
+      action === 'duplicate'
+        ? { url: `/api/teacher/lessons/${lesson.id}/duplicate`, method: 'POST' }
+        : action === 'archive'
+          ? { url: `/api/teacher/lessons/${lesson.id}/archive`, method: 'PUT' }
+          : { url: `/api/teacher/lessons/${lesson.id}`, method: 'DELETE' };
+
+    const res = await fetch(config.url, { method: config.method });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const result = {
+        error: buildErrorMessage(data, `Could not ${action} lesson.`),
+        authExpired: res.status === 401 || res.status === 403,
+      };
+      if (guardAuth(result as any)) {
+        setWorkingAction(null);
+        return;
+      }
+      setActionError(result.error);
+      setWorkingAction(null);
+      return;
+    }
+
+    onChanged?.();
+    setWorkingAction(null);
+
+    if (action === 'delete') {
+      onBack();
+      return;
+    }
+
+    await loadLesson();
+  };
+
+  if (loading) {
     return (
-        <div className="flex flex-col h-full w-full max-w-[900px] bg-[#FDFBF9] rounded-3xl border border-[#E9E7E2] relative min-h-[calc(100vh-100px)] overflow-hidden shadow-sm">
-            {/* Top Bar */}
-            <div className="flex items-center pt-6 pb-4 px-8">
-                <button
-                    onClick={onBack}
-                    className="flex items-center gap-2 text-[14px] text-[#3B3F6E] font-medium hover:text-[#2B2B2F] transition-colors"
-                >
-                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 4L6 10L12 16" />
-                    </svg>
-                    Lessons
-                </button>
-            </div>
-
-            {/* Banner */}
-            <div className="bg-[#3B3F6E] py-6 px-8 text-white flex justify-between items-center">
-                <h1 className="text-xl font-semibold leading-tight">{lesson.title}</h1>
-                <div className="flex gap-3 items-center shrink-0">
-                    <span className="px-3 py-1 bg-white/10 rounded-full text-[11px] font-bold tracking-widest uppercase">{lesson.subject}</span>
-                    <span className={`px-3 py-1 rounded-full text-[12px] font-bold ${lesson.status === 'Published' ? 'bg-[#81C784] text-[#1B5E20]' : 'bg-[#C5C0DF] text-[#3B3F6E]'}`}>
-                        {lesson.status}
-                    </span>
-                </div>
-            </div>
-
-            <div className="flex-1 pb-28 pt-6 px-8">
-                {/* Meta details */}
-                <div className="flex items-center gap-3 mb-8">
-                    <span className="px-3 py-1.5 bg-[#E8E6F5] text-[#3B3F6E] text-[11px] font-bold tracking-widest uppercase rounded-full">
-                        {lesson.level}
-                    </span>
-                    <span className="px-3 py-1.5 bg-[#E8E6F5] text-[#3B3F6E] text-[13px] font-medium flex items-center gap-1.5 rounded-full">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <polyline points="12 6 12 12 16 14" />
-                        </svg>
-                        ~{lesson.duration} min
-                    </span>
-                    <span className="px-3 py-1.5 bg-[#E8E6F5] text-[#3B3F6E] flex items-center gap-2 rounded-full">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polygon points="23 7 16 12 23 17 23 7" />
-                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
-                        </svg>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                            <polyline points="10 9 9 9 8 9" />
-                        </svg>
-                    </span>
-                </div>
-
-                {/* Objectives */}
-                <div className="mb-8 block">
-                    <h3 className="text-[12.5px] font-bold text-[#6E74AA] tracking-wider uppercase mb-4">OBJECTIVES</h3>
-                    <ul className="space-y-3">
-                        {['Understand algebraic expressions and variables', 'Solve simple linear equations step by step', 'Apply algebraic thinking to real-world problems', 'Recognize patterns in mathematical relationships'].map((obj, i) => (
-                            <li key={i} className="flex gap-2.5 items-start text-[14px] text-[#2B2B2F]">
-                                <span className="text-[#3B3F6E] text-lg leading-4 mt-[3px]">•</span>
-                                {obj}
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-
-                {/* Checkpoints */}
-                <div className="mb-8 block">
-                    <h3 className="text-[12.5px] font-bold text-[#6E74AA] tracking-wider uppercase mb-4">CHECKPOINTS</h3>
-                    <div className="flex items-center justify-between py-2 border-b border-transparent">
-                        <span className="text-[14px] text-[#2B2B2F]">1. Section 3 — Comprehension check</span>
-                        <button className="text-[#6E74AA] hover:text-[#3B3F6E] transition-colors"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button>
-                    </div>
-                    <div className="flex items-center justify-between py-2 border-b border-transparent">
-                        <span className="text-[14px] text-[#2B2B2F]">2. Section 6 — Comprehension check</span>
-                        <button className="text-[#6E74AA] hover:text-[#3B3F6E] transition-colors"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg></button>
-                    </div>
-                </div>
-
-                {/* Assignments */}
-                <div className="mb-8 block">
-                    <h3 className="text-[12.5px] font-bold text-[#6E74AA] tracking-wider uppercase mb-4">
-                        ASSIGNMENTS {lesson.status === 'Published' && '(3)'}
-                    </h3>
-                    {lesson.status !== 'Published' ? (
-                        <div className="py-12 flex justify-center items-center text-[#9B9B9B] text-[14px]">
-                            Not yet assigned
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-1">
-                            {[
-                                { class: 'JSS 2 Mathematics', meta: 'Assigned 3 days ago · 14 of 18 students completed' },
-                                { class: 'JSS 3 Science', meta: 'Assigned 1 week ago · 22 of 25 students completed' },
-                                { class: 'JSS 1 General Mathematics', meta: 'Assigned 2 weeks ago · 31 of 34 students completed' }
-                            ].map((assignment, i) => (
-                                <div key={i} className="flex items-center justify-between border-b border-[#E9E7E2] py-4 last:border-none cursor-pointer group">
-                                    <div>
-                                        <p className="text-[14px] font-bold text-[#2B2B2F] mb-1">{assignment.class}</p>
-                                        <p className="text-[12.5px] text-graphite-60">{assignment.meta}</p>
-                                    </div>
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9B9B9B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="group-hover:stroke-[#3B3F6E] transition-colors">
-                                        <polyline points="9 18 15 12 9 6" />
-                                    </svg>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-
-                {/* Performance Signals */}
-                {lesson.status === 'Published' && (
-                    <div className="mb-10 block">
-                        <h3 className="text-[12.5px] font-bold text-[#6E74AA] tracking-wider uppercase mb-4">PERFORMANCE SIGNALS</h3>
-                        <p className="font-bold text-[#3B3F6E] text-[14px] mb-4">How students are doing</p>
-                        <ul className="space-y-4">
-                            <li className="text-[13px] text-graphite-60">Section 4 triggered Simplify 6 times</li>
-                            <li className="text-[13px] text-graphite-60">Section 2 had high comprehension scores</li>
-                            <li className="text-[13px] text-graphite-60">Students spent average 8 minutes on Section 5</li>
-                        </ul>
-                    </div>
-                )}
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="absolute bottom-0 left-0 w-full border-t border-[#E9E7E2] bg-[#FDFBF9] py-4 px-8 flex justify-between">
-                <button className="flex flex-col items-center gap-1.5 text-[#6E74AA] hover:text-[#3B3F6E] transition-colors group">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>
-                    <span className="text-[11px] font-medium">Assign</span>
-                </button>
-                <button onClick={() => setMode('edit')} className="flex flex-col items-center gap-1.5 text-[#6E74AA] hover:text-[#3B3F6E] transition-colors group">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
-                    <span className="text-[11px] font-medium">Edit</span>
-                </button>
-                <button onClick={() => setShowDuplicate(true)} className="flex flex-col items-center gap-1.5 text-[#6E74AA] hover:text-[#3B3F6E] transition-colors group">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
-                    <span className="text-[11px] font-medium">Duplicate</span>
-                </button>
-                <button onClick={() => setShowArchive(true)} className="flex flex-col items-center gap-1.5 text-[#6E74AA] hover:text-[#3B3F6E] transition-colors group">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
-                    <span className="text-[11px] font-medium">Archive</span>
-                </button>
-                <button onClick={() => setShowDelete(true)} className="flex flex-col items-center gap-1.5 text-[#6E74AA] hover:text-[#DF3848] transition-colors group">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
-                    <span className="text-[11px] font-medium">Delete</span>
-                </button>
-            </div>
-
-            {/* Duplicate Modal */}
-            {showDuplicate && (
-                <div className="fixed inset-0 bg-black/40 z-[100] flex flex-col justify-end">
-                    <div className="bg-[#FDFBF9] w-full max-w-[900px] lg:ml-[250px] lg:w-[calc(100%-250px)] mx-auto rounded-t-3xl p-6 pb-8 flex flex-col items-center">
-                        <div className="w-10 h-1 bg-[#D0CCC5] rounded-full mb-6" />
-                        <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-1">Duplicate this lesson?</h3>
-                        <p className="text-[13px] text-graphite-60 mb-8">{lesson.title}</p>
-                        
-                        <div className="w-full max-w-[500px]">
-                            <label className="text-[11px] font-bold text-[#6E74AA] uppercase tracking-wider mb-2 block">Name your copy</label>
-                            <input 
-                                type="text"
-                                defaultValue={`Copy of ${lesson.title}`}
-                                className="w-full border border-[#E0DDD8] rounded-xl px-4 py-3.5 text-[14px] text-[#2B2B2F] mb-6 focus:outline-none focus:border-[#3B3F6E] bg-white transition-colors"
-                            />
-                            
-                            <button
-                                onClick={() => setShowDuplicate(false)}
-                                className="w-full py-3.5 rounded-xl bg-[#3B3F6E] text-white font-semibold text-[14px] hover:bg-[#2E3259] transition-colors mb-3"
-                            >
-                                Create copy
-                            </button>
-                            <button
-                                onClick={() => setShowDuplicate(false)}
-                                className="w-full py-3 text-[#6E74AA] text-[13px] font-medium hover:text-[#3B3F6E] transition-colors"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Archive Modal */}
-            {showArchive && (
-                <div className="fixed inset-0 bg-black/40 z-[100] flex flex-col justify-end">
-                    <div className="bg-[#FDFBF9] w-full max-w-[900px] lg:ml-[250px] lg:w-[calc(100%-250px)] mx-auto rounded-t-3xl p-6 pb-8 flex flex-col items-center">
-                        <div className="w-10 h-1 bg-[#D0CCC5] rounded-full mb-8" />
-                        <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-2">Archive this lesson?</h3>
-                        <p className="text-[14px] text-graphite-60 mb-4">Students with active assignments can still complete it.</p>
-                        
-                        {lesson.status === 'Published' && (
-                            <span className="px-3.5 py-1.5 bg-[#F5E6CA] text-[#A67C00] rounded-full text-[12px] font-medium mb-8">
-                                3 active assignments
-                            </span>
-                        )}
-                        {(!lesson.status || lesson.status !== 'Published') && <div className="h-4" />}
-                        
-                        <div className="flex flex-col gap-3 w-full max-w-[500px]">
-                            <button
-                                onClick={() => setShowArchive(false)}
-                                className="w-full py-3.5 rounded-xl border border-[#E9E7E2] text-[#2B2B2F] font-semibold text-[14px] bg-transparent hover:bg-white transition-colors"
-                            >
-                                Archive lesson
-                            </button>
-                            <button
-                                onClick={() => setShowArchive(false)}
-                                className="w-full py-3.5 rounded-xl bg-[#3B3F6E] text-white font-semibold text-[14px] hover:bg-[#2E3259] transition-colors"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Delete Modal */}
-            {showDelete && (
-                <div className="fixed inset-0 bg-black/40 z-[100] flex flex-col justify-end">
-                    <div className="bg-[#FDFBF9] w-full max-w-[900px] lg:ml-[250px] lg:w-[calc(100%-250px)] mx-auto rounded-t-3xl p-6 pb-8 flex flex-col items-center">
-                        <div className="w-10 h-1 bg-[#D0CCC5] rounded-full mb-8" />
-                        <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-2">Delete this lesson?</h3>
-                        <p className="text-[14px] text-graphite-60 mb-4 text-center">This action cannot be undone. All lesson data will be permanently deleted.</p>
-                        
-                        {lesson.status === 'Published' && (
-                            <span className="px-3.5 py-1.5 bg-[#F5E6CA] text-[#A67C00] rounded-full text-[12px] font-medium mb-8">
-                                3 active assignments
-                            </span>
-                        )}
-                        {(!lesson.status || lesson.status !== 'Published') && <div className="h-4" />}
-                        
-                        <div className="flex flex-col gap-3 w-full max-w-[500px]">
-                            <button
-                                onClick={() => setShowDelete(false)}
-                                className="w-full py-3.5 rounded-xl bg-[#DF3848] text-white font-semibold text-[14px] hover:bg-[#C92938] transition-colors"
-                            >
-                                Delete lesson
-                            </button>
-                            <button
-                                onClick={() => setShowDelete(false)}
-                                className="w-full py-3.5 rounded-xl border border-[#E9E7E2] text-graphite-60 font-semibold text-[14px] bg-transparent hover:bg-white transition-colors"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
+      <div className="flex min-h-[calc(100vh-100px)] w-full max-w-[900px] items-center justify-center rounded-3xl border border-[#E9E7E2] bg-[#FDFBF9]">
+        <span className="text-[14px] text-[#6E74AA]">Loading lesson...</span>
+      </div>
     );
+  }
+
+  if (error || !lesson || !review || !summary) {
+    return (
+      <div className="flex min-h-[calc(100vh-100px)] w-full max-w-[900px] flex-col items-center justify-center rounded-3xl border border-[#E9E7E2] bg-[#FDFBF9] px-8 text-center">
+        <p className="mb-2 text-[16px] font-semibold text-[#3B3F6E]">Couldn&apos;t load this lesson.</p>
+        <p className="mb-6 max-w-[440px] text-[14px] leading-5 text-[#1A1A1A]/60">{error || 'Please try again.'}</p>
+        <button
+          type="button"
+          onClick={onBack}
+          className="cursor-pointer rounded-xl border border-[#3B3F6E] px-6 py-3 text-[14px] font-semibold text-[#3B3F6E]"
+        >
+          Back to lessons
+        </button>
+      </div>
+    );
+  }
+
+  if (mode === 'edit') {
+    return (
+      <LessonEditView
+        lesson={lesson}
+        review={review}
+        onCancel={() => setMode('view')}
+        onSaved={async () => {
+          setMode('view');
+          onChanged?.();
+          await loadLesson();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="relative flex min-h-[calc(100vh-100px)] w-full max-w-[900px] flex-col overflow-hidden rounded-3xl border border-[#E9E7E2] bg-[#FDFBF9] shadow-sm">
+      <div className="flex items-center px-8 pb-4 pt-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="flex items-center gap-2 text-[14px] font-medium text-[#3B3F6E] transition-colors hover:text-[#2B2B2F]"
+        >
+          <BackArrow />
+          Lessons
+        </button>
+      </div>
+
+      <div className="flex items-center justify-between bg-[#3B3F6E] px-8 py-6 text-white">
+        <div className="pr-6">
+          <h1 className="text-xl font-semibold leading-tight">{lesson.title}</h1>
+          <p className="mt-2 text-[13px] text-white/75">
+            {summary.topic} · Created {formatDate(lesson.created_at)}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span className="rounded-full bg-white/10 px-3 py-1 text-[11px] font-bold uppercase tracking-widest">{summary.subject}</span>
+          <span className={`rounded-full px-3 py-1 text-[12px] font-bold ${
+            summary.status === 'Published'
+              ? 'bg-[#81C784] text-[#1B5E20]'
+              : summary.status === 'Archived'
+                ? 'bg-[#F5E6CA] text-[#A67C00]'
+                : 'bg-[#C5C0DF] text-[#3B3F6E]'
+          }`}>
+            {summary.status}
+          </span>
+        </div>
+      </div>
+
+      <div className="flex-1 px-8 pb-28 pt-6">
+        <div className="mb-8 flex items-center gap-3">
+          <Pill>{summary.level}</Pill>
+          <Pill>{summary.duration} min</Pill>
+          <Pill>{assignments.length} assignment{assignments.length === 1 ? '' : 's'}</Pill>
+        </div>
+
+        <Section title="Description">
+          <p className="text-[14px] leading-6 text-[#2B2B2F]">
+            {lesson.description || 'No description added yet.'}
+          </p>
+        </Section>
+
+        <Section title="Objectives">
+          {review.objectives.length > 0 ? (
+            <ul className="space-y-3">
+              {review.objectives.map((objective) => (
+                <li key={objective} className="flex gap-2.5 text-[14px] text-[#2B2B2F]">
+                  <span className="mt-[3px] text-lg leading-4 text-[#3B3F6E]">•</span>
+                  <span>{objective}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[14px] text-graphite-40">No objectives saved yet.</p>
+          )}
+        </Section>
+
+        <Section title="Key concepts">
+          {review.key_concepts.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {review.key_concepts.map((concept) => (
+                <span key={concept} className="rounded-md bg-[#E8E6F5] px-3 py-1 text-[12px] font-medium text-[#3B3F6E]">
+                  {concept}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[14px] text-graphite-40">No key concepts saved yet.</p>
+          )}
+        </Section>
+
+        <Section title={`Assignments${assignments.length ? ` (${assignments.length})` : ''}`}>
+          {assignments.length === 0 ? (
+            <p className="text-[14px] text-graphite-40">This lesson has not been assigned yet.</p>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {assignments.map((assignment) => (
+                <div key={assignment.assignment_id} className="flex items-center justify-between border-b border-[#E9E7E2] py-4 last:border-none">
+                  <div>
+                    <p className="mb-1 text-[14px] font-bold text-[#2B2B2F]">{assignment.student_name}</p>
+                    <p className="text-[12.5px] text-graphite-60">
+                      {assignment.class_name || 'Class not specified'} · {formatAssignmentStatus(assignment.status)} · Assigned {formatDate(assignment.assigned_at)}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusChipClass(assignment.status)}`}>
+                    {formatAssignmentStatus(assignment.status)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </Section>
+
+        {actionError ? (
+          <div className="rounded-xl border border-[#F1C5BF] bg-[#FFF6F4] px-4 py-3 text-[13px] text-[#B54708]">
+            {actionError}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="absolute bottom-0 left-0 flex w-full justify-between border-t border-[#E9E7E2] bg-[#FDFBF9] px-8 py-4">
+        <ActionIconButton label="Assign" onClick={() => onAssign(lesson.id)}>
+          <AssignIcon />
+        </ActionIconButton>
+        <ActionIconButton label="Edit" onClick={() => setMode('edit')}>
+          <EditIcon />
+        </ActionIconButton>
+        <ActionIconButton label={workingAction === 'duplicate' ? 'Duplicating...' : 'Duplicate'} onClick={() => void executeAction('duplicate')}>
+          <DuplicateIcon />
+        </ActionIconButton>
+        <ActionIconButton label={workingAction === 'archive' ? 'Archiving...' : 'Archive'} onClick={() => void executeAction('archive')}>
+          <ArchiveIcon />
+        </ActionIconButton>
+        <ActionIconButton
+          label={workingAction === 'delete' ? 'Deleting...' : 'Delete'}
+          onClick={() => void executeAction('delete')}
+          danger
+        >
+          <DeleteIcon />
+        </ActionIconButton>
+      </div>
+    </div>
+  );
 }
 
-function LessonEditView({ lesson, onCancel, onSave }: { lesson: Lesson; onCancel: () => void; onSave: () => void }) {
-    const initialSimplify = true;
-    const initialExpand = false;
-    const initialDifficulty = 50;
-    const initialFreq = 'Every section';
+function LessonEditView({
+  lesson,
+  review,
+  onCancel,
+  onSaved,
+}: {
+  lesson: LessonDetailResponse;
+  review: LessonReviewResponse;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const guardAuth = useAuthGuard('teacher');
+  const [title, setTitle] = useState(lesson.title);
+  const [description, setDescription] = useState(lesson.description || '');
+  const [subject, setSubject] = useState(lesson.subject || '');
+  const [topic, setTopic] = useState(lesson.topic || '');
+  const [duration, setDuration] = useState(String(lesson.estimated_duration_minutes || 20));
+  const [objectives, setObjectives] = useState(review.objectives.join('\n'));
+  const [keyConcepts, setKeyConcepts] = useState(review.key_concepts.join(', '));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-    const [simplifyToggle, setSimplifyToggle] = useState(initialSimplify);
-    const [expandToggle, setExpandToggle] = useState(initialExpand);
-    const [difficulty, setDifficulty] = useState(initialDifficulty);
-    const [freq, setFreq] = useState(initialFreq);
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
 
-    const isDirty = simplifyToggle !== initialSimplify || expandToggle !== initialExpand || difficulty !== initialDifficulty || freq !== initialFreq;
-    const [showDiscard, setShowDiscard] = useState(false);
+    const detailRes = await fetch(`/api/teacher/lessons/${lesson.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: title.trim(),
+        description: description.trim(),
+        subject: subject.trim(),
+        topic: topic.trim(),
+        target_grade_level: lesson.target_grade_level,
+        estimated_duration_minutes: Number(duration) || lesson.estimated_duration_minutes,
+      }),
+    });
+    const detailData = await detailRes.json().catch(() => ({}));
 
-    const handleCancel = () => {
-        if (isDirty) setShowDiscard(true);
-        else onCancel();
-    };
+    if (!detailRes.ok) {
+      const result = {
+        error: buildErrorMessage(detailData, 'Could not update lesson.'),
+        authExpired: detailRes.status === 401 || detailRes.status === 403,
+      };
+      if (guardAuth(result as any)) {
+        setSaving(false);
+        return;
+      }
+      setError(result.error);
+      setSaving(false);
+      return;
+    }
 
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] bg-[#FDFBF9] rounded-3xl border border-[#E9E7E2] relative min-h-[calc(100vh-100px)] overflow-hidden shadow-sm">
-            {/* Top Bar */}
-            <div className="flex items-center justify-between pt-6 pb-6 px-8 border-b border-[#E9E7E2]">
-                <div className="flex gap-4 items-center">
-                    <button
-                        onClick={handleCancel}
-                        className="p-1 hover:bg-black/5 rounded-lg transition-colors cursor-pointer text-[#3B3F6E]"
-                    >
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
-                            <path d="M12 4L6 10L12 16" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                    </button>
-                    {isDirty && (
-                        <span className="px-3 py-1 bg-[#F5E6CA] text-[#A67C00] rounded-full text-[11px] font-bold uppercase tracking-wider">Unsaved changes</span>
-                    )}
-                </div>
-                <span className="text-lg text-[#3B3F6E] font-semibold flex-1 text-center pr-24">Edit lesson</span>
-            </div>
+    const objectivesRes = await fetch(`/api/teacher/lessons/${lesson.id}/objectives`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        objectives: objectives.split('\n').map((item) => item.trim()).filter(Boolean),
+        key_concepts: keyConcepts.split(',').map((item) => item.trim()).filter(Boolean),
+      }),
+    });
+    const objectivesData = await objectivesRes.json().catch(() => ({}));
 
-            <div className="flex-1 pb-32 px-8 pt-8">
-                {/* Uploaded File Banner */}
-                <div className="bg-white rounded-xl border border-[#E9E7E2] px-4 py-4 flex items-center justify-between mb-8 shadow-sm">
-                    <div className="flex items-center gap-3">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6E74AA" strokeWidth="1.5">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                            <polyline points="14 2 14 8 20 8" />
-                            <line x1="16" y1="13" x2="8" y2="13" />
-                            <line x1="16" y1="17" x2="8" y2="17" />
-                            <polyline points="10 9 9 9 8 9" />
-                        </svg>
-                        <span className="text-[15px] font-medium text-[#2B2B2F]">{lesson.title.replace(/ /g, '_')}.pdf</span>
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20 6L9 17l-5-5" />
-                        </svg>
-                        <span className="px-2 py-0.5 bg-[#E8F5E9] text-[#2E7D32] rounded-full text-[10px] font-bold uppercase">Uploaded</span>
-                    </div>
-                    <button className="text-graphite-40 hover:text-graphite transition-colors">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                    </button>
-                </div>
+    if (!objectivesRes.ok) {
+      const result = {
+        error: buildErrorMessage(objectivesData, 'Could not update lesson review.'),
+        authExpired: objectivesRes.status === 401 || objectivesRes.status === 403,
+      };
+      if (guardAuth(result as any)) {
+        setSaving(false);
+        return;
+      }
+      setError(result.error);
+      setSaving(false);
+      return;
+    }
 
-                {/* Objectives */}
-                <div className="mb-8">
-                    <h3 className="text-[12.5px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">LEARNING OBJECTIVES</h3>
-                    <textarea 
-                        className="w-full bg-white border border-[#3B3F6E] rounded-xl p-5 text-[14.5px] text-[#2B2B2F] outline-none resize-none min-h-[110px]"
-                        defaultValue="Students will understand algebraic expressions, solve simple equations, apply algebra to real-world problems, and develop critical thinking skills"
-                    />
-                    <div className="flex gap-3 mt-3">
-                        <button className="px-4 py-2 bg-[#E8E6F5] text-[#3B3F6E] font-medium text-[13px] rounded-lg hover:bg-indigo-10 transition-colors flex items-center gap-1.5">
-                            ✨ Use simpler language
-                        </button>
-                        <button className="px-4 py-2 bg-[#E8E6F5] text-[#3B3F6E] font-medium text-[13px] rounded-lg hover:bg-indigo-10 transition-colors flex items-center gap-1.5">
-                            ✨ Add assessment criteria
-                        </button>
-                    </div>
-                </div>
+    setSaving(false);
+    onSaved();
+  };
 
-                {/* Key Concepts */}
-                <div className="mb-10">
-                    <h3 className="text-[12.5px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">KEY CONCEPTS</h3>
-                    <div className="flex flex-wrap gap-2.5 mb-3">
-                        {['Variables', 'Equations', 'Expressions', 'Problem Solving'].map(concept => (
-                            <div key={concept} className="flex items-center gap-1.5 bg-[#3B3F6E] text-white px-3.5 py-1.5 rounded-full text-[13px] font-medium shadow-sm">
-                                {concept}
-                                <button className="hover:text-white/70 transition-colors mt-[1.5px]"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg></button>
-                            </div>
-                        ))}
-                    </div>
-                    <input type="text" placeholder="+ Add concept" className="border border-[#E9E7E2] bg-white rounded-xl w-full px-5 py-3.5 text-[14.5px] text-[#2B2B2F] placeholder-[#9B9B9B] outline-none focus:border-[#3B3F6E] transition-colors" />
-                </div>
-
-                {/* Adaptation Settings */}
-                <div className="mb-8">
-                    <h3 className="text-[12.5px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-5">ADAPTATION SETTINGS</h3>
-                    
-                    <div className="flex items-center gap-2 mb-8 border border-[#E0DDD8] w-max rounded-full p-[3px] bg-[#FDFBF9]">
-                        {['After each page', 'Every section', 'End of lesson'].map(f => (
-                            <button
-                                key={f}
-                                onClick={() => setFreq(f)}
-                                className={`px-5 py-2.5 rounded-full text-[13px] font-medium transition-colors ${
-                                    f === freq ? 'bg-[#3B3F6E] text-white shadow-sm' : 'text-[#6E74AA] hover:text-[#3B3F6E]'
-                                }`}
-                            >
-                                {f}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="flex justify-between items-center mb-6">
-                        <span className="text-[14.5px] text-[#2B2B2F]">Simplify complex terms</span>
-                        <button
-                            onClick={() => setSimplifyToggle(!simplifyToggle)}
-                            className={`w-[44px] h-[24px] rounded-full flex items-center px-1 transition-colors ${simplifyToggle ? 'bg-[#3B3F6E]' : 'bg-[#D0CCC5]'}`}
-                        >
-                            <div className={`w-[18px] h-[18px] bg-white rounded-full transition-transform ${simplifyToggle ? 'translate-x-[18px]' : 'translate-x-0'}`} />
-                        </button>
-                    </div>
-
-                    <div className="flex justify-between items-center mb-8">
-                        <span className="text-[14.5px] text-[#2B2B2F]">Expand explanations</span>
-                        <button
-                            onClick={() => setExpandToggle(!expandToggle)}
-                            className={`w-[44px] h-[24px] rounded-full flex items-center px-1 transition-colors ${expandToggle ? 'bg-[#3B3F6E]' : 'bg-[#D0CCC5]'}`}
-                        >
-                            <div className={`w-[18px] h-[18px] bg-white rounded-full transition-transform ${expandToggle ? 'translate-x-[18px]' : 'translate-x-0'}`} />
-                        </button>
-                    </div>
-
-                    <div className="mb-4">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-[14.5px] text-[#2B2B2F]">Difficulty level</span>
-                            <span className="text-[13px] text-[#3B3F6E] font-medium">{difficulty > 66 ? 'Advanced' : difficulty > 33 ? 'Moderate' : 'Accessible'}</span>
-                        </div>
-                        <input 
-                            type="range" 
-                            min="0" max="100" 
-                            value={difficulty} 
-                            onChange={(e) => setDifficulty(parseInt(e.target.value))}
-                            className="w-full h-1.5 bg-[#C5C0DF] rounded-full appearance-none outline-none slider-thumb cursor-pointer"
-                        />
-                        <style dangerouslySetInnerHTML={{__html: `
-                            .slider-thumb::-webkit-slider-thumb {
-                                appearance: none;
-                                width: 18px;
-                                height: 18px;
-                                border-radius: 50%;
-                                background: #3B3F6E;
-                                cursor: pointer;
-                            }
-                        `}} />
-                    </div>
-                </div>
-            </div>
-
-            {/* Edit Bottom Actions */}
-            <div className="absolute bottom-0 left-0 w-full border-t border-[#E9E7E2] bg-[#FDFBF9] py-4 px-8 flex justify-between gap-4">
-                <button
-                    onClick={handleCancel}
-                    className="flex-1 py-3.5 rounded-xl border border-[#3B3F6E] text-[#3B3F6E] font-semibold text-[14px] bg-transparent hover:bg-gray-50 transition-colors"
-                >
-                    Cancel
-                </button>
-                <button
-                    onClick={onSave}
-                    className="flex-1 py-3.5 rounded-xl bg-[#3B3F6E] text-white font-semibold text-[14px] hover:bg-[#2E3259] transition-all"
-                >
-                    Save changes
-                </button>
-            </div>
-
-            {/* Discard Modal */}
-            {showDiscard && (
-                <div className="fixed inset-0 bg-black/40 z-[100] flex flex-col justify-end">
-                    <div className="bg-[#FDFBF9] w-full max-w-[900px] lg:ml-[250px] lg:w-[calc(100%-250px)] mx-auto rounded-t-3xl p-6 pb-12 flex flex-col items-center">
-                        <div className="w-10 h-1 bg-[#D0CCC5] rounded-full mb-6" />
-                        <h3 className="text-[16px] font-bold text-[#3B3F6E] mb-2">Discard changes?</h3>
-                        <p className="text-[14px] text-graphite-60 mb-8">Your edits haven't been saved.</p>
-                        
-                        <div className="flex gap-4 w-full max-w-[400px]">
-                            <button
-                                onClick={onCancel}
-                                className="flex-1 py-3.5 rounded-xl border border-[#EF4444] text-[#EF4444] font-semibold text-[14px] bg-[#FEF2F2] hover:bg-[#FCE8E8] transition-colors"
-                            >
-                                Discard
-                            </button>
-                            <button
-                                onClick={() => setShowDiscard(false)}
-                                className="flex-1 py-3.5 rounded-xl bg-[#3B3F6E] text-white font-semibold text-[14px] hover:bg-[#2E3259] transition-colors"
-                            >
-                                Keep editing
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            )}
+  return (
+    <div className="relative flex min-h-[calc(100vh-100px)] w-full max-w-[900px] flex-col overflow-hidden rounded-3xl border border-[#E9E7E2] bg-[#FDFBF9] shadow-sm">
+      <div className="flex items-center justify-between border-b border-[#E9E7E2] px-8 pb-6 pt-6">
+        <div className="flex items-center gap-4">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="cursor-pointer rounded-lg p-1 text-[#3B3F6E] transition-colors hover:bg-black/5"
+          >
+            <BackArrow />
+          </button>
+          <span className="text-lg font-semibold text-[#3B3F6E]">Edit lesson</span>
         </div>
-    );
+      </div>
+
+      <div className="flex-1 space-y-6 px-8 pb-28 pt-8">
+        <EditField label="Title">
+          <input value={title} onChange={(event) => setTitle(event.target.value)} className={inputClassName} />
+        </EditField>
+
+        <EditField label="Description">
+          <textarea value={description} onChange={(event) => setDescription(event.target.value)} className={`${inputClassName} min-h-[100px] resize-none py-4`} />
+        </EditField>
+
+        <div className="grid grid-cols-2 gap-4">
+          <EditField label="Subject">
+            <input value={subject} onChange={(event) => setSubject(event.target.value)} className={inputClassName} />
+          </EditField>
+          <EditField label="Topic">
+            <input value={topic} onChange={(event) => setTopic(event.target.value)} className={inputClassName} />
+          </EditField>
+        </div>
+
+        <EditField label="Estimated duration (minutes)">
+          <input value={duration} onChange={(event) => setDuration(event.target.value)} className={inputClassName} type="number" min="1" />
+        </EditField>
+
+        <EditField label="Learning objectives">
+          <textarea value={objectives} onChange={(event) => setObjectives(event.target.value)} className={`${inputClassName} min-h-[130px] resize-none py-4`} />
+        </EditField>
+
+        <EditField label="Key concepts">
+          <input
+            value={keyConcepts}
+            onChange={(event) => setKeyConcepts(event.target.value)}
+            className={inputClassName}
+            placeholder="Separate concepts with commas"
+          />
+        </EditField>
+
+        {error ? (
+          <div className="rounded-xl border border-[#F1C5BF] bg-[#FFF6F4] px-4 py-3 text-[13px] text-[#B54708]">
+            {error}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="absolute bottom-0 left-0 flex w-full justify-between gap-4 border-t border-[#E9E7E2] bg-[#FDFBF9] px-8 py-4">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 cursor-pointer rounded-xl border border-[#3B3F6E] bg-transparent py-3.5 text-[14px] font-semibold text-[#3B3F6E] transition-colors hover:bg-gray-50"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="flex-1 cursor-pointer rounded-xl bg-[#3B3F6E] py-3.5 text-[14px] font-semibold text-white transition-all hover:bg-[#2E3259] disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {saving ? 'Saving...' : 'Save changes'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="mb-8">
+      <h3 className="mb-4 text-[12.5px] font-bold uppercase tracking-wider text-[#6E74AA]">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function Pill({ children }: { children: ReactNode }) {
+  return <span className="rounded-full bg-[#E8E6F5] px-3 py-1.5 text-[13px] font-medium text-[#3B3F6E]">{children}</span>;
+}
+
+function EditField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <label className="mb-2 block text-[12px] font-semibold uppercase tracking-wider text-[#6E74AA]">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function ActionIconButton({
+  children,
+  label,
+  onClick,
+  danger = false,
+}: {
+  children: ReactNode;
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex flex-col items-center gap-1.5 transition-colors ${
+        danger ? 'text-[#6E74AA] hover:text-[#DF3848]' : 'text-[#6E74AA] hover:text-[#3B3F6E]'
+      }`}
+    >
+      {children}
+      <span className="text-[11px] font-medium">{label}</span>
+    </button>
+  );
+}
+
+function formatAssignmentStatus(status: string) {
+  const lowered = status.toLowerCase();
+  if (lowered === 'completed') return 'Completed';
+  if (lowered === 'in_progress') return 'In progress';
+  return 'Assigned';
+}
+
+function statusChipClass(status: string) {
+  const lowered = status.toLowerCase();
+  if (lowered === 'completed') return 'bg-[#E8F5E9] text-[#2E7D32]';
+  if (lowered === 'in_progress') return 'bg-[#E8E6F5] text-[#3B3F6E]';
+  return 'bg-[#F5E6CA] text-[#A67C00]';
+}
+
+const inputClassName =
+  'w-full rounded-xl border border-[#E0DDD8] bg-white px-4 py-3.5 text-[14.5px] text-[#2B2B2F] outline-none transition-colors focus:border-[#3B3F6E]';
+
+function BackArrow() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8">
+      <path d="M12 4L6 10L12 16" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function AssignIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" />
+      <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+    </svg>
+  );
+}
+
+function DuplicateIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  );
+}
+
+function ArchiveIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="21 8 21 21 3 21 3 8" />
+      <rect x="1" y="3" width="22" height="5" />
+      <line x1="10" y1="12" x2="14" y2="12" />
+    </svg>
+  );
+}
+
+function DeleteIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  );
 }

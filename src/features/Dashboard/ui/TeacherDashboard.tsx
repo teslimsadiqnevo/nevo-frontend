@@ -11,7 +11,7 @@ import { ConnectView } from "./ConnectView";
 import { ProfileView } from "./ProfileView";
 import { AddLessonWizard } from "./AddLessonWizard";
 import { AssignLessonWizard } from "./AssignLessonWizard";
-import { TeacherStudentsBackendView } from "./TeacherBackendViews";
+import { TeacherStudentsView } from "./TeacherStudentsView";
 import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
 import { useAuthGuard } from "@/shared/lib";
@@ -29,6 +29,7 @@ function getUserDisplayName(user?: any) {
 export function TeacherDashboard({ view = 'home', user }: { view?: string; user?: any }) {
     const router = useRouter();
     const [actionModal, setActionModal] = useState<'upload' | 'assign' | null>(null);
+    const [assignLessonId, setAssignLessonId] = useState<string | null>(null);
     const [profileIdentity, setProfileIdentity] = useState<{ name?: string; email?: string; avatarUrl?: string } | null>(null);
     const [profileSchoolId, setProfileSchoolId] = useState<string | null>(null);
     const [staleSessionDismissed, setStaleSessionDismissed] = useState(false);
@@ -78,7 +79,7 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
 
     const content = useMemo(() => {
         if (view === 'lessons') return <LessonsView />;
-        if (view === 'students') return <TeacherStudentsBackendView />;
+        if (view === 'students') return <TeacherStudentsView />;
         if (view === 'insights') return <InsightsView />;
         if (view === 'connect') return <ConnectView />;
         if (view === 'profile') {
@@ -109,9 +110,21 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
                     />
                 ) : null}
                 {actionModal === 'upload' ? (
-                    <AddLessonWizard onClose={() => setActionModal(null)} onAssign={() => setActionModal('assign')} />
+                    <AddLessonWizard
+                        onClose={() => setActionModal(null)}
+                        onAssign={(lessonId) => {
+                            setAssignLessonId(lessonId);
+                            setActionModal('assign');
+                        }}
+                    />
                 ) : actionModal === 'assign' ? (
-                    <AssignLessonWizard onClose={() => setActionModal(null)} />
+                    <AssignLessonWizard
+                        initialLessonId={assignLessonId || undefined}
+                        onClose={() => {
+                            setAssignLessonId(null);
+                            setActionModal(null);
+                        }}
+                    />
                 ) : (
                     content
                 )}

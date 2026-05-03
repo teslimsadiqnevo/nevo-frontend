@@ -1,446 +1,447 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AddLessonWizard } from './AddLessonWizard';
 import { AssignLessonWizard } from './AssignLessonWizard';
 import { LessonDetailsView } from './LessonDetailsView';
-import { getTeacherDashboard } from '../api/teacher';
 import { useAuthGuard } from '@/shared/lib';
 
-type LessonStatus = 'Published' | 'Draft';
+type LessonStatus = 'Published' | 'Draft' | 'Archived';
 
-interface Lesson {
-    id: number | string;
-    title: string;
-    subject: string;
-    level: string;
-    duration: number;
-    status: LessonStatus;
-    lastUpdated: string;
-    signal?: { type: 'warning' | 'success'; text: string };
+export interface TeacherLessonListItem {
+  id: string;
+  title: string;
+  subject: string;
+  topic: string;
+  level: string;
+  targetGradeLevel: number;
+  duration: number;
+  status: LessonStatus;
+  assignmentCount: number;
+  completionCount: number;
+  confusionSignalCount: number;
+  lastUpdatedLabel: string;
 }
 
-type TabFilter = 'All' | 'Published' | 'Drafts';
+type TabFilter = 'All' | 'Published' | 'Drafts' | 'Archived';
+
+function buildErrorMessage(data: any, fallback: string) {
+  if (typeof data?.detail === 'string') return data.detail;
+  if (typeof data?.message === 'string') return data.message;
+  if (typeof data?.error === 'string') return data.error;
+  return fallback;
+}
+
+function formatUpdatedDate(value?: string | null) {
+  if (!value) return 'Updated recently';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Updated recently';
+  return `Updated ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+function normalizeStatus(raw: string): LessonStatus {
+  const value = raw.toLowerCase();
+  if (value === 'draft') return 'Draft';
+  if (value === 'archived') return 'Archived';
+  return 'Published';
+}
+
+function mapLesson(lesson: any): TeacherLessonListItem {
+  return {
+    id: String(lesson.id),
+    title: lesson.title || 'Untitled lesson',
+    subject: lesson.subject || 'General',
+    topic: lesson.topic || '',
+    level: lesson.education_level || 'Secondary',
+    targetGradeLevel: Number(lesson.target_grade_level || 0),
+    duration: Number(lesson.estimated_duration_minutes || 0),
+    status: normalizeStatus(String(lesson.status || 'published')),
+    assignmentCount: Number(lesson.assignment_count || 0),
+    completionCount: Number(lesson.completion_count || 0),
+    confusionSignalCount: Number(lesson.confusion_signal_count || 0),
+    lastUpdatedLabel: formatUpdatedDate(lesson.last_updated || lesson.created_at),
+  };
+}
 
 export function LessonsView() {
-    const guardAuth = useAuthGuard('teacher');
-    const [lessons, setLessons] = useState<Lesson[]>([]);
-    const [activeTab, setActiveTab] = useState<TabFilter>('All');
-    const [searchQuery, setSearchQuery] = useState('');
-    const [showFilter, setShowFilter] = useState(false);
-    const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
-    const [selectedLevels, setSelectedLevels] = useState<string[]>([]);
-    const [showWizard, setShowWizard] = useState(false);
-    const [showAssignWizard, setShowAssignWizard] = useState(false);
-    const [viewingLesson, setViewingLesson] = useState<Lesson | null>(null);
+  const guardAuth = useAuthGuard('teacher');
+  const [lessons, setLessons] = useState<TeacherLessonListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabFilter>('All');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showWizard, setShowWizard] = useState(false);
+  const [assignLessonId, setAssignLessonId] = useState<string | null>(null);
+  const [viewingLessonId, setViewingLessonId] = useState<string | null>(null);
 
-    useEffect(() => {
-        let mounted = true;
-        (async () => {
-            const res = await getTeacherDashboard();
-            if (guardAuth(res as any)) return;
-            if (!mounted || !('data' in res)) return;
-            const payload = res.data || {};
-            const rawLessons = Array.isArray(payload?.lessons) ? payload.lessons : Array.isArray(payload) ? payload : [];
+  const refreshLessons = useCallback(async () => {
+    setLoading(true);
+    setError(null);
 
-            const mapped: Lesson[] = rawLessons.map((l: any, i: number) => {
-                const rawStatus = String(l?.status || l?.lesson_status || 'published').toLowerCase();
-                const status: LessonStatus = rawStatus === 'draft' ? 'Draft' : 'Published';
-                const updatedRaw = l?.updated_at || l?.updatedAt || l?.last_updated || l?.created_at || l?.createdAt;
-                const lastUpdated = updatedRaw ? `Last updated ${new Date(updatedRaw).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : 'Last updated recently';
-                const confusionCount = Number(l?.confusion_signals || l?.confusion_count || 0);
-                const completionCount = Number(l?.completed_students || l?.completed_count || 0);
+    try {
+      const params = new URLSearchParams({
+        page: '1',
+        page_size: '100',
+        sort_by: 'created_at',
+        sort_order: 'desc',
+      });
+      const res = await fetch(`/api/teacher/lessons?${params.toString()}`);
+      const data = await res.json().catch(() => ({}));
 
-                return {
-                    id: l?.id ?? `lesson-${i}`,
-                    title: l?.title || l?.name || 'Untitled lesson',
-                    subject: l?.subject || l?.topic || 'General',
-                    level: l?.level || l?.grade_level || l?.education_level || 'Secondary',
-                    duration: Number(l?.duration_minutes || l?.duration || 0),
-                    status,
-                    lastUpdated,
-                    signal:
-                        confusionCount > 0
-                            ? { type: 'warning', text: `Confusion signals from ${confusionCount} ${confusionCount === 1 ? 'student' : 'students'}` }
-                            : completionCount > 0
-                                ? { type: 'success', text: `${completionCount} ${completionCount === 1 ? 'student' : 'students'} completed` }
-                                : undefined,
-                };
-            });
-
-            setLessons(mapped);
-        })();
-
-        return () => {
-            mounted = false;
+      if (!res.ok) {
+        const result = {
+          error: buildErrorMessage(data, 'Could not load lessons.'),
+          authExpired: res.status === 401 || res.status === 403,
         };
-    }, []);
+        if (guardAuth(result as any)) return;
+        setLessons([]);
+        setError(result.error);
+        setLoading(false);
+        return;
+      }
 
-    const subjects = useMemo(() => Array.from(new Set(lessons.map((l) => l.subject))).filter(Boolean), [lessons]);
-    const levels = useMemo(() => Array.from(new Set(lessons.map((l) => l.level))).filter(Boolean), [lessons]);
-
-    const counts = useMemo(() => ({
-        all: lessons.length,
-        published: lessons.filter(l => l.status === 'Published').length,
-        drafts: lessons.filter(l => l.status === 'Draft').length,
-    }), [lessons]);
-
-    const filtered = useMemo(() => {
-        return lessons.filter(lesson => {
-            // Tab filter
-            if (activeTab === 'Published' && lesson.status !== 'Published') return false;
-            if (activeTab === 'Drafts' && lesson.status !== 'Draft') return false;
-
-            // Search filter
-            if (searchQuery) {
-                const q = searchQuery.toLowerCase();
-                if (!lesson.title.toLowerCase().includes(q) && !lesson.subject.toLowerCase().includes(q)) return false;
-            }
-
-            // Subject filter
-            if (selectedSubjects.length > 0 && !selectedSubjects.includes(lesson.subject)) return false;
-
-            // Level filter
-            if (selectedLevels.length > 0 && !selectedLevels.includes(lesson.level)) return false;
-
-            return true;
-        });
-    }, [activeTab, searchQuery, selectedSubjects, selectedLevels]);
-
-    const toggleSubject = (s: string) => {
-        setSelectedSubjects(prev => prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]);
-    };
-
-    const toggleLevel = (l: string) => {
-        setSelectedLevels(prev => prev.includes(l) ? prev.filter(x => x !== l) : [...prev, l]);
-    };
-
-    const clearFilters = () => {
-        setSelectedSubjects([]);
-        setSelectedLevels([]);
-    };
-
-    const applyFilters = () => {
-        setShowFilter(false);
-    };
-
-    const tabs: { label: string; value: TabFilter; count: number }[] = [
-        { label: 'All', value: 'All', count: counts.all },
-        { label: 'Published', value: 'Published', count: counts.published },
-        { label: 'Drafts', value: 'Drafts', count: counts.drafts },
-    ];
-
-    if (showWizard) {
-        return <AddLessonWizard onClose={() => setShowWizard(false)} onAssign={() => { setShowWizard(false); setShowAssignWizard(true); }} />;
+      const nextLessons = Array.isArray(data?.lessons) ? data.lessons.map(mapLesson) : [];
+      setLessons(nextLessons);
+      setError(null);
+      setLoading(false);
+    } catch (caughtError) {
+      setLessons([]);
+      setError(caughtError instanceof Error ? caughtError.message : 'Could not load lessons.');
+      setLoading(false);
     }
+  }, [guardAuth]);
 
-    if (showAssignWizard) {
-        return <AssignLessonWizard onClose={() => setShowAssignWizard(false)} />;
-    }
+  useEffect(() => {
+    void refreshLessons();
+  }, [refreshLessons]);
 
-    if (viewingLesson) {
-        return <LessonDetailsView lesson={viewingLesson} onBack={() => setViewingLesson(null)} />;
-    }
+  const counts = useMemo(
+    () => ({
+      all: lessons.length,
+      published: lessons.filter((lesson) => lesson.status === 'Published').length,
+      drafts: lessons.filter((lesson) => lesson.status === 'Draft').length,
+      archived: lessons.filter((lesson) => lesson.status === 'Archived').length,
+    }),
+    [lessons],
+  );
 
+  const filteredLessons = useMemo(() => {
+    return lessons.filter((lesson) => {
+      if (activeTab === 'Published' && lesson.status !== 'Published') return false;
+      if (activeTab === 'Drafts' && lesson.status !== 'Draft') return false;
+      if (activeTab === 'Archived' && lesson.status !== 'Archived') return false;
+      if (!searchQuery) return true;
+
+      const haystack = `${lesson.title} ${lesson.subject} ${lesson.topic} ${lesson.level}`.toLowerCase();
+      return haystack.includes(searchQuery.toLowerCase());
+    });
+  }, [activeTab, lessons, searchQuery]);
+
+  if (showWizard) {
     return (
-        <div className="flex flex-col h-full w-full max-w-[900px]">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-semibold text-[#3B3F6E] leading-tight">Lessons</h2>
-                <div className="flex gap-2">
-                    {/* <button
-                        onClick={() => setShowAssignWizard(true)}
-                        className="bg-white text-[#3B3F6E] border border-[#3B3F6E] px-5 py-2.5 rounded-full font-semibold text-[13px] hover:bg-gray-50 transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                        Assign lesson
-                    </button> */}
-                    <button
-                        onClick={() => setShowWizard(true)}
-                        className="bg-[#3B3F6E] text-white px-5 py-2.5 rounded-full font-semibold text-[13px] hover:bg-[#2E3259] transition-colors cursor-pointer flex items-center gap-2"
-                    >
-                        <UploadIcon />
-                        Upload lesson
-                    </button>
-                </div>
-            </div>
-
-            {/* Search + Filter */}
-            <div className="flex gap-3 mb-5">
-                <div className="relative flex-1">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                        <SearchIcon />
-                    </span>
-                    <input
-                        type="text"
-                        placeholder="Search lessons..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-[#E0DDD8] bg-white text-[13.5px] outline-none focus:border-[#3B3F6E] text-[#111111] font-medium placeholder-graphite-40 transition-colors"
-                    />
-                </div>
-                <button
-                    onClick={() => setShowFilter(true)}
-                    className="flex cursor-pointer items-center gap-2 px-5 py-2.5 rounded-xl border border-[#E0DDD8] bg-white text-[13.5px] font-semibold text-[#3B3F6E] hover:bg-gray-50 transition-colors"
-                >
-                    <FilterIcon />
-                    Filter
-                </button>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-2 mb-5">
-                {tabs.map((tab) => (
-                    <button
-                        key={tab.value}
-                        onClick={() => setActiveTab(tab.value)}
-                        className={`flex items-center justify-center gap-1.5 px-4 py-2 rounded-full text-[13px] font-semibold transition-all cursor-pointer ${
-                            activeTab === tab.value
-                                ? 'bg-[#3B3F6E] text-white'
-                                : 'bg-transparent text-graphite-60 hover:bg-graphite-5'
-                        }`}
-                    >
-                        {tab.label}
-                        <span
-                            className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center ${
-                                activeTab === tab.value
-                                    ? 'bg-white/20 text-white'
-                                    : 'bg-graphite-10 text-graphite-60'
-                            }`}
-                        >
-                            {tab.count}
-                        </span>
-                    </button>
-                ))}
-            </div>
-
-            {/* Lesson List */}
-            <div className="flex flex-col gap-3 pb-12">
-                {filtered.map((lesson) => (
-                    <LessonRow key={lesson.id} lesson={lesson} onClick={() => setViewingLesson(lesson)} />
-                ))}
-                {filtered.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-16 text-graphite-40 text-[14px]">
-                        No lessons found.
-                    </div>
-                )}
-            </div>
-
-            {/* Filter Bottom Sheet */}
-            {showFilter && (
-                <FilterSheet
-                    subjects={subjects}
-                    levels={levels}
-                    selectedSubjects={selectedSubjects}
-                    selectedLevels={selectedLevels}
-                    onToggleSubject={toggleSubject}
-                    onToggleLevel={toggleLevel}
-                    onApply={applyFilters}
-                    onClear={clearFilters}
-                    onClose={() => setShowFilter(false)}
-                />
-            )}
-        </div>
+      <AddLessonWizard
+        onClose={() => setShowWizard(false)}
+        onCreated={() => {
+          void refreshLessons();
+        }}
+        onViewLesson={(lessonId) => {
+          setShowWizard(false);
+          void refreshLessons();
+          setViewingLessonId(lessonId);
+        }}
+        onAssign={(lessonId) => {
+          setShowWizard(false);
+          void refreshLessons();
+          setAssignLessonId(lessonId);
+        }}
+      />
     );
+  }
+
+  if (assignLessonId) {
+    return (
+      <AssignLessonWizard
+        initialLessonId={assignLessonId}
+        onClose={() => setAssignLessonId(null)}
+      />
+    );
+  }
+
+  if (viewingLessonId) {
+    return (
+      <LessonDetailsView
+        lessonId={viewingLessonId}
+        onBack={() => setViewingLessonId(null)}
+        onAssign={(lessonId) => setAssignLessonId(lessonId)}
+        onChanged={() => void refreshLessons()}
+      />
+    );
+  }
+
+  const tabs: { label: string; value: TabFilter; count: number }[] = [
+    { label: 'All', value: 'All', count: counts.all },
+    { label: 'Published', value: 'Published', count: counts.published },
+    { label: 'Drafts', value: 'Drafts', count: counts.drafts },
+    { label: 'Archived', value: 'Archived', count: counts.archived },
+  ];
+
+  return (
+    <div className="flex w-full max-w-[900px] flex-col">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-2xl font-semibold leading-tight text-[#3B3F6E]">Lessons</h2>
+        <button
+          type="button"
+          onClick={() => setShowWizard(true)}
+          className="flex cursor-pointer items-center gap-2 rounded-full bg-[#3B3F6E] px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#2E3259]"
+        >
+          <UploadIcon />
+          Upload lesson
+        </button>
+      </div>
+
+      <div className="relative mb-5">
+        <span className="absolute left-4 top-1/2 -translate-y-1/2">
+          <SearchIcon />
+        </span>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search lessons"
+          className="w-full rounded-xl border border-[#E0DDD8] bg-white py-2.5 pl-11 pr-4 text-[13.5px] font-medium text-[#111111] outline-none transition-colors placeholder-graphite-40 focus:border-[#3B3F6E]"
+        />
+      </div>
+
+      <div className="mb-5 flex gap-2">
+        {tabs.map((tab) => (
+          <button
+            key={tab.value}
+            type="button"
+            onClick={() => setActiveTab(tab.value)}
+            className={`flex cursor-pointer items-center justify-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold transition-all ${
+              activeTab === tab.value
+                ? 'bg-[#3B3F6E] text-white'
+                : 'bg-transparent text-graphite-60 hover:bg-graphite-5'
+            }`}
+          >
+            {tab.label}
+            <span
+              className={`min-w-[20px] rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold ${
+                activeTab === tab.value
+                  ? 'bg-white/20 text-white'
+                  : 'bg-graphite-10 text-graphite-60'
+              }`}
+            >
+              {tab.count}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <LessonLibraryLoadingState />
+      ) : error ? (
+        <LessonLibraryErrorState error={error} />
+      ) : filteredLessons.length === 0 ? (
+        <LessonLibraryEmptyState
+          title={searchQuery ? 'No lessons match this search.' : 'No lessons yet.'}
+          body={searchQuery ? 'Try a different lesson title, subject, or topic.' : 'Upload your first lesson to start building your library.'}
+          actionLabel={searchQuery ? 'Clear search' : 'Upload lesson'}
+          onAction={() => {
+            if (searchQuery) setSearchQuery('');
+            else setShowWizard(true);
+          }}
+        />
+      ) : (
+        <div className="flex flex-col gap-3 pb-12">
+          {filteredLessons.map((lesson) => (
+            <LessonRow
+              key={lesson.id}
+              lesson={lesson}
+              onClick={() => setViewingLessonId(lesson.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
-function LessonRow({ lesson, onClick }: { lesson: Lesson; onClick: () => void }) {
-    return (
-        <div onClick={onClick} className="bg-white rounded-2xl border border-[#E9E7E2] px-6 py-5 hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-shadow cursor-pointer">
-            {/* Top row: title + status + menu */}
-            <div className="flex items-start justify-between mb-2.5">
-                <h3 className="text-[15px] font-semibold text-[#2B2B2F] leading-snug">{lesson.title}</h3>
-                <div className="flex items-center gap-2 shrink-0 ml-4">
-                    <StatusBadge status={lesson.status} />
-                    <button className="text-graphite-40 hover:text-graphite p-1 rounded-full hover:bg-gray-100 transition-colors cursor-pointer">
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <circle cx="8" cy="3" r="1.2" />
-                            <circle cx="8" cy="8" r="1.2" />
-                            <circle cx="8" cy="13" r="1.2" />
-                        </svg>
-                    </button>
-                </div>
-            </div>
+function LessonRow({
+  lesson,
+  onClick,
+}: {
+  lesson: TeacherLessonListItem;
+  onClick: () => void;
+}) {
+  const signal =
+    lesson.confusionSignalCount > 0
+      ? { type: 'warning' as const, text: `${lesson.confusionSignalCount} confusion signal${lesson.confusionSignalCount === 1 ? '' : 's'}` }
+      : lesson.completionCount > 0
+        ? { type: 'success' as const, text: `${lesson.completionCount} completed` }
+        : lesson.assignmentCount > 0
+          ? { type: 'neutral' as const, text: `${lesson.assignmentCount} assigned` }
+          : null;
 
-            {/* Tags + duration + date */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <Tag label={lesson.subject} />
-                    <Tag label={lesson.level} />
-                    <span className="flex items-center gap-1 text-[12px] text-graphite-40 ml-1">
-                        <ClockIcon />
-                        {lesson.duration} min
-                    </span>
-                </div>
-                <span className="text-[12px] text-graphite-40">{lesson.lastUpdated}</span>
-            </div>
-
-            {/* Signal (if any) */}
-            {lesson.signal && (
-                <div className={`flex items-center gap-1.5 mt-2.5 text-[12.5px] font-medium ${
-                    lesson.signal.type === 'warning' ? 'text-[#D97706]' : 'text-[#16A34A]'
-                }`}>
-                    <span className={`w-[7px] h-[7px] rounded-full inline-block ${
-                        lesson.signal.type === 'warning' ? 'bg-[#D97706]' : 'bg-[#16A34A]'
-                    }`} />
-                    {lesson.signal.text}
-                </div>
-            )}
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="cursor-pointer rounded-2xl border border-[#E9E7E2] bg-white px-6 py-5 text-left transition-shadow hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)]"
+    >
+      <div className="mb-2.5 flex items-start justify-between">
+        <h3 className="text-[15px] font-semibold leading-snug text-[#2B2B2F]">{lesson.title}</h3>
+        <div className="ml-4 flex shrink-0 items-center gap-2">
+          <StatusBadge status={lesson.status} />
         </div>
-    );
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Tag label={lesson.subject} />
+          <Tag label={lesson.level} />
+          <span className="ml-1 flex items-center gap-1 text-[12px] text-graphite-40">
+            <ClockIcon />
+            {lesson.duration} min
+          </span>
+        </div>
+        <span className="text-[12px] text-graphite-40">{lesson.lastUpdatedLabel}</span>
+      </div>
+
+      {signal ? (
+        <div
+          className={`mt-2.5 flex items-center gap-1.5 text-[12.5px] font-medium ${
+            signal.type === 'warning'
+              ? 'text-[#D97706]'
+              : signal.type === 'success'
+                ? 'text-[#16A34A]'
+                : 'text-[#6E74AA]'
+          }`}
+        >
+          <span
+            className={`inline-block h-[7px] w-[7px] rounded-full ${
+              signal.type === 'warning'
+                ? 'bg-[#D97706]'
+                : signal.type === 'success'
+                  ? 'bg-[#16A34A]'
+                  : 'bg-[#6E74AA]'
+            }`}
+          />
+          {signal.text}
+        </div>
+      ) : null}
+    </button>
+  );
+}
+
+function LessonLibraryLoadingState() {
+  return (
+    <div className="flex flex-col gap-3">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div key={index} className="rounded-2xl border border-[#E9E7E2] bg-white px-6 py-5">
+          <div className="mb-3 h-4 w-[220px] rounded bg-[#ECE6DA]" />
+          <div className="mb-3 flex gap-2">
+            <div className="h-6 w-[88px] rounded bg-[#ECE6DA]" />
+            <div className="h-6 w-[74px] rounded bg-[#ECE6DA]" />
+          </div>
+          <div className="h-3 w-[180px] rounded bg-[#ECE6DA]" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function LessonLibraryErrorState({ error }: { error: string }) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-[#E9E7E2] bg-[#FAF6EE] px-8 py-14 text-center">
+      <div className="mb-5 flex h-[88px] w-[88px] items-center justify-center rounded-[24px] bg-[#9A9CCB]/15">
+        <svg width="52" height="52" viewBox="0 0 52 52" fill="none" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M26 16V27" />
+          <path d="M26 35H26.02" />
+          <path d="M26 7L46 44H6L26 7Z" />
+        </svg>
+      </div>
+      <p className="mb-2 text-[16px] font-semibold text-[#3B3F6E]">Couldn&apos;t load lessons.</p>
+      <p className="max-w-[480px] text-[14px] leading-5 text-[#1A1A1A]/60">{error}</p>
+    </div>
+  );
+}
+
+function LessonLibraryEmptyState({
+  title,
+  body,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  body: string;
+  actionLabel: string;
+  onAction: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center rounded-2xl border border-[#E9E7E2] bg-[#FAF6EE] px-8 py-14 text-center">
+      <div className="mb-5 flex h-[160px] w-[200px] items-center justify-center rounded-[16px] bg-[#9A9CCB]/15">
+        <svg width="160" height="120" viewBox="0 0 160 120" fill="none">
+          <rect x="26" y="16" width="108" height="80" rx="14" stroke="#3B3F6E" strokeWidth="2" />
+          <path d="M49 39H111" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" />
+          <path d="M49 58H96" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" />
+          <path d="M49 77H89" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" />
+          <path d="M113 70L126 83" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" />
+          <path d="M126 70L113 83" stroke="#3B3F6E" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+      </div>
+      <p className="mb-2 text-[16px] font-semibold text-[#3B3F6E]">{title}</p>
+      <p className="mb-6 max-w-[420px] text-[14px] leading-5 text-[#1A1A1A]/60">{body}</p>
+      <button
+        type="button"
+        onClick={onAction}
+        className="cursor-pointer rounded-xl border border-[#3B3F6E] px-6 py-3 text-[14px] font-semibold text-[#3B3F6E] transition-colors hover:bg-indigo-5"
+      >
+        {actionLabel}
+      </button>
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: LessonStatus }) {
-    const styles = status === 'Published'
-        ? 'bg-[#E8F5E9] text-[#2E7D32]'
+  const styles =
+    status === 'Published'
+      ? 'bg-[#E8F5E9] text-[#2E7D32]'
+      : status === 'Archived'
+        ? 'bg-[#F5E6CA] text-[#A67C00]'
         : 'bg-[#F0F0F0] text-[#6B6B70]';
 
-    return (
-        <span className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold ${styles}`}>
-            {status}
-        </span>
-    );
+  return <span className={`rounded-md px-2.5 py-1 text-[11.5px] font-semibold ${styles}`}>{status}</span>;
 }
 
 function Tag({ label }: { label: string }) {
-    return (
-        <span className="px-2.5 py-1 bg-[#F0EDE8] text-[#4A4A4A] text-[11.5px] font-medium rounded-md">
-            {label}
-        </span>
-    );
+  return <span className="rounded-md bg-[#F0EDE8] px-2.5 py-1 text-[11.5px] font-medium text-[#4A4A4A]">{label}</span>;
 }
-
-function FilterSheet({
-    subjects,
-    levels,
-    selectedSubjects,
-    selectedLevels,
-    onToggleSubject,
-    onToggleLevel,
-    onApply,
-    onClear,
-    onClose,
-}: {
-    subjects: string[];
-    levels: string[];
-    selectedSubjects: string[];
-    selectedLevels: string[];
-    onToggleSubject: (s: string) => void;
-    onToggleLevel: (l: string) => void;
-    onApply: () => void;
-    onClear: () => void;
-    onClose: () => void;
-}) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-end justify-center">
-            {/* Backdrop */}
-            <div
-                className="absolute inset-0 bg-black/30 backdrop-blur-[2px]"
-                onClick={onClose}
-            />
-
-            {/* Sheet */}
-            <div className="relative w-full max-w-[700px] bg-[#F7F1E6] rounded-t-3xl px-8 pt-4 pb-8 animate-slide-up">
-                {/* Drag handle */}
-                <div className="flex justify-center mb-5">
-                    <div className="w-10 h-1 rounded-full bg-graphite-40/40" />
-                </div>
-
-                <h3 className="text-[17px] font-semibold text-[#3B3F6E] mb-6">Filter lessons</h3>
-
-                {/* Subject */}
-                <div className="mb-6">
-                    <p className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">Subject</p>
-                    <div className="flex flex-wrap gap-2">
-                        {subjects.map((s) => (
-                            <button
-                                key={s}
-                                onClick={() => onToggleSubject(s)}
-                                className={`px-4 py-2 rounded-full text-[13px] font-medium border transition-all cursor-pointer ${
-                                    selectedSubjects.includes(s)
-                                        ? 'bg-[#3B3F6E] text-white border-[#3B3F6E]'
-                                        : 'bg-white border-[#D4D0CA] text-[#4A4A4A] hover:border-[#3B3F6E]'
-                                }`}
-                            >
-                                {s}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Level */}
-                <div className="mb-8">
-                    <p className="text-[11px] font-bold text-[#3B3F6E] tracking-wider uppercase mb-3">Level</p>
-                    <div className="flex flex-wrap gap-2">
-                        {levels.map((l) => (
-                            <button
-                                key={l}
-                                onClick={() => onToggleLevel(l)}
-                                className={`px-4 py-2 rounded-full text-[13px] font-medium border transition-all cursor-pointer ${
-                                    selectedLevels.includes(l)
-                                        ? 'bg-[#3B3F6E] text-white border-[#3B3F6E]'
-                                        : 'bg-white border-[#D4D0CA] text-[#4A4A4A] hover:border-[#3B3F6E]'
-                                }`}
-                            >
-                                {l}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Actions */}
-                <button
-                    onClick={onApply}
-                    className="w-full bg-[#3B3F6E] text-white py-4 rounded-2xl font-semibold text-[14px] hover:bg-[#2E3259] transition-colors cursor-pointer mb-3"
-                >
-                    Apply filters
-                </button>
-                <button
-                    onClick={() => { onClear(); onClose(); }}
-                    className="w-full text-graphite-60 text-[13px] font-medium py-2 hover:text-graphite transition-colors cursor-pointer"
-                >
-                    Clear all
-                </button>
-            </div>
-        </div>
-    );
-}
-
-/* ─── Inline SVG Icons ─── */
 
 function SearchIcon() {
-    return (
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9B9B9B" strokeWidth="1.5">
-            <circle cx="7.5" cy="7.5" r="5.5" />
-            <line x1="11.5" y1="11.5" x2="16" y2="16" strokeLinecap="round" />
-        </svg>
-    );
-}
-
-function FilterIcon() {
-    return (
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#3B3F6E" strokeWidth="1.5">
-            <line x1="2" y1="4" x2="14" y2="4" strokeLinecap="round" />
-            <line x1="4" y1="8" x2="12" y2="8" strokeLinecap="round" />
-            <line x1="6" y1="12" x2="10" y2="12" strokeLinecap="round" />
-        </svg>
-    );
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="#9B9B9B" strokeWidth="1.5">
+      <circle cx="7.5" cy="7.5" r="5.5" />
+      <line x1="11.5" y1="11.5" x2="16" y2="16" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function UploadIcon() {
-    return (
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5">
-            <path d="M8 12V3" strokeLinecap="round" />
-            <path d="M4.5 6L8 2.5L11.5 6" strokeLinecap="round" strokeLinejoin="round" />
-            <path d="M3 13.5H13" strokeLinecap="round" />
-        </svg>
-    );
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="white" strokeWidth="1.5">
+      <path d="M8 12V3" strokeLinecap="round" />
+      <path d="M4.5 6L8 2.5L11.5 6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 13.5H13" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function ClockIcon() {
-    return (
-        <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#9B9B9B" strokeWidth="1.3">
-            <circle cx="7" cy="7" r="5.5" />
-            <polyline points="7,4.5 7,7 9,8.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-    );
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="#9B9B9B" strokeWidth="1.3">
+      <circle cx="7" cy="7" r="5.5" />
+      <polyline points="7,4.5 7,7 9,8.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
