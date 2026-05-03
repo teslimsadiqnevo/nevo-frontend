@@ -2,14 +2,16 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useSession } from 'next-auth/react';
 
 export default function TeacherInviteAcceptPage() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const { data: session, status } = useSession();
     const [message, setMessage] = useState('Preparing your class access...');
     const [error, setError] = useState<string | null>(null);
+    const [sessionState, setSessionState] = useState<{
+        loading: boolean;
+        user: any | null;
+    }>({ loading: true, user: null });
     const token = searchParams.get('token') || '';
 
     const loginRedirect = useMemo(() => {
@@ -18,19 +20,42 @@ export default function TeacherInviteAcceptPage() {
     }, [token]);
 
     useEffect(() => {
+        let cancelled = false;
+
+        void (async () => {
+            try {
+                const res = await fetch('/api/auth/session', { cache: 'no-store' });
+                const data = await res.json().catch(() => null);
+                if (cancelled) return;
+                setSessionState({
+                    loading: false,
+                    user: data?.user || null,
+                });
+            } catch {
+                if (cancelled) return;
+                setSessionState({ loading: false, user: null });
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    useEffect(() => {
         if (!token) {
             setError('This invite link is incomplete.');
             return;
         }
 
-        if (status === 'loading') return;
+        if (sessionState.loading) return;
 
-        if (!session?.user) {
+        if (!sessionState.user) {
             router.replace(loginRedirect);
             return;
         }
 
-        if ((session.user as any).role !== 'teacher') {
+        if ((sessionState.user as any).role !== 'teacher') {
             setError('This invite can only be accepted by a teacher account.');
             return;
         }
@@ -66,7 +91,7 @@ export default function TeacherInviteAcceptPage() {
         return () => {
             cancelled = true;
         };
-    }, [token, status, session, router, loginRedirect]);
+    }, [token, sessionState, router, loginRedirect]);
 
     return (
         <div className="min-h-screen bg-[#F7F1E6] flex items-center justify-center px-6">
