@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { VerificationStatusScreen } from "@/shared/ui";
 
 type VerifyStatus = "verifying" | "success" | "expired" | "invalid";
 
 function setCookie(name: string, value: string) {
   // Accessible to middleware (not HttpOnly).
   // Token sizes may be large, but cookies are still required for server-side middleware checks.
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=60*60*24*30; SameSite=Lax`;
+  const maxAge = 60 * 60 * 24 * 30;
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 
 export default function VerifyEmailPage() {
@@ -35,7 +37,7 @@ export default function VerifyEmailPage() {
         setStatus("verifying");
         setMessage("Verifying your email...");
 
-        const res = await fetch(`/api/auth/teacher/verify-email`, {
+        const res = await fetch(`/api/auth/verify-email`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -52,6 +54,7 @@ export default function VerifyEmailPage() {
           const refreshToken = String(data?.refresh_token || data?.refreshToken || "");
           const userFromBackend = data?.user || {};
 
+          const role = String(userFromBackend?.role || "").toUpperCase();
           const userForApp = {
             ...userFromBackend,
             // Email verified is true because the backend accepted the token.
@@ -72,6 +75,10 @@ export default function VerifyEmailPage() {
           setMessage("Email verified. Redirecting...");
 
           setTimeout(() => {
+            if (role === "SCHOOL_ADMIN") {
+              router.replace("/register/school/data-agreement");
+              return;
+            }
             router.replace("/register/teacher/workspace");
           }, 1500);
           return;
@@ -124,12 +131,11 @@ export default function VerifyEmailPage() {
     return () => window.clearInterval(t);
   }, [resendCooldown]);
 
-  const getPendingEmail = () => {
+  const getPendingUser = () => {
     try {
       const userRaw = localStorage.getItem("user");
       if (!userRaw) return null;
-      const user = JSON.parse(userRaw);
-      return typeof user?.email === "string" ? user.email : null;
+      return JSON.parse(userRaw);
     } catch {
       return null;
     }
@@ -139,14 +145,19 @@ export default function VerifyEmailPage() {
     if (resendCooldown > 0) return;
     setResendError(null);
 
-    const email = getPendingEmail();
+    const pendingUser = getPendingUser();
+    const email = typeof pendingUser?.email === "string" ? pendingUser.email : null;
     if (!email) {
       setResendError("No email found to resend. Please go back to the check-your-email screen.");
       return;
     }
 
     try {
-        const res = await fetch(`/api/auth/teacher/resend-verification`, {
+        const resendPath =
+          String(pendingUser?.role || "").toUpperCase() === "SCHOOL_ADMIN"
+            ? `/api/auth/resend-verification`
+            : `/api/auth/resend-verification`;
+        const res = await fetch(resendPath, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -168,50 +179,41 @@ export default function VerifyEmailPage() {
 
   const showResend = status === "expired";
 
+  const title =
+    status === "verifying"
+      ? "Verifying your email"
+      : status === "success"
+        ? "You're verified."
+        : status === "expired"
+          ? "Check your email"
+          : "Verification issue";
+
+  const description =
+    status === "success" ? (
+      <>Taking you to your dashboard.</>
+    ) : (
+      <>{message}</>
+    );
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#F7F1E6] px-6">
-      <div className="w-full max-w-[420px] bg-white border border-[#E9E7E2] rounded-2xl p-7 text-center shadow-[0_4px_18px_rgba(0,0,0,0.04)]">
-        <h1 className="text-[22px] font-bold text-[#3B3F6E] mb-3">
-          {status === "verifying"
-            ? "Verifying Email"
-            : status === "success"
-              ? "Verified"
-              : status === "expired"
-                ? "Link Expired"
-                : "Verification Issue"}
-        </h1>
-
-        <p className="text-[14px] text-[#4A4A50] leading-relaxed">{message}</p>
-
-        {resendError && (
-          <p className="text-[12px] text-[#E57661] mt-4 leading-relaxed font-medium">
-            {resendError}
-          </p>
-        )}
-
-        {showResend && (
-          <div className="mt-6">
-            <button
-              type="button"
-              onClick={handleResend}
-              disabled={resendCooldown > 0}
-              className={`w-full text-white font-bold rounded-xl py-[14px] text-[14px] outline-none transition-all ${
-                resendCooldown > 0
-                  ? "bg-[#9A9BB5] cursor-not-allowed opacity-90"
-                  : "bg-[#3B3F6E] hover:opacity-90 active:scale-[0.98] cursor-pointer"
-              }`}
-            >
-              {resendCooldown > 0 ? `Resending in ${resendCooldown}s` : "Resend verification email"}
-            </button>
-          </div>
-        )}
-
-        {status === "invalid" && (
-          <p className="text-[12px] text-[#A29ECA] mt-4 leading-relaxed font-medium">
-            This link may have already been used, or it may be invalid.
-          </p>
-        )}
-      </div>
-    </div>
+    <VerificationStatusScreen
+      icon={status === "success" ? "check" : "mail"}
+      title={title}
+      description={description}
+      primaryLabel={
+        showResend ? (resendCooldown > 0 ? `Resend again in ${resendCooldown}s` : "Resend email") : undefined
+      }
+      onPrimaryClick={showResend ? handleResend : undefined}
+      primaryDisabled={!showResend || resendCooldown > 0}
+      primaryMuted={showResend && resendCooldown > 0}
+      helperText={
+        resendError
+          ? resendError
+          : status === "invalid"
+            ? "This link may have already been used, or it may be invalid."
+            : null
+      }
+      helperTone={resendError ? "error" : "info"}
+    />
   );
 }

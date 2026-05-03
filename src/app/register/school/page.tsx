@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { Icon } from "@/shared/ui";
 import { registerSchool } from "@/features/SchoolRegistration/api/registerSchool";
 
@@ -56,20 +55,20 @@ export default function SchoolRegistrationPage() {
             return;
         }
 
-        const loginResult = await signIn("credentials", {
-            email,
-            password,
-            loginType: "school",
-            redirect: false,
-        });
-
-        if (loginResult?.error) {
-            setError("School account created, but automatic sign-in failed. Please sign in.");
-            setIsLoading(false);
-            return;
+        try {
+            localStorage.setItem(
+                "user",
+                JSON.stringify({
+                    email,
+                    role: "SCHOOL_ADMIN",
+                    emailVerified: false,
+                }),
+            );
+        } catch {
+            // Ignore localStorage errors.
         }
 
-        router.push('/register/school/data-agreement');
+        router.push(`/register/school/verify-email?email=${encodeURIComponent(email)}`);
         })();
     };
 

@@ -19,6 +19,10 @@ export default function DataAgreementPage() {
             const res = await getSchoolOnboardingStatus();
             if (!mounted) return;
             if ("error" in res && res.error) {
+                if (/unauthorized/i.test(res.error)) {
+                    router.replace("/register/school/verify-email");
+                    return;
+                }
                 setError(res.error);
             } else {
                 const data = "data" in res ? res.data : null;

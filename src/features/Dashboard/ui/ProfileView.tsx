@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { getTeacherProfile, updateTeacherProfile } from '../api/teacher';
 import { normalizeTeacherProfile } from '../lib/teacherProfile';
 import { UserAvatar } from '@/shared/ui';
+import { LogoutDialog } from '@/widgets/LogoutDialog';
 
 interface ProfileData {
     fullName: string;
@@ -55,6 +56,7 @@ export function ProfileView({
     const [notice, setNotice] = useState<string | null>(null);
     const [avatarBroken, setAvatarBroken] = useState(false);
     const [avatarFile, setAvatarFile] = useState<File | null>(null);
+    const [showLogout, setShowLogout] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const previewBlobRef = useRef<string | null>(null);
 
@@ -382,6 +384,22 @@ export function ProfileView({
             >
                 {isSaving ? 'Saving...' : 'Save changes'}
             </button>
+
+            <div className="mt-6 flex justify-center">
+                <button
+                    type="button"
+                    onClick={() => setShowLogout(true)}
+                    className="text-[15px] leading-[22px] text-[#C0392B] cursor-pointer bg-transparent border-none hover:underline"
+                >
+                    Log out
+                </button>
+            </div>
+
+            <LogoutDialog
+                open={showLogout}
+                onClose={() => setShowLogout(false)}
+                callbackUrl="/login/teacher"
+            />
 
             {showDiscard && (
                 <div className="fixed inset-0 z-50 flex items-end justify-center">

@@ -2,6 +2,7 @@ export { ActionButton } from "./ActionButton";
 export { Icon } from "./icon/Icon";
 export type { IconType } from "./icon/Icon";
 export { NevoLogo } from "./NevoLogo";
+export { VerificationStatusScreen } from "./VerificationStatusScreen";
 export * from "./Input";
 export * from "./HorizontalCard";
 export * from "./DashboardCard";

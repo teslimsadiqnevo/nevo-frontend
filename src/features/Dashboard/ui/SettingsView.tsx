@@ -4,6 +4,7 @@ import type { RefObject } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 import { deleteSchoolAccount, getSchoolSettings, updateSchoolSettings } from '../api/school';
+import { LogoutDialog } from '@/widgets/LogoutDialog';
 
 type SectionId = 'school-profile' | 'features' | 'permissions' | 'data-privacy' | 'danger-zone';
 
@@ -38,6 +39,7 @@ export function SettingsView() {
     const [settings, setSettings] = useState<any | null>(null);
     const [activeSection, setActiveSection] = useState<SectionId>('school-profile');
     const [deleteStep, setDeleteStep] = useState<'idle' | 'confirm'>('idle');
+    const [showLogout, setShowLogout] = useState(false);
     const [form, setForm] = useState<SettingsForm>({
         schoolName: '',
         region: '',
@@ -385,7 +387,23 @@ export function SettingsView() {
                         )}
                     </div>
                 </section>
+
+                <div className="mt-6 flex justify-center">
+                    <button
+                        type="button"
+                        onClick={() => setShowLogout(true)}
+                        className="text-[15px] leading-[22px] text-[#C0392B] cursor-pointer bg-transparent border-none hover:underline"
+                    >
+                        Log out
+                    </button>
+                </div>
             </div>
+
+            <LogoutDialog
+                open={showLogout}
+                onClose={() => setShowLogout(false)}
+                callbackUrl="/login/school"
+            />
         </div>
     );
 }
