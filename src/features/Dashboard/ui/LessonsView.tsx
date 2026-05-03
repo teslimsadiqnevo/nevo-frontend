@@ -5,6 +5,7 @@ import { AddLessonWizard } from './AddLessonWizard';
 import { AssignLessonWizard } from './AssignLessonWizard';
 import { LessonDetailsView } from './LessonDetailsView';
 import { getTeacherDashboard } from '../api/teacher';
+import { useAuthGuard } from '@/shared/lib';
 
 type LessonStatus = 'Published' | 'Draft';
 
@@ -22,6 +23,7 @@ interface Lesson {
 type TabFilter = 'All' | 'Published' | 'Drafts';
 
 export function LessonsView() {
+    const guardAuth = useAuthGuard('teacher');
     const [lessons, setLessons] = useState<Lesson[]>([]);
     const [activeTab, setActiveTab] = useState<TabFilter>('All');
     const [searchQuery, setSearchQuery] = useState('');
@@ -36,6 +38,7 @@ export function LessonsView() {
         let mounted = true;
         (async () => {
             const res = await getTeacherDashboard();
+            if (guardAuth(res as any)) return;
             if (!mounted || !('data' in res)) return;
             const payload = res.data || {};
             const rawLessons = Array.isArray(payload?.lessons) ? payload.lessons : Array.isArray(payload) ? payload : [];

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { getTeacherDashboard, getTeacherStudents } from '../api/teacher';
+import { useAuthGuard } from '@/shared/lib';
 
 /* ─── Types ─── */
 interface SupportStudent {
@@ -70,6 +71,7 @@ interface TopicDetail {
 
 /* ─── Main Component ─── */
 export function InsightsView() {
+    const guardAuth = useAuthGuard('teacher');
     const [isLoading, setIsLoading] = useState(true);
     const [dashboardData, setDashboardData] = useState<any>(null);
     const [studentsData, setStudentsData] = useState<any[]>([]);
@@ -82,6 +84,7 @@ export function InsightsView() {
         (async () => {
             const [dashboardRes, studentsRes] = await Promise.all([getTeacherDashboard(), getTeacherStudents()]);
             if (!mounted) return;
+            if (guardAuth([dashboardRes as any, studentsRes as any])) return;
             setDashboardData('data' in dashboardRes ? dashboardRes.data || null : null);
             const studentPayload = 'data' in studentsRes ? studentsRes.data : null;
             setStudentsData(Array.isArray(studentPayload) ? studentPayload : Array.isArray(studentPayload?.students) ? studentPayload.students : []);

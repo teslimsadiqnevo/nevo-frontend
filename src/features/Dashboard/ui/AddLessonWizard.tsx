@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 
 /* ─── Types ─── */
 interface LessonMeta {
@@ -18,6 +19,10 @@ interface UploadedFile {
     file: File;
 }
 
+type ClientActionResult =
+    | { data: any; authExpired?: false }
+    | { error: string; authExpired?: boolean };
+
 const SUBJECTS = ['Mathematics', 'English', 'Science', 'History', 'Geography', 'Arts', 'Physical Education', 'Other'];
 const LEVELS = ['Primary', 'Secondary', 'Tertiary'];
 const DURATIONS = ['Under 15 mins', '15–30 mins', '30+ mins'];
@@ -31,7 +36,7 @@ async function publishLessonFromClient(payload: {
     topic?: string;
     target_grade_level?: number;
     file?: File | null;
-}) {
+}): Promise<ClientActionResult> {
     const formData = new FormData();
     formData.append('title', payload.title);
     formData.append('content', payload.content);
@@ -50,12 +55,13 @@ async function publishLessonFromClient(payload: {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
         const detail = (data as any)?.detail || (data as any)?.message || 'Could not publish lesson.';
-        return { error: String(detail) };
+        return { error: String(detail), authExpired: res.status === 401 || res.status === 403 };
     }
     return { data };
 }
 
 export function AddLessonWizard({ onClose, onAssign }: { onClose: () => void; onAssign?: () => void }) {
+    const guardAuth = useAuthGuard('teacher');
     const [step, setStep] = useState(1);
     const [showSuccess, setShowSuccess] = useState(false);
     const [meta, setMeta] = useState<LessonMeta>({ title: '', subject: '', educationLevel: '', duration: '' });
@@ -191,6 +197,11 @@ export function AddLessonWizard({ onClose, onAssign }: { onClose: () => void; on
                             target_grade_level: levelMap[meta.educationLevel] ?? 3,
                             file: uploadedFile?.file || null,
                         });
+
+                        if (guardAuth(result as any)) {
+                            setIsPublishing(false);
+                            return;
+                        }
 
                         if ('error' in result) {
                             setPublishError(result.error || 'Could not publish lesson. Please try again.');

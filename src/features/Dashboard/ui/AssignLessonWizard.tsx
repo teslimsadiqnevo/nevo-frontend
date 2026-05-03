@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useAuthGuard } from '@/shared/lib';
 
 type LessonStatus = 'Published' | 'Draft';
 
@@ -62,7 +63,11 @@ async function fetchTeacherLessons() {
     });
     const res = await fetch(`/api/teacher/lessons?${params.toString()}`);
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not load lessons.'));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not load lessons.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
 
     const rawLessons = Array.isArray(data?.lessons) ? data.lessons : [];
     return rawLessons
@@ -91,7 +96,11 @@ async function fetchTeacherLessons() {
 async function fetchTeacherClasses() {
     const res = await fetch('/api/teacher/classes');
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not load classes.'));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not load classes.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
 
     const rawClasses = Array.isArray(data?.classes) ? data.classes : [];
     return rawClasses.map((item: any): ClassOption => ({
@@ -105,7 +114,11 @@ async function fetchTeacherClasses() {
 async function fetchAssignableStudents() {
     const res = await fetch('/api/teacher/students/assignable');
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not load students.'));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not load students.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
 
     const rawStudents = Array.isArray(data?.students) ? data.students : [];
     return rawStudents.map((item: any): StudentOption => {
@@ -142,7 +155,11 @@ async function assignLesson(payload: {
         }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(buildErrorMessage(data, 'Could not assign lesson.'));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not assign lesson.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
     return data;
 }
 
@@ -153,6 +170,7 @@ export function AssignLessonWizard({
     onClose: () => void;
     initialLessonId?: number | string;
 }) {
+    const guardAuth = useAuthGuard('teacher');
     const [step, setStep] = useState(1);
     const [showSuccess, setShowSuccess] = useState(false);
     const [successCount, setSuccessCount] = useState(0);
@@ -195,6 +213,7 @@ export function AssignLessonWizard({
                 setStudents(studentData);
             } catch (error) {
                 if (!mounted) return;
+                if (guardAuth(error as any)) return;
                 setLoadError(error instanceof Error ? error.message : 'Could not load assignment data.');
             } finally {
                 if (mounted) setLoading(false);
@@ -253,6 +272,10 @@ export function AssignLessonWizard({
             setSuccessCount(Number(result?.assigned_count || 0));
             setShowSuccess(true);
         } catch (error) {
+            if (guardAuth(error as any)) {
+                setAssigning(false);
+                return;
+            }
             setSubmitError(error instanceof Error ? error.message : 'Could not assign lesson.');
         } finally {
             setAssigning(false);

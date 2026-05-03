@@ -15,6 +15,7 @@ import {
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
 import { StudentProgressPanel } from "./StudentProgressPanel";
+import { useAuthGuard } from "@/shared/lib";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export type Lesson = {
@@ -54,6 +55,7 @@ export function StudentDashboard({
   view?: string;
   user?: any;
 }) {
+  const guardAuth = useAuthGuard("student");
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
   const [studentName, setStudentName] = useState("");
@@ -108,6 +110,10 @@ export function StudentDashboard({
             getStudentConnections(),
           ],
         );
+
+        if (guardAuth([dashRes as any, lessRes as any, profRes as any, progRes as any, connRes as any])) {
+          return;
+        }
 
         if (profRes.data) setProfile(profRes.data);
         if (progRes.data) setProgressData(progRes.data);
@@ -2493,6 +2499,7 @@ function StudentProfileView({
   profile?: any;
   onLogout: () => Promise<void>;
 }) {
+  const guardAuth = useAuthGuard("student");
   const [settings, setSettings] = useState({
     adaptAutomatically: true,
     cameraForLearningSignals: false,
@@ -2556,7 +2563,11 @@ function StudentProfileView({
     setSettings((prev) => ({ ...prev, [key]: newValue }));
 
     try {
-      await updateStudentSettings({ [key]: newValue });
+      const res = await updateStudentSettings({ [key]: newValue });
+      if (guardAuth(res as any)) return;
+      if (res?.error) {
+        throw new Error(res.error);
+      }
     } catch (err) {
       console.error("Failed to update setting", err);
       // Revert on error

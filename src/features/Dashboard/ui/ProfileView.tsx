@@ -5,6 +5,7 @@ import { getTeacherProfile, updateTeacherProfile } from '../api/teacher';
 import { normalizeTeacherProfile } from '../lib/teacherProfile';
 import { UserAvatar } from '@/shared/ui';
 import { LogoutDialog } from '@/widgets/LogoutDialog';
+import { useAuthGuard } from '@/shared/lib';
 
 interface ProfileData {
     fullName: string;
@@ -48,6 +49,7 @@ export function ProfileView({
     onBack: () => void;
     onProfileSaved?: (profile: ProfileData) => void;
 }) {
+    const guardAuth = useAuthGuard('teacher');
     const [profile, setProfile] = useState<ProfileData>({ ...initialProfile });
     const [saved, setSaved] = useState<ProfileData>({ ...initialProfile });
     const [showDiscard, setShowDiscard] = useState(false);
@@ -65,6 +67,9 @@ export function ProfileView({
         setNotice(null);
 
         const res = await getTeacherProfile();
+        if (guardAuth(res as any)) {
+            return;
+        }
         if (!('data' in res)) {
             setLoadState('error');
             setNotice('Unable to load profile right now.');
@@ -142,6 +147,10 @@ export function ProfileView({
             const uploadJson = await uploadRes.json().catch(() => ({}));
 
             if (!uploadRes.ok || !uploadJson?.public_url) {
+                if (guardAuth({ error: buildRouteError(uploadRes.status, uploadJson) } as any)) {
+                    setIsSaving(false);
+                    return;
+                }
                 setNotice('Could not upload avatar image. Please try again.');
                 setIsSaving(false);
                 return;
@@ -159,6 +168,10 @@ export function ProfileView({
         };
 
         const profileRes = await updateTeacherProfile(payload);
+        if (guardAuth(profileRes as any)) {
+            setIsSaving(false);
+            return;
+        }
         if ('error' in profileRes) {
             setNotice('Could not save profile. Please try again.');
             setIsSaving(false);
@@ -440,6 +453,11 @@ export function ProfileView({
             )}
         </div>
     );
+}
+
+function buildRouteError(status: number, data: any) {
+    const detail = data?.detail || data?.message || data?.error || (status === 401 ? 'Unauthorized' : 'Request failed');
+    return typeof detail === 'string' ? detail : JSON.stringify(detail ?? '');
 }
 
 function ProfileViewMessageState({
