@@ -1,6 +1,6 @@
 'use client';
 
-import { type Dispatch, type ReactNode, type SetStateAction, useMemo, useRef, useState } from 'react';
+import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 
 interface LessonMeta {
@@ -38,6 +38,12 @@ const LEVELS = ['Primary', 'Secondary', 'Tertiary'];
 const DURATIONS = ['Under 15 mins', '15-30 mins', '30+ mins'];
 const TOTAL_STEPS = 5;
 const ACCEPTED_FILE_EXTENSIONS = ['.pdf', '.docx', '.pptx'];
+const LESSON_CREATION_STEPS = [
+  ['Uploading your source file', 'Saving the original lesson securely.'],
+  ['Reading the lesson content', 'Extracting text, structure, and supporting media.'],
+  ['Reviewing with Nevo AI', 'Finding strong objectives and the right key concepts.'],
+  ['Preparing your lesson draft', 'Saving everything for your review in the next step.'],
+] as const;
 
 function buildErrorMessage(data: unknown, fallback: string) {
   if (!data || typeof data !== 'object') return fallback;
@@ -657,6 +663,19 @@ function Step2Upload({
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [activeLoaderStep, setActiveLoaderStep] = useState(0);
+
+  useEffect(() => {
+    if (!isProcessing) return;
+
+    const interval = window.setInterval(() => {
+      setActiveLoaderStep((current) => (
+        current < LESSON_CREATION_STEPS.length - 1 ? current + 1 : current
+      ));
+    }, 1800);
+
+    return () => window.clearInterval(interval);
+  }, [isProcessing]);
 
   const pickFile = () => inputRef.current?.click();
 
@@ -672,6 +691,72 @@ function Step2Upload({
       <h2 className="mb-2 text-[20px] font-semibold text-[#3B3F6E]">Upload your lesson</h2>
       <p className="mb-6 text-[13px] text-graphite-60">Choose a source file and Nevo will create the lesson from the real upload.</p>
 
+      {isProcessing ? (
+        <div className="mb-8 rounded-[28px] border border-[#DCD6C9] bg-white px-6 py-6 shadow-[0_18px_50px_rgba(59,63,110,0.08)]">
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <p className="mb-1 text-[17px] font-semibold text-[#3B3F6E]">Creating your lesson</p>
+              <p className="text-[13px] leading-5 text-graphite-60">
+                Nevo is preparing the uploaded lesson so the next step opens with useful objectives and concepts.
+              </p>
+            </div>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#F0EEFA]">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#C9C4EB] border-t-[#3B3F6E]" />
+            </div>
+          </div>
+
+          {uploadedFile ? (
+            <div className="mb-5 rounded-2xl border border-[#ECE7DD] bg-[#FAF9F6] px-4 py-3">
+              <p className="truncate text-[14px] font-medium text-[#3B3F6E]">{uploadedFile.name}</p>
+              <p className="mt-1 text-[12px] text-graphite-50">{uploadedFile.sizeLabel}</p>
+            </div>
+          ) : null}
+
+          <div className="mb-6 h-2 overflow-hidden rounded-full bg-[#ECE7DD]">
+            <div
+              className="h-full rounded-full bg-[#3B3F6E] transition-all duration-500"
+              style={{ width: `${((activeLoaderStep + 1) / LESSON_CREATION_STEPS.length) * 100}%` }}
+            />
+          </div>
+
+          <div className="space-y-3">
+            {LESSON_CREATION_STEPS.map(([title, description], index) => {
+              const isDone = index < activeLoaderStep;
+              const isActive = index === activeLoaderStep;
+
+              return (
+                <div
+                  key={title}
+                  className={`flex items-start gap-3 rounded-2xl border px-4 py-3 transition-all ${
+                    isActive
+                      ? 'border-[#C9C4EB] bg-[#F7F5FF]'
+                      : isDone
+                        ? 'border-[#DCEBD8] bg-[#F7FCF5]'
+                        : 'border-[#ECE7DD] bg-[#FAF9F6]'
+                  }`}
+                >
+                  <div
+                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${
+                      isDone
+                        ? 'bg-[#7AB87A] text-white'
+                        : isActive
+                          ? 'bg-[#3B3F6E] text-white'
+                          : 'bg-[#E8E6F5] text-[#6E74AA]'
+                    }`}
+                  >
+                    {isDone ? '✓' : index + 1}
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-medium text-[#2B2B2F]">{title}</p>
+                    <p className="mt-1 text-[12px] leading-5 text-graphite-50">{description}</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+      <>
       <div
         onDragOver={(event) => {
           event.preventDefault();
@@ -726,16 +811,20 @@ function Step2Upload({
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.docx,.pptx"
+          accept={ACCEPTED_FILE_EXTENSIONS.join(',')}
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) onFileSelect(file);
+            event.currentTarget.value = '';
           }}
         />
       </div>
 
       <p className="mb-8 text-center text-[12px] text-graphite-40">Accepted: PDF, DOC, DOCX, PPT, PPTX · Max 50MB</p>
+
+      </>
+      )}
 
       {fileError ? (
         <div className="mb-5 rounded-xl border border-[#F1C5BF] bg-[#FFF6F4] px-4 py-3 text-[13px] text-[#B54708]">

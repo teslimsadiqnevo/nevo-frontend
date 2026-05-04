@@ -8,6 +8,8 @@ type ActionModeProps = {
     stage: Stage;
     progress: number;
     onBack: () => void;
+    onContinue: () => void;
+    continueLabel: string;
     askContext?: string | null;
     toolbarState: ToolbarState;
     onToolbarChange: (state: ToolbarState) => void;
@@ -65,11 +67,12 @@ export function ActionMode({
     stage,
     progress,
     onBack,
+    onContinue,
+    continueLabel,
     askContext,
     toolbarState,
     onToolbarChange,
     headerAction,
-    paceDensity: _paceDensity,
 }: ActionModeProps) {
     const content = stage.modes.action;
     const steps =
@@ -102,6 +105,8 @@ export function ActionMode({
             }
             progress={progress}
             onBack={onBack}
+            onContinue={onContinue}
+            continueLabel={continueLabel}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}
             headerAction={headerAction}

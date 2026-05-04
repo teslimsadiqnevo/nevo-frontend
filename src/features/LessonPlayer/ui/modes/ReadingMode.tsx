@@ -8,6 +8,8 @@ type ReadingModeProps = {
     stage: Stage;
     progress: number;
     onBack: () => void;
+    onContinue: () => void;
+    continueLabel: string;
     askContext?: string | null;
     toolbarState: ToolbarState;
     onToolbarChange: (state: ToolbarState) => void;
@@ -19,11 +21,12 @@ export function ReadingMode({
     stage,
     progress,
     onBack,
+    onContinue,
+    continueLabel,
     askContext,
     toolbarState,
     onToolbarChange,
     headerAction,
-    paceDensity: _paceDensity,
 }: ReadingModeProps) {
     const content = stage.modes.reading;
     const label =
@@ -59,6 +62,8 @@ export function ReadingMode({
             }
             progress={progress}
             onBack={onBack}
+            onContinue={onContinue}
+            continueLabel={continueLabel}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}
             headerAction={headerAction}

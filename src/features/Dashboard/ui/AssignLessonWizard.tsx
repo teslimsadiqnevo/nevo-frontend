@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 
 type LessonStatus = 'Published' | 'Draft';
@@ -777,6 +777,26 @@ function Step3Scheduling({
     setDueDate: (value: string) => void;
     onContinue: () => void;
 }) {
+    const dateInputRef = useRef<HTMLInputElement>(null);
+
+    const openDatePicker = () => {
+        const input = dateInputRef.current;
+        if (!input) return;
+        if (typeof input.showPicker === 'function') {
+            input.showPicker();
+            return;
+        }
+        input.click();
+    };
+
+    const formattedDueDate = dueDate
+        ? new Date(`${dueDate}T00:00:00`).toLocaleDateString('en-US', {
+              month: '2-digit',
+              day: '2-digit',
+              year: 'numeric',
+          })
+        : '';
+
     return (
         <div className="flex flex-col h-full flex-1">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">When should students complete this?</h2>
@@ -790,25 +810,55 @@ function Step3Scheduling({
                     <span className="px-2 py-0.5 rounded-full bg-[#E8E6F5] text-[#6E74AA] text-[10px] font-bold uppercase tracking-wider">Optional</span>
                 </div>
                 <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center justify-center">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E74AA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                            <line x1="16" y1="2" x2="16" y2="6" />
-                            <line x1="8" y1="2" x2="8" y2="6" />
-                            <line x1="3" y1="10" x2="21" y2="10" />
-                        </svg>
-                    </span>
                     <input
+                        ref={dateInputRef}
                         type="date"
                         value={dueDate}
+                        min={new Date().toISOString().slice(0, 10)}
                         onChange={(e) => setDueDate(e.target.value)}
-                        className="w-full pl-11 pr-4 py-3.5 rounded-xl border border-[#E0DDD8] bg-white text-[14px] outline-none transition-colors focus:border-[#3B3F6E]"
+                        className="pointer-events-none absolute inset-0 opacity-0"
+                        tabIndex={-1}
+                        aria-hidden="true"
                     />
-                    {!dueDate ? (
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[14px] text-graphite-60 pointer-events-none bg-white pl-2">
-                            No due date
+                    <button
+                        type="button"
+                        onClick={openDatePicker}
+                        className="flex w-full items-center gap-3 rounded-xl border border-[#E0DDD8] bg-white px-4 py-3.5 text-left transition-colors hover:border-[#C5C3E8] focus:outline-none focus:border-[#3B3F6E]"
+                    >
+                        <span className="flex items-center justify-center">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6E74AA" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                                <line x1="16" y1="2" x2="16" y2="6" />
+                                <line x1="8" y1="2" x2="8" y2="6" />
+                                <line x1="3" y1="10" x2="21" y2="10" />
+                            </svg>
                         </span>
-                    ) : null}
+                        <span className={`text-[14px] ${dueDate ? 'text-[#2B2B2F]' : 'text-graphite-40'}`}>
+                            {formattedDueDate || 'mm/dd/yyyy'}
+                        </span>
+                        <span className="ml-auto flex items-center gap-3">
+                            {dueDate ? (
+                                <span
+                                    onClick={(event) => {
+                                        event.stopPropagation();
+                                        setDueDate('');
+                                    }}
+                                    role="button"
+                                    tabIndex={0}
+                                    onKeyDown={(event) => {
+                                        if (event.key === 'Enter' || event.key === ' ') {
+                                            event.preventDefault();
+                                            setDueDate('');
+                                        }
+                                    }}
+                                    className="cursor-pointer text-[13px] font-medium text-[#6E74AA] hover:text-[#3B3F6E]"
+                                >
+                                    Clear
+                                </span>
+                            ) : null}
+                            <span className="text-[14px] text-graphite-60">{dueDate ? 'Change date' : 'No due date'}</span>
+                        </span>
+                    </button>
                 </div>
             </div>
 

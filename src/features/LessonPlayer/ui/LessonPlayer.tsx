@@ -73,6 +73,8 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
     const progress = ((stageIndex + 1) / STAGE_ORDER.length) * 100;
     const askContext = `You're on: ${data.title} · Section ${stageIndex + 1}`;
+    const nextStage = stageIndex < STAGE_ORDER.length - 1 ? data.stages[stageIndex + 1] : null;
+    const continueLabel = nextStage ? `Continue to ${nextStage.pillText}` : 'Take final check';
     const toolbarState = toolbarSession.scopeKey === scopeKey ? toolbarSession.state : 'original';
     const headerAction: ReactNode =
         stageIndex < STAGE_ORDER.length - 1 ? (
@@ -97,12 +99,12 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
     const goToNextStage = () => {
         if (stageIndex < STAGE_ORDER.length - 1) {
-            const nextStage = STAGE_ORDER[stageIndex + 1];
-            router.push(`/lesson/${lessonId}/${nextStage}`);
+            const nextStageKey = STAGE_ORDER[stageIndex + 1];
+            router.push(`/lesson/${lessonId}/${nextStageKey}`);
             return;
         }
 
-        router.push(`/lesson/${lessonId}/complete`);
+        router.push(`/lesson/${lessonId}/assessment`);
     };
 
     const onToolbarChange = (nextState: ToolbarState) => {
@@ -132,6 +134,8 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         onToolbarChange,
         headerAction,
         paceDensity,
+        continueLabel,
+        onContinue: goToNextStage,
     };
 
     const applyPaceSelection = () => {

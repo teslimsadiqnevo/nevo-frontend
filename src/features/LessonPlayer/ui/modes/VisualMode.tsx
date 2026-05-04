@@ -10,6 +10,8 @@ type VisualModeProps = {
     stage: Stage;
     progress: number;
     onBack: () => void;
+    onContinue: () => void;
+    continueLabel: string;
     askContext?: string | null;
     toolbarState: ToolbarState;
     onToolbarChange: (state: ToolbarState) => void;
@@ -21,6 +23,8 @@ export function VisualMode({
     stage,
     progress,
     onBack,
+    onContinue,
+    continueLabel,
     askContext,
     toolbarState,
     onToolbarChange,
@@ -43,6 +47,11 @@ export function VisualMode({
               : content.body;
 
     const isCalmDensity = paceDensity === 'calm';
+    const fallbackPoints = body
+        .split(/(?<=[.!?])\s+/)
+        .map((sentence) => sentence.trim())
+        .filter(Boolean)
+        .slice(0, 3);
 
     return (
         <StageShell
@@ -55,6 +64,8 @@ export function VisualMode({
             }
             progress={progress}
             onBack={onBack}
+            onContinue={onContinue}
+            continueLabel={continueLabel}
             askContext={askContext}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}
@@ -63,11 +74,42 @@ export function VisualMode({
             media={
                 <div
                     className={[
-                        'relative w-full rounded-xl border-2 border-[#E0D9CE] bg-cover bg-center bg-graphite-10 overflow-hidden',
+                        'relative w-full rounded-xl border-2 border-[#E0D9CE] overflow-hidden',
+                        content.imageUrl ? 'bg-cover bg-center bg-graphite-10' : 'bg-[linear-gradient(135deg,#f1ece2_0%,#ebe4d7_45%,#e1d8c9_100%)]',
                         isCalmDensity ? 'h-[280px]' : 'h-[280px]',
                     ].join(' ')}
                     style={content.imageUrl ? { backgroundImage: `url(${content.imageUrl})` } : undefined}
                 >
+                    {!content.imageUrl ? (
+                        <div className="absolute inset-0 flex flex-col justify-between p-6">
+                            <div className="flex items-center justify-between">
+                                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-indigo">
+                                    Visual focus
+                                </span>
+                                <span className="rounded-full bg-[#3B3F6E] px-3 py-1 text-[11px] font-semibold text-parchment">
+                                    {stage.modes.reading.keyTerm}
+                                </span>
+                            </div>
+
+                            <div className="mx-auto flex w-full max-w-[420px] flex-col gap-3">
+                                {fallbackPoints.map((point, index) => (
+                                    <div
+                                        key={`${point}:${index}`}
+                                        className="rounded-2xl bg-white/70 px-4 py-3 text-[13px] leading-5 text-graphite shadow-[0_12px_24px_rgba(59,63,110,0.08)]"
+                                    >
+                                        {point}
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex justify-end">
+                                <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-[12px] text-indigo/80">
+                                    Picture-led explanation for this concept
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+
                     {content.highlight ? (
                         <div className="absolute inset-0 flex items-center justify-center">
                             <div

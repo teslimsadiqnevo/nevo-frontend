@@ -8,6 +8,8 @@ type AudioModeProps = {
     stage: Stage;
     progress: number;
     onBack: () => void;
+    onContinue: () => void;
+    continueLabel: string;
     askContext?: string | null;
     toolbarState: ToolbarState;
     onToolbarChange: (state: ToolbarState) => void;
@@ -19,6 +21,8 @@ export function AudioMode({
     stage,
     progress,
     onBack,
+    onContinue,
+    continueLabel,
     askContext,
     toolbarState,
     onToolbarChange,
@@ -65,6 +69,8 @@ export function AudioMode({
             }
             progress={progress}
             onBack={onBack}
+            onContinue={onContinue}
+            continueLabel={continueLabel}
             askContext={askContext}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}

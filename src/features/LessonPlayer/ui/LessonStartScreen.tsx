@@ -1,8 +1,7 @@
 'use client';
 
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
 import type { LessonPlayerData, LessonModeCard } from '../api/types';
 import { STAGE_ORDER } from '../api/types';
 import { LeaveLessonDialog } from './LeaveLessonDialog';
@@ -70,14 +69,9 @@ function MetaItem({
 
 export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
     const router = useRouter();
-    const isAutoAdapt = useRegistrationStore((state) => state.isAutoAdapt);
-    const learningMode = useRegistrationStore((state) => state.learningMode);
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
-    const activeMode: LearningMode = useMemo(
-        () => (isAutoAdapt ? data.recommendedMode : learningMode),
-        [data.recommendedMode, isAutoAdapt, learningMode]
-    );
+    const activeMode = data.recommendedMode;
     const activeCard = data.start.cards[activeMode];
 
     const beginLesson = () => {

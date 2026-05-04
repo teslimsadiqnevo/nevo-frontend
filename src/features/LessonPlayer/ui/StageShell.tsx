@@ -17,6 +17,8 @@ type StageShellProps = {
     onToolbarChange: (state: ToolbarState) => void;
     headerAction?: ReactNode;
     bodyWidthClassName?: string;
+    continueLabel?: string;
+    onContinue?: () => void;
 };
 
 const TOOLBAR_BUTTONS: Array<{ label: string; state: ToolbarState }> = [
@@ -38,6 +40,8 @@ export function StageShell({
     onToolbarChange,
     headerAction,
     bodyWidthClassName = 'max-w-[700px]',
+    continueLabel,
+    onContinue,
 }: StageShellProps) {
     return (
         <div className="flex flex-col w-[1024px] min-h-[900px] bg-parchment mx-auto shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
@@ -90,8 +94,21 @@ export function StageShell({
                 </div>
             </div>
 
-            <div className="relative w-full h-[61px] flex justify-center items-center bg-parchment border-t border-[#E0D9CE]">
-                <div className="flex items-center gap-5">
+            <div className="w-full min-h-[78px] bg-parchment border-t border-[#E0D9CE] px-10 py-4">
+                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
+                    <div className="flex items-center">
+                        {onContinue && continueLabel ? (
+                            <button
+                                type="button"
+                                onClick={onContinue}
+                                className="flex h-11 items-center justify-center rounded-full bg-indigo px-6 text-[14px] font-semibold text-parchment cursor-pointer border-none shadow-[0_12px_24px_rgba(59,63,110,0.18)]"
+                            >
+                                {continueLabel}
+                            </button>
+                        ) : null}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-5">
                     {TOOLBAR_BUTTONS.map((button) => {
                         const isActive = toolbarState === button.state;
                         return (
@@ -110,10 +127,11 @@ export function StageShell({
                             </button>
                         );
                     })}
-                </div>
+                    </div>
 
-                <div className="absolute right-[58.69px] top-[9px]">
-                    <AskNevoButton context={askContext} />
+                    <div className="flex justify-end">
+                        <AskNevoButton context={askContext} />
+                    </div>
                 </div>
             </div>
         </div>
