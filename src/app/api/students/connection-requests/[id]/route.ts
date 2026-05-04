@@ -8,7 +8,8 @@ export async function DELETE(req: Request, context: any) {
   let id: string | undefined;
   try {
     const params = context?.params;
-    const resolved = params && typeof params.then === 'function' ? await params : params;
+    const resolved =
+      params && typeof params.then === "function" ? await params : params;
     id = resolved?.id;
   } catch {
     id = undefined;
@@ -53,6 +54,9 @@ export async function DELETE(req: Request, context: any) {
 
     return NextResponse.json(data, { status: backendRes.status });
   } catch (err) {
-    return NextResponse.json({ detail: "Could not cancel request." }, { status: 500 });
+    return NextResponse.json(
+      { detail: "Could not cancel request." },
+      { status: 500 },
+    );
   }
 }
