@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
+import { useLessonTts } from '../api/useLessonTts';
 import type {
     LessonAssessmentOption,
     LessonAssessmentQuestion,
@@ -134,6 +135,7 @@ function AssessmentQuestionView({
 }) {
     const isKids = variant === 'kids';
     const optionTextClass = isKids ? 'text-[16px] font-semibold' : 'text-[15px] font-medium';
+    const { isLoading, isPlaying, error, togglePlayback } = useLessonTts(prompt);
 
     return (
         <>
@@ -149,20 +151,48 @@ function AssessmentQuestionView({
             ) : null}
 
             {variant === 'audio' ? (
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <path d="M5 3L12 8L5 13V3Z" fill="#F7F1E6" />
-                    </svg>
-                </div>
+                <button
+                    type="button"
+                    onClick={() => {
+                        void togglePlayback();
+                    }}
+                    className="flex h-11 w-11 items-center justify-center rounded-full bg-indigo border-none cursor-pointer"
+                    aria-label={isPlaying ? 'Pause question audio' : 'Play question audio'}
+                >
+                    {isPlaying ? (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <rect x="4" y="3" width="3" height="10" rx="1" fill="#F7F1E6" />
+                            <rect x="9" y="3" width="3" height="10" rx="1" fill="#F7F1E6" />
+                        </svg>
+                    ) : (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                            <path d="M5 3L12 8L5 13V3Z" fill="#F7F1E6" />
+                        </svg>
+                    )}
+                </button>
             ) : null}
 
             {(variant === 'kids' || variant === 'reading') && helperLabel ? (
                 <div className="flex flex-col items-center">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo">
-                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M4 2.5L10.5 7L4 11.5V2.5Z" fill="#F7F1E6" />
-                        </svg>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            void togglePlayback();
+                        }}
+                        className="flex h-10 w-10 items-center justify-center rounded-full bg-indigo border-none cursor-pointer"
+                        aria-label={isPlaying ? 'Pause question audio' : 'Play question audio'}
+                    >
+                        {isPlaying ? (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                <rect x="3.5" y="2.5" width="2.5" height="9" rx="1" fill="#F7F1E6" />
+                                <rect x="8" y="2.5" width="2.5" height="9" rx="1" fill="#F7F1E6" />
+                            </svg>
+                        ) : (
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                <path d="M4 2.5L10.5 7L4 11.5V2.5Z" fill="#F7F1E6" />
+                            </svg>
+                        )}
+                    </button>
                     <span className="mt-1.5 text-[11px] leading-4 text-indigo/50">{helperLabel}</span>
                 </div>
             ) : null}
@@ -172,7 +202,12 @@ function AssessmentQuestionView({
                     {prompt}
                 </h1>
                 {variant === 'audio' && helperLabel ? (
-                    <span className="mt-2 text-[12px] leading-4 text-indigo/40">{helperLabel}</span>
+                    <span className="mt-2 text-[12px] leading-4 text-indigo/40">
+                        {isLoading ? 'Generating audio...' : helperLabel}
+                    </span>
+                ) : null}
+                {error ? (
+                    <span className="mt-2 text-[12px] leading-4 text-[#B54708]">{error}</span>
                 ) : null}
             </div>
 

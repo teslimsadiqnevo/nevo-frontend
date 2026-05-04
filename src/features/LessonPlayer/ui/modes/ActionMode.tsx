@@ -1,6 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
+import { useLessonTts } from '../../api/useLessonTts';
 import { StageShell } from '../StageShell';
 import type { Stage, ActionStep, LessonPaceDensity, ToolbarState } from '../../api/types';
 
@@ -81,15 +82,64 @@ export function ActionMode({
             : toolbarState === 'expanded'
               ? content.stepsExpanded
               : content.steps;
+    const baseActiveIndex = Math.max(0, steps.findIndex((s) => s.state === 'active'));
+    const stepScopeKey = `${stage.key}:${toolbarState}:${steps.length}`;
+    const [stepSession, setStepSession] = useState({
+        scopeKey: stepScopeKey,
+        index: baseActiveIndex >= 0 ? baseActiveIndex : 0,
+    });
     const label =
         toolbarState === 'simplified'
             ? stage.labelSimplified || stage.label
             : toolbarState === 'expanded'
               ? stage.labelExpanded || stage.label
               : stage.label;
-    const activeIndex = steps.findIndex((s) => s.state === 'active');
-    const stepNumber = activeIndex >= 0 ? activeIndex + 1 : steps.length;
     const totalSteps = steps.length;
+
+    const currentStepIndex =
+        stepSession.scopeKey === stepScopeKey
+            ? stepSession.index
+            : baseActiveIndex >= 0
+                ? baseActiveIndex
+                : 0;
+
+    const hydratedSteps = useMemo<ActionStep[]>(() => (
+        steps.map((step, index) => ({
+            ...step,
+            state:
+                index < currentStepIndex
+                    ? 'completed'
+                    : index === currentStepIndex
+                        ? 'active'
+                        : 'unread',
+        }))
+    ), [currentStepIndex, steps]);
+
+    const currentStep = hydratedSteps[Math.min(currentStepIndex, hydratedSteps.length - 1)];
+    const stepNumber = Math.min(currentStepIndex + 1, totalSteps);
+    const stageCompletion = totalSteps > 0 ? Math.round((stepNumber / totalSteps) * 100) : 0;
+    const { isLoading, isPlaying, error, togglePlayback, replay } = useLessonTts(currentStep?.text || '');
+    const canMoveBackward = currentStepIndex > 0;
+    const isFinalStep = currentStepIndex >= totalSteps - 1;
+
+    const goToPreviousStep = () => {
+        setStepSession({
+            scopeKey: stepScopeKey,
+            index: Math.max(0, currentStepIndex - 1),
+        });
+    };
+
+    const completeCurrentStep = () => {
+        if (isFinalStep) {
+            onContinue();
+            return;
+        }
+
+        setStepSession({
+            scopeKey: stepScopeKey,
+            index: Math.min(totalSteps - 1, currentStepIndex + 1),
+        });
+    };
 
     return (
         <StageShell
@@ -97,24 +147,100 @@ export function ActionMode({
             label={label}
             askContext={askContext}
             body={
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-3">
                     <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-lavender">
                         Step {stepNumber} of {totalSteps}
                     </span>
+                    <div className="h-2 w-full overflow-hidden rounded-full bg-[#E8E2D6]">
+                        <div
+                            className="h-full rounded-full bg-indigo transition-all duration-300"
+                            style={{ width: `${stageCompletion}%` }}
+                        />
+                    </div>
+                    <p className="text-[14px] leading-6 text-graphite-60">
+                        Work through one action at a time. Mark each step done before moving forward.
+                    </p>
                 </div>
             }
             progress={progress}
             onBack={onBack}
-            onContinue={onContinue}
-            continueLabel={continueLabel}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}
             headerAction={headerAction}
             media={
-                <div className="w-full flex flex-col gap-4 overflow-y-auto">
-                    {steps.map((step, idx) => (
-                        <StepRow key={idx} index={idx} step={step} />
-                    ))}
+                <div className="w-full flex flex-col gap-5">
+                    <div className="rounded-[20px] border border-[rgba(59,63,110,0.12)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-lavender">
+                                    Current action
+                                </p>
+                                <h3 className="mt-2 text-[20px] font-semibold leading-7 text-indigo">
+                                    Step {stepNumber}
+                                </h3>
+                            </div>
+                            <div className="rounded-full bg-lavender-10 px-3 py-2 text-[12px] font-medium text-indigo">
+                                {isFinalStep ? 'Final step' : `${totalSteps - stepNumber} step${totalSteps - stepNumber === 1 ? '' : 's'} left`}
+                            </div>
+                        </div>
+
+                        <p className="mt-4 text-[16px] leading-7 text-graphite">
+                            {currentStep?.text}
+                        </p>
+
+                        {error ? (
+                            <p className="mt-3 text-[12px] leading-5 text-[#B54708]">{error}</p>
+                        ) : null}
+
+                        <div className="mt-5 flex flex-wrap items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={goToPreviousStep}
+                                disabled={!canMoveBackward}
+                                className={`flex h-11 items-center justify-center rounded-full px-5 text-[14px] font-medium border ${
+                                    canMoveBackward
+                                        ? 'cursor-pointer border-indigo text-indigo bg-transparent'
+                                        : 'cursor-not-allowed border-[#D9D2C5] text-graphite-40 bg-[#F7F3EC]'
+                                }`}
+                            >
+                                Previous step
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    void togglePlayback();
+                                }}
+                                className="flex h-11 items-center justify-center gap-2 rounded-full border border-indigo bg-white px-5 text-[14px] font-medium text-indigo cursor-pointer"
+                            >
+                                <span>{isLoading ? 'Generating audio...' : isPlaying ? 'Pause step audio' : 'Hear this step'}</span>
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    void replay();
+                                }}
+                                className="flex h-11 items-center justify-center rounded-full border border-indigo bg-white px-5 text-[14px] font-medium text-indigo cursor-pointer"
+                            >
+                                Replay
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={completeCurrentStep}
+                                className="ml-auto flex h-11 items-center justify-center rounded-full bg-indigo px-6 text-[14px] font-semibold text-parchment cursor-pointer border-none shadow-[0_12px_24px_rgba(59,63,110,0.18)]"
+                            >
+                                {isFinalStep ? continueLabel : 'Mark step done'}
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="w-full flex flex-col gap-4 overflow-y-auto">
+                        {hydratedSteps.map((step, idx) => (
+                            <StepRow key={`${step.text}:${idx}`} index={idx} step={step} />
+                        ))}
+                    </div>
                 </div>
             }
             bodyWidthClassName="w-full"
