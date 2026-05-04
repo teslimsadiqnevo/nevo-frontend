@@ -16,7 +16,11 @@ const navItems = [
     { name: 'Settings', view: 'settings' },
 ] as const;
 
-export function SchoolAdminSidebar({ user }: { user?: any }) {
+export function SchoolAdminSidebar({
+    user,
+}: {
+    user?: { name?: string | null; full_name?: string | null; email?: string | null } | null;
+}) {
     const searchParams = useSearchParams();
     const currentView = searchParams?.get('view') || null;
     const [schoolName, setSchoolName] = useState('Lagos International Academy');
@@ -57,7 +61,7 @@ export function SchoolAdminSidebar({ user }: { user?: any }) {
     return (
         <aside className="w-[240px] min-w-[240px] h-full bg-[#FCFCFC] border-r border-[#E0D9CE] flex flex-col">
             <div className="px-6 pt-6 pb-8">
-                <NevoLogo className="h-8 w-auto" width={172} height={32} />
+                <NevoLogo className="h-6 w-auto" width={80} height={24} />
                 <p className="mt-3 max-w-[170px] text-[14px] font-semibold leading-[20px] text-[#3B3F6E]">
                     {schoolName}
                 </p>

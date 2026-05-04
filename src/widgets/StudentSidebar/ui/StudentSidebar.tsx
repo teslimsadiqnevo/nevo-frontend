@@ -32,9 +32,9 @@ export function StudentSidebar() {
         {/* Logo */}
         <div className="px-6 pt-6 pb-5">
           <NevoLogo
-            className="h-8 w-auto"
-            width={172}
-            height={32}
+            className="h-6 w-auto"
+            width={80}
+            height={24}
             variant="light"
           />
         </div>
