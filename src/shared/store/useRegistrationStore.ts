@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
 export type LearningMode = 'visual' | 'audio' | 'action' | 'reading';
+type AssessmentAnswerValue = string | number | boolean | string[] | null;
 
 interface RegistrationState {
     firstName: string;
@@ -10,7 +11,7 @@ interface RegistrationState {
     schoolId: string | null;
     classId: string | null;
     pin: string;
-    assessmentAnswers: Record<string, any>;
+    assessmentAnswers: Record<string, AssessmentAnswerValue>;
     token: string | null;
     nevoId: string | null;
     isAutoAdapt: boolean;
@@ -21,7 +22,7 @@ interface RegistrationState {
     setSchoolId: (id: string | null) => void;
     setClassId: (id: string | null) => void;
     setPin: (pin: string) => void;
-    setAssessmentAnswer: (questionId: string, answer: any) => void;
+    setAssessmentAnswer: (questionId: string, answer: AssessmentAnswerValue) => void;
     setToken: (token: string | null) => void;
     setNevoId: (nevoId: string | null) => void;
     setIsAutoAdapt: (val: boolean) => void;
@@ -41,7 +42,7 @@ export const useRegistrationStore = create<RegistrationState>()(
             assessmentAnswers: {},
             token: null,
             nevoId: null,
-            isAutoAdapt: false,
+            isAutoAdapt: true,
             learningMode: 'visual',
             setFirstName: (firstName) => set({ firstName }),
             setSurname: (surname) => set({ surname }),
@@ -70,7 +71,7 @@ export const useRegistrationStore = create<RegistrationState>()(
                 assessmentAnswers: {},
                 token: null,
                 nevoId: null,
-                isAutoAdapt: false,
+                isAutoAdapt: true,
                 learningMode: 'visual',
             }),
         }),

@@ -244,6 +244,7 @@ export type LessonPlayerData = {
     subject: string;
     topic: string;
     recommendedMode: LearningMode;
+    adaptAutomatically: boolean;
     reflection: LessonReflectionData;
     reorientation: LessonReorientationData;
     start: LessonStartData;

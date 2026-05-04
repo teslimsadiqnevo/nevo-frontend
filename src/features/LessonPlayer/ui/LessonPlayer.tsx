@@ -2,7 +2,7 @@
 
 import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
+import { type LearningMode } from '@/shared/store/useRegistrationStore';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import { STAGE_ORDER, type StageKey, type ToolbarState } from '../api/types';
@@ -24,10 +24,6 @@ type LessonPlayerProps = {
 export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const router = useRouter();
     const { data, loading, error } = useLessonPlayer(lessonId);
-    const isAutoAdapt = useRegistrationStore((s) => s.isAutoAdapt);
-    const learningMode = useRegistrationStore((s) => s.learningMode);
-    const setIsAutoAdapt = useRegistrationStore((s) => s.setIsAutoAdapt);
-    const setLearningMode = useRegistrationStore((s) => s.setLearningMode);
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);
     const [showPaceOverlay, setShowPaceOverlay] = useState(false);
     const [showReflectionOverlay, setShowReflectionOverlay] = useState(false);
@@ -35,7 +31,15 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const [showAskNevoDrawer, setShowAskNevoDrawer] = useState(false);
     const [paceSelection, setPaceSelection] = useState<'slower' | 'steady' | 'faster'>('slower');
     const [paceDensity, setPaceDensity] = useState<LessonPaceDensity>('standard');
-    const scopeKey = `${lessonId}:${stage}:${learningMode}:${isAutoAdapt ? '1' : '0'}`;
+    const [sessionAutoAdapt, setSessionAutoAdapt] = useState<boolean | null>(null);
+    const [manualMode, setManualMode] = useState<LearningMode | null>(null);
+    const backendAutoAdapt = data?.adaptAutomatically ?? true;
+    const isAutoAdaptActive = sessionAutoAdapt ?? backendAutoAdapt;
+    const activeMode: LearningMode =
+        isAutoAdaptActive
+            ? data?.recommendedMode ?? 'visual'
+            : manualMode ?? data?.recommendedMode ?? 'visual';
+    const scopeKey = `${lessonId}:${stage}:${activeMode}:${isAutoAdaptActive ? '1' : '0'}`;
     const [toolbarSession, setToolbarSession] = useState<{ scopeKey: string; state: ToolbarState }>({
         scopeKey,
         state: 'original',
@@ -68,7 +72,6 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
     const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
     const progress = ((stageIndex + 1) / STAGE_ORDER.length) * 100;
-    const activeMode: LearningMode = isAutoAdapt ? data.recommendedMode : learningMode;
     const askContext = `You're on: ${data.title} · Section ${stageIndex + 1}`;
     const toolbarState = toolbarSession.scopeKey === scopeKey ? toolbarSession.state : 'original';
     const headerAction: ReactNode =
@@ -166,8 +169,8 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             return;
         }
 
-        setIsAutoAdapt(false);
-        setLearningMode(optionId === 'action' ? 'action' : 'visual');
+        setSessionAutoAdapt(false);
+        setManualMode(optionId === 'action' ? 'action' : 'visual');
         setShowReorientationOverlay(false);
     };
 

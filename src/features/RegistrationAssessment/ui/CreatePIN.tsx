@@ -7,7 +7,7 @@ import { Icon } from "@/shared/ui";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () => void; }) {
-    const { setPin: setGlobalPin, firstName, surname, age, schoolId, classId, assessmentAnswers } = useRegistrationStore();
+    const { setPin: setGlobalPin, firstName, surname, age, schoolId, classId, assessmentAnswers, isAutoAdapt } = useRegistrationStore();
     const [mode, setMode] = useState<"enter" | "confirm">("enter");
     const [pin, setPin] = useState("");
     const [confirmPin, setConfirmPin] = useState("");
@@ -115,6 +115,22 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                 }
             }
 
+            if (regResult.token) {
+                const adaptationRes = await fetch(
+                    `/api/students/me/adaptation?enabled=${encodeURIComponent(String(isAutoAdapt))}`,
+                    {
+                        method: "PUT",
+                        headers: {
+                            Authorization: `Bearer ${regResult.token}`,
+                        },
+                    },
+                ).catch(() => null);
+
+                if (adaptationRes && !adaptationRes.ok) {
+                    console.warn("Adaptation preference save failed during onboarding.");
+                }
+            }
+
             setIsSubmitting(false);
             onNext();
         } catch (error) {
@@ -178,7 +194,7 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
 
             <main className="px-6 flex-1 flex flex-col items-center justify-center mt-6 w-full">
                 <h1 className="text-2xl font-extrabold text-graphite mb-2">Create your PIN</h1>
-                <p className="text-graphite-60 text-sm font-medium mb-10">You'll use this to log in. Keep it safe.</p>
+                <p className="text-graphite-60 text-sm font-medium mb-10">You&apos;ll use this to log in. Keep it safe.</p>
 
                 <div className="flex flex-col items-center gap-6 min-h-[160px] mb-12">
                      {/* Initial pin dots */}
@@ -189,7 +205,7 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                          <>
                             <p className="text-[13px] font-medium text-graphite-60">Enter it again to confirm</p>
                             {renderDots(confirmPin, true, status)}
-                            {status === "error" && <p className="text-[#E57661] text-[13px] font-medium">PINs don't match. Try again.</p>}
+                            {status === "error" && <p className="text-[#E57661] text-[13px] font-medium">PINs don&apos;t match. Try again.</p>}
                             {status === "success" && (
                                 <div className="mt-2 text-[#7DBF83]">
                                      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

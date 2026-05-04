@@ -14,6 +14,7 @@ import {
 type BackendConceptStep = {
     step_number?: number;
     text?: string;
+    step_text?: string;
 };
 
 type BackendConcept = {
@@ -39,6 +40,7 @@ type BackendLessonPayload = {
     lesson_title: string;
     adaptation_style: string;
     learning_mode_delivered?: string;
+    adapt_automatically?: boolean;
     concepts: BackendConcept[];
     adapted_lesson_id: string;
     original_lesson_id: string;
@@ -113,7 +115,9 @@ function expandText(text: string, concept: BackendConcept) {
 function buildActionSteps(concept: BackendConcept) {
     const sourceSteps =
         Array.isArray(concept.steps) && concept.steps.length > 0
-            ? concept.steps.map((step, index) => step.text?.trim() || `Step ${index + 1}`)
+            ? concept.steps.map(
+                (step, index) => step.text?.trim() || step.step_text?.trim() || `Step ${index + 1}`,
+            )
             : splitIntoSentences(concept.concept_text).slice(0, 4);
 
     const fallbackSteps =
@@ -417,6 +421,7 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
         subject: payload.lesson_title,
         topic: sourceConcepts[0]?.key_term || payload.lesson_title,
         recommendedMode,
+        adaptAutomatically: payload.adapt_automatically ?? true,
         reflection: buildReflection(payload.lesson_title),
         reorientation: buildReorientation(recommendedMode),
         start: {
