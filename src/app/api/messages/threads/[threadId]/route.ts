@@ -39,9 +39,7 @@ export async function GET(req: Request, context: RouteContext) {
   let threadId: string | undefined;
 
   try {
-    const params = context?.params;
-    const resolved =
-      params && typeof params.then === "function" ? await params : params;
+    const resolved = await Promise.resolve(context?.params);
     threadId = resolved?.threadId;
   } catch {
     threadId = undefined;

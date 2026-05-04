@@ -88,6 +88,10 @@ function getInitials(name: string) {
     );
 }
 
+function getText(value: unknown, fallback = ''): string {
+    return typeof value === 'string' ? value : fallback;
+}
+
 function formatTimestamp(value: string) {
     if (!value) return '';
     const date = new Date(value);
@@ -306,12 +310,18 @@ export function ConnectView() {
         );
         setRequests(
             reqList.map((r, i: number) => {
-                const name = r.student_name || r.name || `Student ${i + 1}`;
+                const name: string =
+                    getText(r.student_name) ||
+                    getText(r.name) ||
+                    `Student ${i + 1}`;
                 return {
                     id: String(r.connection_id ?? r.id ?? `req-${i}`),
                     name,
                     initials: getInitials(name),
-                    classInfo: r.class_name || r.class || 'Class not specified',
+                    classInfo:
+                        getText(r.class_name) ||
+                        getText(r.class) ||
+                        'Class not specified',
                     status: r.status === 'accepted' || r.status === 'rejected' ? r.status : 'pending',
                 } as ConnectionRequestItem;
             }),
