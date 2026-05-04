@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Icon } from "@/shared/ui";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import Link from "next/link";
 
 export function Step1({ onNext }: { onNext: () => void }) {
     const {
@@ -25,13 +26,13 @@ export function Step1({ onNext }: { onNext: () => void }) {
 
     return (
         <div className="w-full max-w-[1024px] mx-auto px-6 pt-12">
-            <a
+            <Link
                 href="/register"
                 className="flex w-11 h-11 items-center justify-center cursor-pointer"
                 aria-label="Back"
             >
                 <Icon type="back" width={24} height={24} />
-            </a>
+            </Link>
 
             <main className="w-full flex flex-col items-center">
                 <header className="pt-6 flex w-full flex-col gap-2 items-center justify-center">

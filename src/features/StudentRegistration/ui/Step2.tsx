@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Icon } from "@/shared/ui";
 import { fetchSchools, type SchoolSearchOption } from "../api/schoolLookup";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import Link from "next/link";
 
 export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => void }) {
     const { setSchoolId } = useRegistrationStore();
@@ -40,7 +41,7 @@ export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => v
                     setIsLoading(false);
                 }
             }
-        }, 350);
+        }, 180);
 
         return () => {
             isCancelled = true;
@@ -55,9 +56,9 @@ export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => v
                     <Icon type="back" width={24} height={24} />
                 </button>
             ) : (
-                <a href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
+                <Link href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
                     <Icon type="back" width={24} height={24} />
-                </a>
+                </Link>
             )}
 
             <main className="px-6 w-full flex flex-col items-center">
@@ -117,7 +118,7 @@ export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => v
                                     </div>
                                 ) : (
                                     <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
-                                        <p className="text-sm text-graphite">No schools found matching '{searchQuery}'.</p>
+                                        <p className="text-sm text-graphite">No schools found matching &apos;{searchQuery}&apos;.</p>
                                         <p className="text-[13px] text-graphite mt-1">Your school may not be registered on Nevo yet.</p>
                                     </div>
                                 )}

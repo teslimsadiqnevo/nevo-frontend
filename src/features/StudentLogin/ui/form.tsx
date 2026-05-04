@@ -1,11 +1,10 @@
 'use client'
 
-import { Input, Icon } from "@/shared/ui";
-import { useState, useRef, useEffect } from "react";
-import { BrowserQRCodeReader } from "@zxing/browser";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { loginStudent } from "../api/loginStudent";
+import { signIn } from "next-auth/react";
+import { Icon } from "@/shared/ui";
 
 export function StudentLoginForm() {
     const router = useRouter();
@@ -17,45 +16,47 @@ export function StudentLoginForm() {
 
     const handleKeyPress = (key: string) => {
         if (pin.length < 4 && !isLoading) {
-            setPin(prev => prev + key);
+            setPin((prev) => prev + key);
             setError(null);
         }
     };
 
     const handleBackspace = () => {
         if (pin.length > 0 && !isLoading) {
-            setPin(prev => prev.slice(0, -1));
+            setPin((prev) => prev.slice(0, -1));
             setError(null);
         }
     };
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        
-        if (!firstName || !nevoID || pin.length < 4) {
+        if (!firstName || !nevoID || pin.length < 4 || isLoading) {
             return;
         }
 
         setIsLoading(true);
         setError(null);
-        
+
         try {
-            const result = await loginStudent({
+            const result = await signIn("credentials", {
                 firstName,
                 nevoId: nevoID,
                 pin,
+                redirect: false,
+                callbackUrl: "/dashboard",
             });
 
             if (result?.error) {
-                setError(result.error);
+                setError("Invalid credentials. Please try again.");
                 setIsLoading(false);
                 setPin("");
+                return;
             }
-            // If successful, loginStudent triggers a redirect via NextAuth signIn
-        } catch (err) {
-            // NextAuth signIn with redirectTo throws a NEXT_REDIRECT "error"
-            // which is expected — it means the redirect is happening.
-            // Only show error for actual failures.
+
+            router.replace(result?.url || "/dashboard");
+            router.refresh();
+        } catch {
+            setError("Something went wrong. Please try again.");
             setIsLoading(false);
         }
     };
@@ -82,13 +83,13 @@ export function StudentLoginForm() {
 
              <div className="w-full flex flex-col items-start gap-1.5 mb-1 relative min-h-[70px]">
                  <label className="text-[10px] font-bold text-[#3B3F6E]/80 uppercase tracking-wider">PIN</label>
-                 
+
                  <div className="flex gap-[18px] self-center">
                      {[0, 1, 2, 3].map(i => {
                          const isFilled = i < pin.length;
                          const isError = error !== null;
                          const outerBorder = isError ? "border-[#E57661]" : "border-[#3B3F6E]/30";
-                         const innerFill = isError ? "bg-[#3B3F6E]" : "bg-[#3B3F6E]";
+                         const innerFill = "bg-[#3B3F6E]";
 
                          return (
                              <div key={i} className={`w-[32px] h-[32px] rounded-full border flex items-center justify-center transition-all ${outerBorder}`}>
@@ -99,7 +100,7 @@ export function StudentLoginForm() {
                          )
                      })}
                  </div>
-                 
+
                  <div className="h-[20px] w-full mt-2">
                      {error && (
                          <p className="text-[#E57661] text-[10.5px] font-medium text-center w-full">{error}</p>
@@ -118,7 +119,7 @@ export function StudentLoginForm() {
                          {num}
                      </button>
                  ))}
-                 <div /> {/* Empty */}
+                 <div />
                  <button
                      type="button"
                      onClick={() => handleKeyPress("0")}
@@ -128,7 +129,7 @@ export function StudentLoginForm() {
                  </button>
                  <button
                      type="button"
-                     onClick={() => handleBackspace()}
+                     onClick={handleBackspace}
                      className="h-[48px] flex items-center justify-center border border-[#3B3F6E]/10 rounded-[10px] bg-transparent active:bg-[#3B3F6E]/5 transition-colors text-[#3B3F6E] cursor-pointer"
                  >
                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">

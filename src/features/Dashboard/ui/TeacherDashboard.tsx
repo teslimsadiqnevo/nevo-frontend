@@ -1,19 +1,44 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
-import { LessonsView } from "./LessonsView";
-import { InsightsView } from "./InsightsView";
-import { ConnectView } from "./ConnectView";
-import { ProfileView } from "./ProfileView";
-import { AddLessonWizard } from "./AddLessonWizard";
-import { AssignLessonWizard } from "./AssignLessonWizard";
-import { TeacherStudentsView } from "./TeacherStudentsView";
 import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
 import { useAuthGuard } from "@/shared/lib";
+
+const DashboardViewLoader = () => (
+    <div className="flex min-h-[40vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
+        Loading...
+    </div>
+);
+
+const LessonsView = dynamic(() => import("./LessonsView").then((mod) => mod.LessonsView), {
+    loading: DashboardViewLoader,
+});
+const InsightsView = dynamic(() => import("./InsightsView").then((mod) => mod.InsightsView), {
+    loading: DashboardViewLoader,
+});
+const ConnectView = dynamic(() => import("./ConnectView").then((mod) => mod.ConnectView), {
+    loading: DashboardViewLoader,
+});
+const ProfileView = dynamic(() => import("./ProfileView").then((mod) => mod.ProfileView), {
+    loading: DashboardViewLoader,
+});
+const AddLessonWizard = dynamic(() => import("./AddLessonWizard").then((mod) => mod.AddLessonWizard), {
+    loading: DashboardViewLoader,
+});
+const AssignLessonWizard = dynamic(() => import("./AssignLessonWizard").then((mod) => mod.AssignLessonWizard), {
+    loading: DashboardViewLoader,
+});
+const TeacherStudentsView = dynamic(
+    () => import("./TeacherStudentsView").then((mod) => mod.TeacherStudentsView),
+    {
+        loading: DashboardViewLoader,
+    },
+);
 
 type TeacherRecentActivityItem = {
     id: string;

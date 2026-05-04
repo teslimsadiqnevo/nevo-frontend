@@ -1,23 +1,72 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
 import { useAuthGuard } from '@/shared/lib';
 import { SchoolAdminSidebar } from "@/widgets";
-import { ClassesView } from './ClassesView';
-import { TeachersView } from './TeachersView';
-import { StudentsView } from './StudentsView';
-import { ReportsView } from './ReportsView';
-import { SettingsView } from './SettingsView';
 import { getSchoolDashboardOverview, getSchoolDashboardSummary, getSchoolSettings } from '../api/school';
 
+const DashboardViewLoader = () => (
+    <div className="flex min-h-[40vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
+        Loading...
+    </div>
+);
+
+const ClassesView = dynamic(() => import('./ClassesView').then((mod) => mod.ClassesView), {
+    loading: DashboardViewLoader,
+});
+const TeachersView = dynamic(() => import('./TeachersView').then((mod) => mod.TeachersView), {
+    loading: DashboardViewLoader,
+});
+const StudentsView = dynamic(() => import('./StudentsView').then((mod) => mod.StudentsView), {
+    loading: DashboardViewLoader,
+});
+const ReportsView = dynamic(() => import('./ReportsView').then((mod) => mod.ReportsView), {
+    loading: DashboardViewLoader,
+});
+const SettingsView = dynamic(() => import('./SettingsView').then((mod) => mod.SettingsView), {
+    loading: DashboardViewLoader,
+});
+
 type OverviewData = {
-    summary: any | null;
-    overview: any | null;
-    settings: any | null;
+    summary: Record<string, unknown> | null;
+    overview: Record<string, unknown> | null;
+    settings: Record<string, unknown> | null;
 };
 
-export function SchoolAdminDashboard({ user }: { user?: any }) {
+type DashboardUser = {
+    schoolName?: string;
+    name?: string;
+    full_name?: string;
+    email?: string;
+} & Record<string, unknown>;
+
+type SubjectCoverageRow = {
+    subject_name?: string;
+    total_units?: number | string;
+    units_active?: number | string;
+};
+
+type EngagementPoint = {
+    active_students?: number | string;
+    date?: string;
+    day?: string;
+};
+
+type InsightItem = {
+    topic?: string;
+    topic_id?: string | number;
+    topic_name?: string;
+    subject?: string;
+    name?: string;
+    label?: string;
+    student_count?: number | string;
+    count?: number | string;
+    supporting_metric?: string;
+};
+
+export function SchoolAdminDashboard({ user }: { user?: DashboardUser }) {
     const searchParams = useSearchParams();
     const currentView = searchParams?.get('view') || null;
 
@@ -48,7 +97,7 @@ export function SchoolAdminDashboard({ user }: { user?: any }) {
     );
 }
 
-function AdminDashboardOverview({ user }: { user?: any }) {
+function AdminDashboardOverview({ user }: { user?: DashboardUser }) {
     const guardAuth = useAuthGuard('school');
     const [state, setState] = useState<{
         loading: boolean;
@@ -117,20 +166,34 @@ function AdminDashboardOverview({ user }: { user?: any }) {
     const summary = state.data.summary;
     const overview = state.data.overview;
     const settings = state.data.settings;
+    const curriculumCoverage = overview?.curriculum_coverage as
+        | { subjects?: SubjectCoverageRow[] }
+        | undefined;
+    const conceptsBuildingWell = overview?.concepts_building_well as
+        | { topics?: InsightItem[] }
+        | undefined;
+    const areasNeedingSupport = overview?.areas_needing_support as
+        | { topics?: InsightItem[] }
+        | undefined;
+    const engagementOverTime = overview?.engagement_over_time as
+        | { data_points?: EngagementPoint[] }
+        | undefined;
 
-    const schoolName = settings?.school_name || summary?.school_name || user?.schoolName || 'Your school';
-    const dateFilterLabel = overview?.date_range_label || 'This week';
-    const subjectRows = Array.isArray(overview?.curriculum_coverage?.subjects)
-        ? overview.curriculum_coverage.subjects
+    const schoolName = String(
+        settings?.school_name || summary?.school_name || user?.schoolName || 'Your school',
+    );
+    const dateFilterLabel = String(overview?.date_range_label || 'This week');
+    const subjectRows: SubjectCoverageRow[] = Array.isArray(curriculumCoverage?.subjects)
+        ? curriculumCoverage.subjects
         : [];
-    const strengths = Array.isArray(overview?.concepts_building_well?.topics)
-        ? overview.concepts_building_well.topics
+    const strengths: InsightItem[] = Array.isArray(conceptsBuildingWell?.topics)
+        ? conceptsBuildingWell.topics
         : [];
-    const support = Array.isArray(overview?.areas_needing_support?.topics)
-        ? overview.areas_needing_support.topics
+    const support: InsightItem[] = Array.isArray(areasNeedingSupport?.topics)
+        ? areasNeedingSupport.topics
         : [];
-    const engagementPoints = Array.isArray(overview?.engagement_over_time?.data_points)
-        ? overview.engagement_over_time.data_points
+    const engagementPoints: EngagementPoint[] = Array.isArray(engagementOverTime?.data_points)
+        ? engagementOverTime.data_points
         : [];
 
     const statCards = [
@@ -220,10 +283,10 @@ function AdminDashboardOverview({ user }: { user?: any }) {
                             </h2>
                             <div className="mt-5 flex flex-col gap-4">
                                 {subjectRows.length > 0 ? (
-                                    subjectRows.map((subject: any) => (
+                                    subjectRows.map((subject) => (
                                         <ProgressBar
-                                            key={subject.subject_name}
-                                            label={subject.subject_name}
+                                            key={String(subject.subject_name || 'subject')}
+                                            label={String(subject.subject_name || 'Subject')}
                                             total={Number(subject.total_units || 0)}
                                             current={Number(subject.units_active || 0)}
                                         />
@@ -302,7 +365,7 @@ function StatCard({ number, label, accent }: { number: string; label: string; ac
     );
 }
 
-function EngagementChart({ points }: { points: any[] }) {
+function EngagementChart({ points }: { points: EngagementPoint[] }) {
     const values = points.map((point) => Number(point.active_students || 0));
     const max = Math.max(...values, 1);
     const coords = points.map((point, index) => {
@@ -362,7 +425,7 @@ function InsightCard({
     emptyText,
 }: {
     title: string;
-    items: any[];
+    items: InsightItem[];
     accent: string;
     type: 'success' | 'warning';
     emptyText: string;

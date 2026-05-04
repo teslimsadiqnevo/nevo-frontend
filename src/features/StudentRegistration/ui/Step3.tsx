@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Icon } from "@/shared/ui";
 import { fetchClassesBySchoolId, type SchoolClassOption } from "../api/schoolLookup";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import Link from "next/link";
 
 export function Step3({ onNext, onBack }: { onNext?: () => void, onBack?: () => void }) {
     const { schoolId, setClassId } = useRegistrationStore();
@@ -50,9 +51,9 @@ export function Step3({ onNext, onBack }: { onNext?: () => void, onBack?: () => 
                     <Icon type="back" width={24} height={24} />
                 </button>
             ) : (
-                <a href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
+                <Link href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
                     <Icon type="back" width={24} height={24} />
-                </a>
+                </Link>
             )}
 
             <main className="px-6 w-full flex flex-col items-center">

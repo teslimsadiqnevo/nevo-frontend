@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Icon } from "@/shared/ui";
-import { loginTeacher } from "../api/loginTeacher";
 
 export function TeacherLoginForm() {
     const router = useRouter();
@@ -12,7 +12,6 @@ export function TeacherLoginForm() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
-    
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -37,24 +36,30 @@ export function TeacherLoginForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!isComplete || isLoading) return;
+
         setIsLoading(true);
         setError(null);
 
         try {
-            const result = await loginTeacher({
+            const result = await signIn("credentials", {
                 email,
                 password,
-                redirectTo: normalizedRedirect,
+                loginType: "teacher",
+                redirect: false,
+                callbackUrl: normalizedRedirect,
             });
 
             if (result?.error) {
-                setError(result.error);
+                setError("Invalid credentials. Please try again.");
                 setIsLoading(false);
+                return;
             }
-            // If successful, loginTeacher triggers a redirect via NextAuth signIn
-        } catch (err) {
-            // NextAuth signIn with redirectTo throws a NEXT_REDIRECT "error"
-            // which is expected — it means the redirect is happening.
+
+            router.replace(result?.url || normalizedRedirect);
+            router.refresh();
+        } catch {
+            setError("Something went wrong. Please try again.");
             setIsLoading(false);
         }
     };
@@ -62,9 +67,9 @@ export function TeacherLoginForm() {
     return (
         <form className="flex flex-col items-center w-full gap-[14px]" onSubmit={handleSubmit}>
             <div className="w-full flex flex-col gap-[14px]">
-                <input 
-                    type="email" 
-                    placeholder="Your email address" 
+                <input
+                    type="email"
+                    placeholder="Your email address"
                     value={email}
                     onChange={(e) => { setEmail(e.target.value); setError(null); }}
                     className={`w-full bg-transparent border rounded-[10px] px-5 py-[14px] outline-none transition-colors text-[13px] font-medium placeholder:text-[#3B3F6E]/40 text-[#3B3F6E] ${
@@ -72,17 +77,17 @@ export function TeacherLoginForm() {
                     }`}
                 />
                 <div className="relative w-full">
-                    <input 
-                        type={showPassword ? "text" : "password"} 
-                        placeholder="Your password" 
+                    <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Your password"
                         value={password}
                         onChange={(e) => { setPassword(e.target.value); setError(null); }}
                         className={`w-full bg-transparent border rounded-[10px] pl-5 pr-12 py-[14px] outline-none transition-colors text-[13px] font-medium placeholder:text-[#3B3F6E]/40 text-[#3B3F6E] ${
                             error ? "border-[#E57661]" : "border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50"
                         }`}
                     />
-                    <button 
-                        type="button" 
+                    <button
+                        type="button"
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-4 top-1/2 -translate-y-1/2 text-[#3B3F6E]/50 hover:text-[#3B3F6E] transition-colors p-[2px] cursor-pointer"
                     >
@@ -109,9 +114,9 @@ export function TeacherLoginForm() {
                 {isLoading ? 'Logging in...' : 'Log in'}
             </button>
 
-            <a href="/forgot-password" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-[10px]">
+            <Link href="/forgot-password" className="text-[11px] text-[#A29ECA] font-medium transition-colors hover:text-[#3B3F6E] cursor-pointer text-center mt-[10px]">
                 Forgot your password?
-            </a>
+            </Link>
 
             {inviteToken ? (
                 <p className="text-[11px] text-[#3B3F6E]/60 text-center mt-2">
