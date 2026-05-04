@@ -1,8 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'next-auth/react';
 import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
 import { LessonsView } from "./LessonsView";
@@ -20,9 +19,26 @@ type TeacherRecentActivityItem = {
     id: string;
     text: string;
     time: string;
+    kind: 'person' | 'lesson' | 'question';
 };
 
-function getUserDisplayName(user?: any) {
+type UnknownRecord = Record<string, unknown>;
+type GuardableResponse = { authExpired?: boolean; error?: string } | null | undefined;
+type TeacherUserLike = UnknownRecord & {
+    name?: string;
+    full_name?: string;
+    display_name?: string;
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    avatarUrl?: string;
+    avatar_url?: string;
+    image?: string;
+    schoolId?: string | number | null;
+    school_id?: string | number | null;
+};
+
+function getUserDisplayName(user?: TeacherUserLike) {
     return (
         user?.name ||
         user?.full_name ||
@@ -33,13 +49,114 @@ function getUserDisplayName(user?: any) {
 }
 
 function formatActivityTime(value: unknown) {
-    if (typeof value === 'string' && value.trim()) return value.trim();
+    const formatRelative = (date: Date) => {
+        const now = new Date();
+        const diffMs = now.getTime() - date.getTime();
+
+        if (Number.isNaN(diffMs)) return '';
+
+        const minute = 60 * 1000;
+        const hour = 60 * minute;
+        const day = 24 * hour;
+
+        if (diffMs < hour) {
+            const minutes = Math.max(1, Math.round(diffMs / minute));
+            return `${minutes}m ago`;
+        }
+
+        if (diffMs < day) {
+            const hours = Math.max(1, Math.round(diffMs / hour));
+            return `${hours}h ago`;
+        }
+
+        if (diffMs < day * 2) {
+            return 'Yesterday';
+        }
+
+        return date.toLocaleDateString([], {
+            month: 'short',
+            day: 'numeric',
+        });
+    };
 
     if (typeof value === 'number' && Number.isFinite(value)) {
-        return new Date(value).toLocaleDateString();
+        return formatRelative(new Date(value));
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+        const trimmed = value.trim();
+        const parsed = new Date(trimmed);
+        if (!Number.isNaN(parsed.getTime())) {
+            return formatRelative(parsed);
+        }
+        return trimmed;
     }
 
     return '';
+}
+
+function getActivityKind(item: Record<string, unknown>): TeacherRecentActivityItem['kind'] {
+    const actionSource = [
+        item.action,
+        item.event,
+        item.activity_type,
+        item.type,
+        item.status,
+        item.text,
+        item.message,
+        item.title,
+        item.description,
+        item.summary,
+    ]
+        .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+        .join(' ')
+        .toLowerCase();
+
+    if (actionSource.includes('question') || actionSource.includes('asked')) {
+        return 'question';
+    }
+
+    if (actionSource.includes('lesson') || actionSource.includes('assigned') || actionSource.includes('topic')) {
+        return 'lesson';
+    }
+
+    return 'person';
+}
+
+function ActivityIcon({ kind }: { kind: TeacherRecentActivityItem['kind'] }) {
+    if (kind === 'lesson') {
+        return (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2EEE7]">
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <rect x="3.5" y="4.5" width="13" height="11" rx="2" fill="#DDE8FF" stroke="#C7D6F4" />
+                    <path d="M6.5 8H13.5" stroke="#6D84B8" strokeWidth="1.2" strokeLinecap="round" />
+                    <path d="M6.5 10.5H11.5" stroke="#6D84B8" strokeWidth="1.2" strokeLinecap="round" />
+                    <path d="M5.2 6.3L9.2 3.8L13.3 6.3L9.2 8.7L5.2 6.3Z" fill="#8BC4F7" stroke="#6D84B8" strokeWidth="0.8" />
+                </svg>
+            </div>
+        );
+    }
+
+    if (kind === 'question') {
+        return (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#E8F0F6]">
+                <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                    <circle cx="9" cy="9" r="8" fill="#D8E9F7" />
+                    <path d="M7.1 7.1C7.1 6.05 7.93 5.25 9.1 5.25C10.15 5.25 10.95 5.91 10.95 6.92C10.95 8.31 9.35 8.53 9.35 9.7" stroke="#3B3F6E" strokeWidth="1.3" strokeLinecap="round" />
+                    <circle cx="9.35" cy="12.5" r="0.75" fill="#3B3F6E" />
+                </svg>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F4D7DC]">
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+                <circle cx="9" cy="6.4" r="2.5" fill="#B86573" />
+                <path d="M4.5 13.8C5.2 11.7 6.84 10.6 9 10.6C11.16 10.6 12.8 11.7 13.5 13.8" stroke="#B86573" strokeWidth="1.4" strokeLinecap="round" />
+            </svg>
+        </div>
+    );
 }
 
 function buildActivityText(item: Record<string, unknown>) {
@@ -72,8 +189,12 @@ function buildActivityText(item: Record<string, unknown>) {
     return parts.length > 0 ? parts.join(' • ') : 'Recent activity';
 }
 
-function normalizeRecentActivity(data: any): TeacherRecentActivityItem[] {
-    const weekStats = data?.week_stats ?? data?.weekStats ?? null;
+function normalizeRecentActivity(data: UnknownRecord | null | undefined): TeacherRecentActivityItem[] {
+    const weekStatsSource = data?.week_stats ?? data?.weekStats ?? null;
+    const weekStats =
+        weekStatsSource && typeof weekStatsSource === 'object'
+            ? (weekStatsSource as UnknownRecord)
+            : null;
     const rawActivity = [
         data?.recent_activity,
         data?.recentActivity,
@@ -107,11 +228,12 @@ function normalizeRecentActivity(data: any): TeacherRecentActivityItem[] {
                     item.timestamp ||
                     item.date,
             ),
+            kind: getActivityKind(item),
         };
     });
 }
 
-export function TeacherDashboard({ view = 'home', user }: { view?: string; user?: any }) {
+export function TeacherDashboard({ view = 'home', user }: { view?: string; user?: TeacherUserLike }) {
     const router = useRouter();
     const [actionModal, setActionModal] = useState<'upload' | 'assign' | null>(null);
     const [assignLessonId, setAssignLessonId] = useState<string | null>(null);
@@ -119,8 +241,10 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
     const [profileSchoolId, setProfileSchoolId] = useState<string | null>(null);
     const [staleSessionDismissed, setStaleSessionDismissed] = useState(false);
     const guardAuth = useAuthGuard('teacher');
-
-    const handleExpiredTeacherSession = (res?: any) => guardAuth(res);
+    const handleExpiredTeacherSession = useCallback(
+        (res?: GuardableResponse) => guardAuth(res),
+        [guardAuth],
+    );
 
     useEffect(() => {
         let mounted = true;
@@ -139,10 +263,10 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [handleExpiredTeacherSession]);
 
     const sessionSchoolId = useMemo(() => {
-        const raw = (user as any)?.schoolId ?? (user as any)?.school_id ?? null;
+        const raw = user?.schoolId ?? user?.school_id ?? null;
         return raw ? String(raw) : null;
     }, [user]);
 
@@ -162,6 +286,17 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
         [user, profileIdentity],
     );
 
+    const handleProfileSaved = useCallback(
+        (updated: { fullName: string; email: string; avatarUrl?: string }) => {
+            setProfileIdentity({
+                name: updated.fullName,
+                email: updated.email,
+                avatarUrl: updated.avatarUrl || '',
+            });
+        },
+        [],
+    );
+
     const content = useMemo(() => {
         if (view === 'lessons') return <LessonsView />;
         if (view === 'students') return <TeacherStudentsView />;
@@ -171,18 +306,12 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
             return (
                 <ProfileView
                     onBack={() => router.push('/dashboard')}
-                    onProfileSaved={(updated: { fullName: string; email: string; avatarUrl?: string }) =>
-                        setProfileIdentity({
-                            name: updated.fullName,
-                            email: updated.email,
-                            avatarUrl: updated.avatarUrl || '',
-                        })
-                    }
+                    onProfileSaved={handleProfileSaved}
                 />
             );
         }
         return <TeacherHomeView user={effectiveUser} onAction={setActionModal} />;
-    }, [view, router, effectiveUser]);
+    }, [view, router, effectiveUser, handleProfileSaved]);
 
     return (
         <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
@@ -222,11 +351,11 @@ function TeacherHomeView({
     user,
     onAction,
 }: {
-    user?: any;
+    user?: TeacherUserLike;
     onAction: (action: 'upload' | 'assign') => void;
 }) {
     const router = useRouter();
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<UnknownRecord | null>(null);
     const [loading, setLoading] = useState(true);
     const guardAuth = useAuthGuard('teacher');
 
@@ -249,7 +378,11 @@ function TeacherHomeView({
     }, [guardAuth]);
 
     const firstName = user?.name || 'Teacher';
-    const weekStats = data?.week_stats ?? data?.weekStats ?? data ?? {};
+    const weekStatsSource = data?.week_stats ?? data?.weekStats ?? data ?? null;
+    const weekStats =
+        weekStatsSource && typeof weekStatsSource === 'object'
+            ? (weekStatsSource as UnknownRecord)
+            : null;
     const studentsNeedSupport = Number(
         weekStats?.students_needing_support ?? weekStats?.students_need_support ?? 0,
     );
@@ -321,19 +454,24 @@ function TeacherHomeView({
 
             <section>
                 <h2 className="text-[15px] font-semibold text-indigo mb-4">Recent activity</h2>
-                <div className="bg-[#F1F1F1] rounded-2xl border border-[#D9D6CE] overflow-hidden">
+                <div className="rounded-xl border border-[#E0D9CE] bg-[#FAF9F6] p-[1px] overflow-hidden">
                     {!loading && activity.length === 0 && (
                         <p className="px-6 py-5 text-sm text-graphite-40">No recent activity yet.</p>
                     )}
                     {activity.map((item, idx: number) => (
-                        <div key={item.id} className={`px-6 py-4 flex items-center justify-between ${idx < activity.length - 1 ? 'border-b border-[#DDDAD3]' : ''}`}>
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="w-8 h-8 rounded-full bg-[#C9CCD8] shrink-0" />
-                                <p className="text-sm text-[#2B2B2F] truncate">
+                        <div
+                            key={item.id}
+                            className={`flex items-center gap-4 bg-[#FAF9F6] px-4 py-5 ${
+                                idx < activity.length - 1 ? 'border-b border-[#E0D9CE]' : ''
+                            }`}
+                        >
+                            <ActivityIcon kind={item.kind} />
+                            <div className="min-w-0 flex-1">
+                                <p className="truncate text-[14px] font-normal leading-5 text-black">
                                     {item.text}
                                 </p>
                             </div>
-                            <span className="text-[20px] text-graphite-40 shrink-0 ml-4">
+                            <span className="ml-4 shrink-0 text-[12px] leading-4 text-black/50">
                                 {item.time}
                             </span>
                         </div>

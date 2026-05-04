@@ -92,6 +92,10 @@ function getText(value: unknown, fallback = ''): string {
     return typeof value === 'string' ? value : fallback;
 }
 
+function getRecipientValue(recipient: MessageRecipient): string {
+    return `${recipient.type}:${recipient.id}`;
+}
+
 function formatTimestamp(value: string) {
     if (!value) return '';
     const date = new Date(value);
@@ -217,9 +221,11 @@ export function ConnectView() {
 
     const openComposer = () => {
         const defaultRecipient =
-            composerRecipientId && recipients.some((recipient) => recipient.id === composerRecipientId)
+            composerRecipientId &&
+            recipients.some((recipient) => getRecipientValue(recipient) === composerRecipientId)
                 ? composerRecipientId
-                : recipients[0]?.id || '';
+                : (recipients[0] ? getRecipientValue(recipients[0]) : '');
+        setNotice(null);
         setComposerRecipientId(defaultRecipient);
         setComposerMessage('');
         setComposerOpen(true);
@@ -381,9 +387,13 @@ export function ConnectView() {
         if (!recipientKey || !content) return;
 
         const [recipientType, recipientId] = recipientKey.split(':');
-        if (!recipientType || !recipientId) return;
+        if (!recipientType || !recipientId) {
+            setNotice('Please choose a valid recipient before sending.');
+            return;
+        }
 
         setSending(true);
+        setNotice(null);
         const result = await fetchClientJson<Record<string, unknown>>('/api/messages', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -856,7 +866,7 @@ function NewMessageComposer({
                             <option value="">No recipients available</option>
                         ) : (
                             recipients.map((recipient) => (
-                                <option key={recipient.id} value={recipient.id}>
+                                <option key={getRecipientValue(recipient)} value={getRecipientValue(recipient)}>
                                     {recipient.name} • {recipient.subtitle}
                                 </option>
                             ))
