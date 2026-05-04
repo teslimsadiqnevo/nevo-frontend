@@ -21,7 +21,9 @@ export function StudentSidebar() {
   const currentView = searchParams.get("view") || null;
   const askPage = currentView || "home";
   const askContext = `You are on Student Dashboard > ${
-    currentView ? currentView.charAt(0).toUpperCase() + currentView.slice(1) : "Home"
+    currentView
+      ? currentView.charAt(0).toUpperCase() + currentView.slice(1)
+      : "Home"
   }`;
 
   return (

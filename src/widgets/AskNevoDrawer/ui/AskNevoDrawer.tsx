@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const SUGGESTIONS = ['Explain this differently', "I don't understand", 'Give me an example'];
 
 type AskNevoMessage = {
+    id: string;
     role: 'user' | 'nevo';
     content: string;
 };
@@ -18,6 +19,20 @@ type AskNevoDrawerProps = {
     leftInset?: number;
 };
 
+function createMessage(role: AskNevoMessage['role'], content: string): AskNevoMessage {
+    return {
+        id: `${role}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role,
+        content,
+    };
+}
+
+function formatContextLabel(context?: string | null) {
+    if (!context) return null;
+    const clean = context.replace(/^You are on\s*/i, '').trim();
+    return `You're on: ${clean}`;
+}
+
 export function AskNevoDrawer({
     open,
     onClose,
@@ -30,6 +45,7 @@ export function AskNevoDrawer({
     const [messages, setMessages] = useState<AskNevoMessage[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isSending, setIsSending] = useState(false);
+    const [feedbackState, setFeedbackState] = useState<'idle' | 'answered' | 'slower-offered'>('idle');
     const listRef = useRef<HTMLDivElement | null>(null);
 
     useEffect(() => {
@@ -42,36 +58,23 @@ export function AskNevoDrawer({
     }, [open, onClose]);
 
     useEffect(() => {
-        if (!open) {
-            setValue('');
-            setMessages([]);
-            setError(null);
-            setIsSending(false);
-        }
-    }, [open]);
-
-    useEffect(() => {
         if (!listRef.current) return;
         listRef.current.scrollTop = listRef.current.scrollHeight;
-    }, [messages, error, isSending]);
-
-    const hasInput = value.trim().length > 0;
-    const showEmptyPrompt = messages.length === 0 && !hasInput && !error;
-    const submitLabel = useMemo(() => {
-        if (isSending) return 'Sending...';
-        return 'Ask anything...';
-    }, [isSending]);
+    }, [messages, error, isSending, feedbackState]);
 
     if (!open) return null;
 
-    const handleSend = async () => {
-        const message = value.trim();
+    const sendMessage = async (rawMessage?: string) => {
+        const message = (rawMessage ?? value).trim();
         if (!message || isSending) return;
+
+        const userMessage = createMessage('user', message);
+        const nextMessages = [...messages, userMessage];
 
         setError(null);
         setIsSending(true);
         setValue('');
-        setMessages((current) => [...current, { role: 'user', content: message }]);
+        setMessages(nextMessages);
 
         try {
             const res = await fetch('/api/chat/ask', {
@@ -82,7 +85,7 @@ export function AskNevoDrawer({
                     ...(lessonId ? { lesson_id: lessonId } : {}),
                     ...(context ? { context } : {}),
                     ...(page ? { page } : {}),
-                    ...(messages.length > 0 ? { history: messages } : {}),
+                    history: nextMessages.slice(0, -1).map(({ role, content }) => ({ role, content })),
                 }),
             });
 
@@ -100,18 +103,28 @@ export function AskNevoDrawer({
                     ? data.response.trim()
                     : 'Nevo did not return a response.';
 
-            setMessages((current) => [...current, { role: 'nevo', content: responseText }]);
-        } catch (sendError: any) {
-            setError(sendError?.message || 'Ask Nevo could not respond right now.');
+            setMessages((current) => [...current, createMessage('nevo', responseText)]);
+            setFeedbackState(message.toLowerCase() === 'still confused' ? 'slower-offered' : 'idle');
+        } catch (sendError: unknown) {
+            const message =
+                sendError instanceof Error ? sendError.message : 'Ask Nevo could not respond right now.';
+            setError(message);
         } finally {
             setIsSending(false);
         }
     };
 
+    const hasInput = value.trim().length > 0;
+    const showEmptyPrompt = messages.length === 0 && !hasInput && !error;
+    const latestNevoIndex = [...messages].map((message) => message.role).lastIndexOf('nevo');
+    const contextLabel = formatContextLabel(context);
+    const showFeedback = latestNevoIndex >= 0 && feedbackState === 'idle' && !isSending;
+    const showSlowerMode = latestNevoIndex >= 0 && feedbackState === 'slower-offered' && !isSending;
+
     return (
         <div className="fixed inset-0 z-50">
             <div
-                className="absolute inset-0 bg-graphite/35 animate-fade-in"
+                className="absolute top-0 right-0 bottom-0 bg-black/35 animate-fade-in"
                 onClick={onClose}
                 aria-hidden
                 style={{ left: leftInset }}
@@ -120,27 +133,30 @@ export function AskNevoDrawer({
             <div
                 role="dialog"
                 aria-modal="true"
-                className="absolute left-0 right-0 bottom-0 h-[55vh] bg-parchment rounded-t-[20px] flex flex-col animate-slide-up shadow-[0_-12px_32px_rgba(0,0,0,0.18)]"
-                style={{ left: leftInset }}
+                className="absolute right-0 bottom-0 flex flex-col rounded-t-[20px] bg-[#F7F1E6] shadow-[0_-12px_32px_rgba(0,0,0,0.18)] animate-slide-up"
+                style={{
+                    left: leftInset,
+                    height: 'min(464px, calc(100vh - 112px))',
+                }}
             >
-                <div className="flex justify-center pt-[10px] pb-1">
-                    <div className="w-10 h-1 rounded-full bg-[#C8C1B4]" />
+                <div className="flex justify-center pt-[10px] pb-0">
+                    <div className="h-1 w-10 rounded-full bg-[#C8C1B4]" />
                 </div>
 
-                {context ? (
-                    <div className="flex items-center gap-2 min-h-9 px-4 py-2 bg-lavender-10">
-                        <span className="w-1.5 h-1.5 rounded-full bg-lavender shrink-0" />
-                        <span className="text-[13px] leading-5 text-indigo">{context}</span>
+                {contextLabel ? (
+                    <div className="mt-[10px] flex min-h-9 items-center gap-2 bg-[rgba(154,156,203,0.1)] px-5 text-[13px] leading-5 text-[#3B3F6E]">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-[#9A9CCB]" />
+                        <span>{contextLabel}</span>
                     </div>
                 ) : null}
 
-                <div ref={listRef} className="flex-1 overflow-y-auto px-6 py-6">
+                <div ref={listRef} className="flex-1 overflow-y-auto px-5 py-6">
                     {showEmptyPrompt ? (
-                        <div className="h-full flex flex-col items-center justify-center gap-6">
-                            <p className="text-[15px] leading-[22px] text-graphite/55 text-center">
+                        <div className="flex h-full flex-col items-center justify-center gap-6">
+                            <p className="text-center text-[15px] leading-[22px] text-[#2B2B2F]/65">
                                 What can I help you with?
                             </p>
-                            <div className="flex flex-wrap justify-center gap-2 max-w-[480px]">
+                            <div className="flex max-w-[520px] flex-wrap justify-center gap-2">
                                 {SUGGESTIONS.map((suggestion) => (
                                     <button
                                         key={suggestion}
@@ -149,7 +165,7 @@ export function AskNevoDrawer({
                                             setValue(suggestion);
                                             setError(null);
                                         }}
-                                        className="flex items-center px-3 h-8 rounded-full bg-lavender-15 text-indigo text-[13px] leading-5 cursor-pointer border-none"
+                                        className="h-8 rounded-xl bg-[rgba(154,156,203,0.12)] px-4 text-[13px] leading-5 text-[#3B3F6E]"
                                     >
                                         {suggestion}
                                     </button>
@@ -157,28 +173,73 @@ export function AskNevoDrawer({
                             </div>
                         </div>
                     ) : (
-                        <div className="mx-auto flex w-full max-w-[720px] flex-col gap-4">
-                            {messages.map((message, index) => (
-                                <div
-                                    key={`${message.role}-${index}`}
-                                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                >
-                                    <div
-                                        className={`max-w-[85%] rounded-[18px] px-4 py-3 text-[14px] leading-6 shadow-sm ${
-                                            message.role === 'user'
-                                                ? 'bg-indigo text-parchment'
-                                                : 'bg-white border border-[#E0D9CE] text-graphite'
-                                        }`}
-                                    >
-                                        {message.content}
+                        <div className="mx-auto flex w-full max-w-[764px] flex-col gap-3">
+                            {messages.map((message, index) => {
+                                const isUser = message.role === 'user';
+                                const isLatestNevo = !isUser && index === latestNevoIndex;
+
+                                return (
+                                    <div key={message.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+                                        <div className="max-w-[573px]">
+                                            <div
+                                                className={`px-4 py-4 text-[15px] leading-[22px] ${
+                                                    isUser
+                                                        ? 'rounded-[12px_12px_0px_12px] bg-[#3B3F6E] text-[#F7F1E6]'
+                                                        : 'rounded-[12px_12px_12px_0px] bg-[rgba(154,156,203,0.12)] text-[#2B2B2F]'
+                                                }`}
+                                            >
+                                                {message.content}
+                                            </div>
+
+                                            {isLatestNevo && showFeedback ? (
+                                                <div className="mt-2 flex flex-col items-start gap-2">
+                                                    <p className="text-[13px] leading-5 text-[#9A9CCB]">Does that help?</p>
+                                                    <div className="flex flex-wrap gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setFeedbackState('answered')}
+                                                            className="h-8 rounded-xl bg-[rgba(122,184,122,0.15)] px-4 text-[13px] leading-5 text-[#7AB87A]"
+                                                        >
+                                                            That helped
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void sendMessage('Still confused')}
+                                                            className="h-8 rounded-xl bg-[rgba(154,156,203,0.15)] px-4 text-[13px] leading-5 text-[#9A9CCB]"
+                                                        >
+                                                            Still confused
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : null}
+
+                                            {isLatestNevo && showSlowerMode ? (
+                                                <div className="mt-2 flex flex-col items-start gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setValue('Switch to Slower mode');
+                                                            setFeedbackState('answered');
+                                                        }}
+                                                        className="h-9 rounded-xl border border-[#3B3F6E] px-4 text-[13px] font-medium leading-5 text-[#3B3F6E]"
+                                                    >
+                                                        Switch to Slower mode
+                                                    </button>
+                                                </div>
+                                            ) : null}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
 
                             {isSending ? (
                                 <div className="flex justify-start">
-                                    <div className="rounded-[18px] border border-[#E0D9CE] bg-white px-4 py-3 text-[14px] leading-6 text-graphite/55 shadow-sm">
-                                        Nevo is thinking...
+                                    <div className="rounded-[12px_12px_12px_0px] bg-[rgba(154,156,203,0.12)] px-4 py-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="h-2 w-2 rounded-full bg-[#9A9CCB]" />
+                                            <span className="h-2 w-2 rounded-full bg-[#9A9CCB]" />
+                                            <span className="h-2 w-2 rounded-full bg-[#9A9CCB]" />
+                                        </div>
                                     </div>
                                 </div>
                             ) : null}
@@ -192,9 +253,9 @@ export function AskNevoDrawer({
                     )}
                 </div>
 
-                <div className="border-t border-[#E0D9CE] bg-parchment px-4 py-[17px]">
-                    <div className="flex items-center gap-2">
-                        <div className="flex-1 h-11 bg-parchment border border-[#E0D9CE] rounded-[20px] flex items-center px-[17px]">
+                <div className="border-t border-[#E0D9CE] bg-[#F7F1E6] px-4 py-[16px]">
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-11 flex-1 items-center rounded-[20px] border border-[#E0D9CE] bg-[#F7F1E6] px-5">
                             <input
                                 type="text"
                                 value={value}
@@ -202,26 +263,27 @@ export function AskNevoDrawer({
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault();
-                                        void handleSend();
+                                        void sendMessage();
                                     }
                                 }}
-                                placeholder={submitLabel}
-                                className="w-full bg-transparent border-none outline-none text-[15px] leading-[22px] text-graphite placeholder:text-graphite/35"
+                                placeholder={isSending ? 'Sending...' : 'Ask anything...'}
+                                className="w-full bg-transparent text-[15px] leading-[22px] text-[#2B2B2F] outline-none placeholder:text-[#2B2B2F]/45"
                             />
                         </div>
+
                         <button
                             type="button"
                             disabled={!hasInput || isSending}
-                            onClick={() => void handleSend()}
-                            className="flex justify-center items-center w-10 h-10 rounded-full bg-indigo cursor-pointer border-none disabled:cursor-default"
-                            style={{ opacity: !hasInput || isSending ? 0.4 : 1 }}
+                            onClick={() => void sendMessage()}
+                            className="flex h-10 w-10 items-center justify-center rounded-full bg-[#3B3F6E] disabled:cursor-default"
+                            style={{ opacity: !hasInput || isSending ? 0.45 : 1 }}
                             aria-label="Send"
                         >
-                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                                 <path
-                                    d="M3.91 10H10M16.09 10L3.91 4.09L6.5 10L3.91 15.91L16.09 10Z"
+                                    d="M3.12891 8H8.00078M12.8719 8L3.12891 3.27344L5.20078 8L3.12891 12.7266L12.8719 8Z"
                                     stroke="#F7F1E6"
-                                    strokeWidth="1.875"
+                                    strokeWidth="1.75"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
                                 />
