@@ -1,10 +1,8 @@
 "use client";
 
 import { Icon, NevoLogo } from "@/shared/ui";
-import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
 
 const navItems = [
   { name: "Home", view: null },
@@ -16,14 +14,8 @@ const navItems = [
 ] as const;
 
 export function StudentSidebar() {
-  const [showAskNevo, setShowAskNevo] = useState(false);
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view") || null;
-  const role = searchParams.get("role");
-  const askPage = currentView || "home";
-  const askContext = `You are on Student Dashboard > ${
-    currentView ? currentView.charAt(0).toUpperCase() + currentView.slice(1) : "Home"
-  }`;
 
   return (
     <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
@@ -41,6 +33,7 @@ export function StudentSidebar() {
       <nav className="flex flex-col gap-1 px-0 flex-1">
         {navItems.map((item) => {
           const isActive = item.view === currentView;
+          const role = searchParams.get("role");
           const params = new URLSearchParams();
           if (role) params.set("role", role);
           if (item.view) params.set("view", item.view);
@@ -71,11 +64,7 @@ export function StudentSidebar() {
 
       {/* Ask Nevo Button */}
       <div className="px-4 pb-6 pt-2">
-        <button
-          type="button"
-          onClick={() => setShowAskNevo(true)}
-          className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm"
-        >
+        <button className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm">
           <Icon
             type="galaxy"
             width={16}
@@ -85,14 +74,6 @@ export function StudentSidebar() {
           <span>Ask Nevo</span>
         </button>
       </div>
-
-      <AskNevoDrawer
-        open={showAskNevo}
-        onClose={() => setShowAskNevo(false)}
-        leftInset={220}
-        page={askPage}
-        context={askContext}
-      />
     </aside>
   );
 }
