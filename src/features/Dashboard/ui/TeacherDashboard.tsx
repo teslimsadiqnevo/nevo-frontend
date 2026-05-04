@@ -16,6 +16,12 @@ import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
 import { useAuthGuard } from "@/shared/lib";
 
+type TeacherRecentActivityItem = {
+    id: string;
+    text: string;
+    time: string;
+};
+
 function getUserDisplayName(user?: any) {
     return (
         user?.name ||
@@ -24,6 +30,85 @@ function getUserDisplayName(user?: any) {
         `${user?.first_name || ''} ${user?.last_name || ''}`.trim() ||
         'Teacher'
     );
+}
+
+function formatActivityTime(value: unknown) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return new Date(value).toLocaleDateString();
+    }
+
+    return '';
+}
+
+function buildActivityText(item: Record<string, unknown>) {
+    const directText =
+        item.text ||
+        item.message ||
+        item.title ||
+        item.description ||
+        item.summary;
+
+    if (typeof directText === 'string' && directText.trim()) {
+        return directText.trim();
+    }
+
+    const actor =
+        item.student_name ||
+        item.studentName ||
+        item.teacher_name ||
+        item.teacherName ||
+        item.user_name ||
+        item.userName ||
+        item.name;
+    const action = item.action || item.event || item.activity_type || item.type || item.status;
+    const target = item.lesson_title || item.lessonTitle || item.topic || item.subject || item.target;
+
+    const parts = [actor, action, target]
+        .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
+        .map((part) => part.trim());
+
+    return parts.length > 0 ? parts.join(' • ') : 'Recent activity';
+}
+
+function normalizeRecentActivity(data: any): TeacherRecentActivityItem[] {
+    const weekStats = data?.week_stats ?? data?.weekStats ?? null;
+    const rawActivity = [
+        data?.recent_activity,
+        data?.recentActivity,
+        data?.activity,
+        data?.activities,
+        weekStats?.recent_activity,
+        weekStats?.recentActivity,
+    ].find((value) => Array.isArray(value));
+
+    if (!Array.isArray(rawActivity)) return [];
+
+    return rawActivity.map((entry: unknown, index: number) => {
+        const item =
+            entry && typeof entry === 'object'
+                ? (entry as Record<string, unknown>)
+                : { text: String(entry ?? 'Recent activity') };
+
+        return {
+            id:
+                typeof item.id === 'string' || typeof item.id === 'number'
+                    ? String(item.id)
+                    : `activity-${index}`,
+            text: buildActivityText(item),
+            time: formatActivityTime(
+                item.time_ago ||
+                    item.timeAgo ||
+                    item.time ||
+                    item.when ||
+                    item.created_at ||
+                    item.createdAt ||
+                    item.timestamp ||
+                    item.date,
+            ),
+        };
+    });
 }
 
 export function TeacherDashboard({ view = 'home', user }: { view?: string; user?: any }) {
@@ -164,11 +249,16 @@ function TeacherHomeView({
     }, [guardAuth]);
 
     const firstName = user?.name || 'Teacher';
-    const studentsNeedSupport = Number(data?.students_need_support ?? 0);
-    const lessonsWithConfusion = Number(data?.lessons_with_confusion ?? 0);
-    const topicsBuildingWell = Number(data?.topics_building_well ?? 0);
+    const weekStats = data?.week_stats ?? data?.weekStats ?? data ?? {};
+    const studentsNeedSupport = Number(
+        weekStats?.students_needing_support ?? weekStats?.students_need_support ?? 0,
+    );
+    const lessonsWithConfusion = Number(
+        weekStats?.lessons_with_confusion_signals ?? weekStats?.lessons_with_confusion ?? 0,
+    );
+    const topicsBuildingWell = Number(weekStats?.topics_building_well ?? 0);
     const isAllCaughtUp = !loading && studentsNeedSupport === 0 && lessonsWithConfusion === 0;
-    const activity = Array.isArray(data?.recent_activity) ? data.recent_activity : [];
+    const activity = normalizeRecentActivity(data);
 
     return (
         <div className="max-w-[900px]">
@@ -235,16 +325,16 @@ function TeacherHomeView({
                     {!loading && activity.length === 0 && (
                         <p className="px-6 py-5 text-sm text-graphite-40">No recent activity yet.</p>
                     )}
-                    {activity.map((item: any, idx: number) => (
-                        <div key={item.id || idx} className={`px-6 py-4 flex items-center justify-between ${idx < activity.length - 1 ? 'border-b border-[#DDDAD3]' : ''}`}>
+                    {activity.map((item, idx: number) => (
+                        <div key={item.id} className={`px-6 py-4 flex items-center justify-between ${idx < activity.length - 1 ? 'border-b border-[#DDDAD3]' : ''}`}>
                             <div className="flex items-center gap-3 min-w-0">
                                 <div className="w-8 h-8 rounded-full bg-[#C9CCD8] shrink-0" />
                                 <p className="text-sm text-[#2B2B2F] truncate">
-                                    {item.text || item.message || item.title || 'Recent activity'}
+                                    {item.text}
                                 </p>
                             </div>
                             <span className="text-[20px] text-graphite-40 shrink-0 ml-4">
-                                {item.time_ago || item.time || item.when || ''}
+                                {item.time}
                             </span>
                         </div>
                     ))}
