@@ -23,20 +23,28 @@ interface UploadedFileState {
   sizeLabel: string;
 }
 
-type ClientResult<T = any> =
+type ClientResult<T = unknown> =
   | { data: T; authExpired?: false }
   | { error: string; authExpired?: boolean };
+
+interface LessonReviewData {
+  objectives?: string[];
+  key_concepts?: string[];
+  keyConcepts?: string[];
+}
 
 const SUBJECTS = ['Mathematics', 'English', 'Science', 'History', 'Geography', 'Arts', 'Physical Education', 'Other'];
 const LEVELS = ['Primary', 'Secondary', 'Tertiary'];
 const DURATIONS = ['Under 15 mins', '15-30 mins', '30+ mins'];
 const TOTAL_STEPS = 5;
-const ACCEPTED_FILE_EXTENSIONS = ['.pdf', '.doc', '.docx', '.ppt', '.pptx'];
+const ACCEPTED_FILE_EXTENSIONS = ['.pdf', '.docx', '.pptx'];
 
-function buildErrorMessage(data: any, fallback: string) {
-  if (typeof data?.detail === 'string') return data.detail;
-  if (typeof data?.message === 'string') return data.message;
-  if (typeof data?.error === 'string') return data.error;
+function buildErrorMessage(data: unknown, fallback: string) {
+  if (!data || typeof data !== 'object') return fallback;
+  const payload = data as Record<string, unknown>;
+  if (typeof payload.detail === 'string') return payload.detail;
+  if (typeof payload.message === 'string') return payload.message;
+  if (typeof payload.error === 'string') return payload.error;
   return fallback;
 }
 
@@ -83,7 +91,6 @@ async function createLesson(payload: {
   formData.append('subject', payload.meta.subject);
   formData.append('description', `${payload.meta.subject} lesson for ${payload.meta.educationLevel}`);
   formData.append('topic', payload.meta.title.trim());
-  formData.append('content', payload.meta.title.trim());
   formData.append('target_grade_level', String(mapEducationLevelToGrade(payload.meta.educationLevel)));
   formData.append('file', payload.file);
 
@@ -128,7 +135,7 @@ async function updateLessonDetails(lessonId: string, payload: {
   return { data };
 }
 
-async function processLesson(lessonId: string): Promise<ClientResult<{ objectives: string[]; key_concepts: string[] }>> {
+async function processLesson(lessonId: string): Promise<ClientResult<LessonReviewData>> {
   const res = await fetch(`/api/teacher/lessons/${lessonId}/ai-review`, {
     method: 'POST',
   });
@@ -256,7 +263,7 @@ export function AddLessonWizard({
 
   const handleFileSelect = (file: File) => {
     if (!isAcceptedFile(file)) {
-      setFileError('Use a PDF, DOC, DOCX, PPT, or PPTX file.');
+      setFileError('Use a PDF, DOCX, or PPTX file.');
       setUploadedFile(null);
       return;
     }
@@ -290,7 +297,7 @@ export function AddLessonWizard({
       file: uploadedFile.file,
     });
 
-    if (guardAuth(created as any)) {
+    if (guardAuth(created)) {
       setIsProcessing(false);
       return;
     }
@@ -312,7 +319,7 @@ export function AddLessonWizard({
       estimated_duration_minutes: mapDurationToMinutes(meta.duration),
     });
 
-    if (guardAuth(updated as any)) {
+    if (guardAuth(updated)) {
       setIsProcessing(false);
       return;
     }
@@ -323,7 +330,7 @@ export function AddLessonWizard({
     }
 
     const reviewed = await processLesson(createdLessonId);
-    if (guardAuth(reviewed as any)) {
+    if (guardAuth(reviewed)) {
       setIsProcessing(false);
       return;
     }
@@ -336,10 +343,10 @@ export function AddLessonWizard({
       setStepError(`${reviewed.error} You can still continue and write the learning goals manually.`);
     } else {
       const nextObjectives = Array.isArray(reviewed.data?.objectives) ? reviewed.data.objectives.filter(Boolean) : [];
-      const nextConcepts = Array.isArray((reviewed.data as any)?.key_concepts)
-        ? (reviewed.data as any).key_concepts.filter(Boolean)
-        : Array.isArray((reviewed.data as any)?.keyConcepts)
-          ? (reviewed.data as any).keyConcepts.filter(Boolean)
+      const nextConcepts = Array.isArray(reviewed.data?.key_concepts)
+        ? reviewed.data.key_concepts.filter(Boolean)
+        : Array.isArray(reviewed.data?.keyConcepts)
+          ? reviewed.data.keyConcepts.filter(Boolean)
           : [];
 
       setReviewObjectives(nextObjectives);
@@ -364,7 +371,7 @@ export function AddLessonWizard({
     setIsProcessing(true);
 
     const result = await saveObjectives(lessonId, normalizedObjectives, keyConcepts);
-    if (guardAuth(result as any)) {
+    if (guardAuth(result)) {
       setIsProcessing(false);
       return;
     }
@@ -385,7 +392,7 @@ export function AddLessonWizard({
     setIsSavingDraft(true);
 
     const result = await saveAdaptation(lessonId, adaptationSettings);
-    if (guardAuth(result as any)) {
+    if (guardAuth(result)) {
       setIsSavingDraft(false);
       return;
     }
@@ -407,7 +414,7 @@ export function AddLessonWizard({
     setIsPublishing(true);
 
     const adaptationResult = await saveAdaptation(lessonId, adaptationSettings);
-    if (guardAuth(adaptationResult as any)) {
+    if (guardAuth(adaptationResult)) {
       setIsPublishing(false);
       return;
     }
@@ -418,7 +425,7 @@ export function AddLessonWizard({
     }
 
     const result = await publishLesson(lessonId);
-    if (guardAuth(result as any)) {
+    if (guardAuth(result)) {
       setIsPublishing(false);
       return;
     }
@@ -719,7 +726,7 @@ function Step2Upload({
         <input
           ref={inputRef}
           type="file"
-          accept=".pdf,.doc,.docx,.ppt,.pptx"
+          accept=".pdf,.docx,.pptx"
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
