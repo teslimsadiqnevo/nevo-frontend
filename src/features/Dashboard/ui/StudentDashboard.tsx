@@ -2098,6 +2098,7 @@ function StudentConnectView({ profile }: { profile?: any }) {
   const [showScanner, setShowScanner] = useState(false);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
+  const isNevoIdLoaded = Boolean(profile);
   const nevoId =
     profile?.nevo_id ||
     profile?.nevoId ||
@@ -2118,6 +2119,8 @@ function StudentConnectView({ profile }: { profile?: any }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
+
+  const openQr = () => setShowQr(true);
 
   const getTokenFromCookie = () => {
     try {
@@ -2265,9 +2268,15 @@ function StudentConnectView({ profile }: { profile?: any }) {
           <span className="text-[11px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase">
             Your Nevo ID
           </span>
-          <h2 className="text-[28px] font-bold text-[#2B2B2F] tracking-[-0.01em] mt-1 mb-4">
-            {nevoId}
-          </h2>
+          <div className="mt-1 mb-4">
+            {isNevoIdLoaded ? (
+              <h2 className="text-[28px] font-bold text-[#2B2B2F] tracking-[-0.01em]">
+                {nevoId}
+              </h2>
+            ) : (
+              <div className="h-[34px] w-[160px] rounded-xl bg-[#EEECEA] animate-pulse" />
+            )}
+          </div>
           <div className="flex items-center gap-3 mb-3">
             <button
               onClick={handleCopy}
@@ -2292,7 +2301,10 @@ function StudentConnectView({ profile }: { profile?: any }) {
               </svg>
               {copied ? "Copied!" : "Copy ID"}
             </button>
-            <button className="flex items-center gap-2 px-4 py-[7px] border-2 border-[#E9E7E2] rounded-full text-[12px] font-semibold text-[#3B3F6E] bg-parchment transition-colors cursor-pointer">
+            <button
+              onClick={openQr}
+              className="flex items-center gap-2 px-4 py-[7px] border-2 border-[#E9E7E2] rounded-full text-[12px] font-semibold text-[#3B3F6E] bg-parchment transition-colors cursor-pointer"
+            >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                 <rect
                   x="2"
@@ -2569,7 +2581,7 @@ function StudentConnectView({ profile }: { profile?: any }) {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowQr(true)}
+            onClick={openQr}
             className="px-5 py-[9px] bg-white text-[#3B3F6E] rounded-full text-[13px] font-semibold border border-[#E9E7E2] transition-colors cursor-pointer"
           >
             Show QR
