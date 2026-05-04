@@ -21,7 +21,12 @@ export function StudentSidebar({ onAskNevo }: { onAskNevo?: () => void }) {
     <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
       {/* Logo */}
       <div className="px-6 pt-6 pb-5">
-        <NevoLogo className="h-8 w-auto" width={172} height={32} variant="light" />
+        <NevoLogo
+          className="h-8 w-auto"
+          width={172}
+          height={32}
+          variant="light"
+        />
       </div>
 
       {/* Navigation */}
@@ -59,7 +64,10 @@ export function StudentSidebar({ onAskNevo }: { onAskNevo?: () => void }) {
 
       {/* Ask Nevo Button */}
       <div className="px-4 pb-6 pt-2">
-        <button onClick={onAskNevo} className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm">
+        <button
+          onClick={onAskNevo}
+          className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm"
+        >
           <Icon
             type="galaxy"
             width={16}

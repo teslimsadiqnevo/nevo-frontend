@@ -17,7 +17,53 @@ import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
 import { StudentProgressPanel } from "./StudentProgressPanel";
 import { useAuthGuard } from "@/shared/lib";
+import dynamic from "next/dynamic";
 
+const QRInner = dynamic(() => import("react-qr-code").then((m) => {
+  // Render wrapper component
+  return function QRWrap({ value }: { value: string }) {
+    // eslint-disable-next-line react/jsx-no-undef
+    return <m.default value={value} />;
+  };
+}), { ssr: false });
+
+const ScannerInner = dynamic(async () => {
+  const mod = await import("@zxing/browser");
+  return function Scanner({ onDetected }: { onDetected: (text: string) => void }) {
+    const ref = React.useRef<HTMLVideoElement | null>(null);
+    React.useEffect(() => {
+      let codeReader: any = null;
+      (async () => {
+        try {
+          const { BrowserMultiFormatReader } = mod;
+          codeReader = new BrowserMultiFormatReader();
+          const videoElem = document.createElement('video');
+          ref.current = videoElem;
+          const previewElem = document.getElementById('zxing-preview');
+          if (previewElem) {
+            previewElem.innerHTML = '';
+            previewElem.appendChild(videoElem);
+          }
+          const hints = new Map();
+          await codeReader.decodeFromVideoDevice(undefined, videoElem, (result: any, err: any) => {
+            if (result && result.getText) {
+              onDetected(result.getText());
+            }
+          });
+        } catch (e) {
+          // ignore
+        }
+      })();
+      return () => {
+        try {
+          if (codeReader && codeReader.reset) codeReader.reset();
+        } catch {}
+      };
+    }, [onDetected]);
+
+    return <div id="zxing-preview" className="w-full h-full" />;
+  };
+}, { ssr: false });
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export type Lesson = {
   id: number | string;
@@ -225,7 +271,8 @@ export function StudentDashboard({
   };
 
   return (
-    <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
+    <>
+      <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
       <StudentSidebar onAskNevo={() => setShowAskNevoDrawer(true)} />
       <main className="flex-1 overflow-y-auto relative px-[44px] py-[32px]">
         {selectedLesson ? (
@@ -282,6 +329,7 @@ export function StudentDashboard({
         context={"student-dashboard"}
         page={"student-dashboard"}
       />
+    </>
   );
 }
 
@@ -2018,6 +2066,12 @@ function SubjectDetailView({
 function StudentConnectView({ profile }: { profile?: any }) {
   const [classCode, setClassCode] = useState("");
   const [copied, setCopied] = useState(false);
+  const [connectionsData, setConnectionsData] = useState<any[]>(profile?.connections || []);
+  const [loadingConnections, setLoadingConnections] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [showQr, setShowQr] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
 
   const nevoId = profile?.nevo_id || "NEVO-XXXX";
 
@@ -2025,6 +2079,116 @@ function StudentConnectView({ profile }: { profile?: any }) {
     navigator.clipboard?.writeText(nevoId).catch(() => {});
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const getTokenFromCookie = () => {
+    try {
+      const m = document.cookie.match(/(?:^|; )access_token=([^;]+)/);
+      return m ? decodeURIComponent(m[1]) : null;
+    } catch {
+      return null;
+    }
+  };
+
+  const fetchConnections = async () => {
+    setLoadingConnections(true);
+    setConnectError(null);
+    try {
+      const res = await fetch('/api/students/connections');
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setConnectError((data?.detail || data?.error || 'Failed to load connections'));
+        setConnectionsData([]);
+      } else {
+        // Accept either array or object with data/connections
+        if (Array.isArray(data)) setConnectionsData(data);
+        else if (Array.isArray(data?.connections)) setConnectionsData(data.connections);
+        else if (Array.isArray(data?.data)) setConnectionsData(data.data);
+        else setConnectionsData([]);
+          // derive pending requests if present
+          const conns = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.connections)
+            ? data.connections
+            : Array.isArray(data?.data)
+            ? data.data
+            : [];
+          setPendingRequests(conns.filter((c: any) => (c.request_status || c.status || "").toLowerCase() === "pending"));
+      }
+    } catch (err: any) {
+      setConnectError(err?.message || 'Failed to load connections');
+      setConnectionsData([]);
+    } finally {
+      setLoadingConnections(false);
+    }
+  };
+
+  useEffect(() => {
+    void fetchConnections();
+  }, []);
+
+  useEffect(() => {
+    // keep pendingRequests in sync if profile initial data provided
+    if (connectionsData && connectionsData.length > 0) {
+      setPendingRequests(connectionsData.filter((c: any) => (c.request_status || c.status || "").toLowerCase() === "pending"));
+    }
+  }, [connectionsData]);
+
+  const handleConnectClass = async () => {
+    setConnectError(null);
+    const code = classCode.trim();
+    if (!code) {
+      setConnectError('Please enter a class code or Nevo ID');
+      return;
+    }
+
+    const token = getTokenFromCookie();
+    if (!token) {
+      setConnectError('Not authenticated');
+      return;
+    }
+
+    try {
+      const normalized = code.toUpperCase();
+      const payload = normalized.startsWith('NEVO-CLASS-') ? { class_code: normalized } : { teacher_nevo_id: normalized };
+
+      const res = await fetch('/api/teachers/connect', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setConnectError(data?.detail || data?.error || 'Failed to connect');
+        return;
+      }
+
+      // Refresh connections
+      setClassCode('');
+      await fetchConnections();
+    } catch (err: any) {
+      setConnectError(err?.message || 'Failed to connect');
+    }
+  };
+
+  const handleCancelRequest = async (id: string) => {
+    try {
+      const res = await fetch(`/api/students/connection-requests/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setConnectError(data?.detail || data?.error || 'Failed to cancel request');
+        return;
+      }
+      await fetchConnections();
+    } catch (err: any) {
+      setConnectError(err?.message || 'Failed to cancel request');
+    }
   };
 
   return (
@@ -2229,6 +2393,45 @@ function StudentConnectView({ profile }: { profile?: any }) {
             </defs>
           </svg>
         </div>
+        {/* QR Modal */}
+        {showQr && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowQr(false)} />
+            <div className="bg-white rounded-lg p-6 z-10">
+              <h3 className="text-[16px] font-semibold mb-4">Your Nevo QR</h3>
+              <div className="flex items-center justify-center">
+                <div style={{ width: 200, height: 200 }}>
+                  <React.Suspense fallback={<div>Loading...</div>}>
+                    <QRInner value={nevoId} />
+                  </React.Suspense>
+                </div>
+              </div>
+              <div className="mt-4 flex justify-end">
+                <button onClick={() => setShowQr(false)} className="px-4 py-2 bg-[#3B3F6E] text-white rounded">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Scanner Modal */}
+        {showScanner && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/40" onClick={() => setShowScanner(false)} />
+            <div className="bg-white rounded-lg p-4 z-10 w-[520px]">
+              <h3 className="text-[16px] font-semibold mb-3">Scan QR to connect</h3>
+              <div className="w-full h-[360px] bg-black/5 rounded mb-3">
+                <ScannerInner onDetected={(text: string) => {
+                  setShowScanner(false);
+                  setClassCode(text);
+                  void handleConnectClass();
+                }} />
+              </div>
+              <div className="flex justify-end">
+                <button onClick={() => setShowScanner(false)} className="px-4 py-2 bg-[#3B3F6E] text-white rounded">Close</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add your teacher */}
@@ -2286,9 +2489,14 @@ function StudentConnectView({ profile }: { profile?: any }) {
             Use your camera to connect
           </p>
         </div>
-        <button className="px-5 py-[9px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[13px] font-semibold transition-colors cursor-pointer">
-          Open Scanner
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowQr(true)} className="px-5 py-[9px] bg-white text-[#3B3F6E] rounded-full text-[13px] font-semibold border border-[#E9E7E2] transition-colors cursor-pointer">
+            Show QR
+          </button>
+          <button onClick={() => setShowScanner(true)} className="px-5 py-[9px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[13px] font-semibold transition-colors cursor-pointer">
+            Open Scanner
+          </button>
+        </div>
       </div>
 
       {/* Enter Class Code */}
@@ -2309,7 +2517,7 @@ function StudentConnectView({ profile }: { profile?: any }) {
                 placeholder="e.g., NEVO-CLASS-204"
                 className="flex-1 px-4 py-[8px] bg-[#F7F1E6] border border-[#E9E7E2] rounded-lg text-[13px] text-[#2B2B2F] placeholder:text-graphite-40 outline-none focus:border-[#3B3F6E] transition-colors"
               />
-              <button className="flex items-center gap-1 px-5 py-[8px] border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-[13px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer shrink-0">
+              <button onClick={() => void handleConnectClass()} className="flex items-center gap-1 px-5 py-[8px] border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-[13px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer shrink-0">
                 Connect
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
                   <path
@@ -2322,6 +2530,7 @@ function StudentConnectView({ profile }: { profile?: any }) {
                 </svg>
               </button>
             </div>
+            {connectError ? <p className="text-[13px] text-[#C0392B] mt-2">{connectError}</p> : null}
           </div>
         </div>
       </div>
@@ -2331,35 +2540,49 @@ function StudentConnectView({ profile }: { profile?: any }) {
         {/* Pending */}
         <div>
           <h4 className="text-[15px] font-bold text-[#2B2B2F] mb-4">Pending</h4>
-          <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 32 32"
-              fill="none"
-              className="mb-3 opacity-40"
-            >
-              <rect
-                x="4"
-                y="8"
-                width="24"
-                height="16"
-                rx="3"
-                stroke="#8A8D9F"
-                strokeWidth="1.5"
-              />
-              <path
-                d="M4 11L16 19L28 11"
-                stroke="#8A8D9F"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-            <p className="text-[13px] text-graphite-40 font-medium">
-              No requests yet.
-            </p>
-          </div>
+          {pendingRequests.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">
+              <svg
+                width="32"
+                height="32"
+                viewBox="0 0 32 32"
+                fill="none"
+                className="mb-3 opacity-40"
+              >
+                <rect
+                  x="4"
+                  y="8"
+                  width="24"
+                  height="16"
+                  rx="3"
+                  stroke="#8A8D9F"
+                  strokeWidth="1.5"
+                />
+                <path
+                  d="M4 11L16 19L28 11"
+                  stroke="#8A8D9F"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <p className="text-[13px] text-graphite-40 font-medium">No requests yet.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pendingRequests.map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl border border-[#E9E7E2] px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <p className="text-[14px] font-semibold text-[#2B2B2F]">{req.teacher_name || 'Teacher'}</p>
+                    <p className="text-[12px] text-graphite-40">{req.subject || ''}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleCancelRequest(String(req.id))} className="px-3 py-2 text-[13px] border border-[#E9E7E2] rounded-full text-[#C0392B]">Cancel</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Connected */}
@@ -2368,27 +2591,63 @@ function StudentConnectView({ profile }: { profile?: any }) {
             Connected
           </h4>
           {profile?.connections?.length > 0 ? (
-            <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden">
-              {profile.connections.map((conn: any) => (
-                <div
-                  key={conn.id}
-                  className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EDE7] last:border-b-0"
-                >
-                  <div className="w-10 h-10 rounded-full bg-[#E8D5C4] flex items-center justify-center text-[12px] font-bold text-[#5C4A32] shrink-0">
-                    {conn.teacher_name
-                      ? conn.teacher_name.substring(0, 2).toUpperCase()
-                      : "T"}
+              <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden">
+              {loadingConnections ? (
+                <div className="p-6">Loading...</div>
+              ) : connectError ? (
+                <div className="p-6 text-[#C0392B]">{connectError}</div>
+              ) : connectionsData.length > 0 ? (
+                connectionsData.map((conn: any) => (
+                  <div
+                    key={conn.id}
+                    className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EDE7] last:border-b-0"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-[#E8D5C4] flex items-center justify-center text-[12px] font-bold text-[#5C4A32] shrink-0">
+                      {conn.teacher_name
+                        ? conn.teacher_name.substring(0, 2).toUpperCase()
+                        : "T"}
+                    </div>
+                    <div>
+                      <p className="text-[13.5px] font-semibold text-[#2B2B2F]">
+                        {conn.teacher_name || "Teacher"}
+                      </p>
+                      <p className="text-[11.5px] text-graphite-40">
+                        {conn.subject || "Subject"}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[13.5px] font-semibold text-[#2B2B2F]">
-                      {conn.teacher_name || "Teacher"}
-                    </p>
-                    <p className="text-[11.5px] text-graphite-40">
-                      {conn.subject || "Subject"}
-                    </p>
-                  </div>
+                ))
+              ) : (
+                <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">
+                  <svg
+                    width="32"
+                    height="32"
+                    viewBox="0 0 32 32"
+                    fill="none"
+                    className="mb-3 opacity-40"
+                  >
+                    <rect
+                      x="4"
+                      y="8"
+                      width="24"
+                      height="16"
+                      rx="3"
+                      stroke="#8A8D9F"
+                      strokeWidth="1.5"
+                    />
+                    <path
+                      d="M4 11L16 19L28 11"
+                      stroke="#8A8D9F"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <p className="text-[13px] text-graphite-40 font-medium">
+                    No connected teachers yet.
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">
@@ -2779,6 +3038,8 @@ function StudentProfileView({
               </button>
             </div>
           </div>
+
+          
         </>
       )}
     </div>
