@@ -120,56 +120,33 @@ export async function getSchoolStudentsPage(params?: {
   }
 }
 
+export async function getSchoolStudentDetail(studentId: string) {
+  try {
+    const { headers } = await schoolContext();
+    const res = await apiFetch(`/schools/me/students/${studentId}`, { headers });
+    return unwrap(res, "Failed to fetch student details");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 export async function enrollSchoolStudent(payload: {
   firstName: string;
   age: number;
   classId: string;
 }) {
   try {
-    const { schoolId } = await schoolContext();
-
-    if (!schoolId) {
-      return { error: "School not found in session." };
-    }
-
-    const res = await apiFetch("/auth/student/register", {
+    const { headers } = await schoolContext();
+    const res = await apiFetch("/schools/me/students/enroll", {
       method: "POST",
+      headers,
       body: JSON.stringify({
         age: Number(payload.age),
         class_id: payload.classId,
         first_name: payload.firstName.trim(),
-        last_name: "",
-        pin: String(Math.floor(1000 + Math.random() * 9000)),
-        role: "student",
-        school_id: schoolId,
-        phone_number: "+2348133333333",
       }),
     });
-
-    const result = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      const detail =
-        (result as any)?.detail ||
-        (result as any)?.message ||
-        (result as any)?.error ||
-        "Failed to enroll student.";
-      const detailText =
-        typeof detail === "string" ? detail : JSON.stringify(detail ?? "");
-      return { error: detailText || "Failed to enroll student." };
-    }
-
-    return {
-      data: {
-        nevo_id:
-          (result as any)?.nevo_id ||
-          (result as any)?.student_id ||
-          (result as any)?.user?.nevo_id ||
-          (result as any)?.user?.student_id ||
-          null,
-        raw: result,
-      },
-    };
+    return unwrap(res, "Failed to enroll student");
   } catch (e: any) {
     return { error: e.message };
   }

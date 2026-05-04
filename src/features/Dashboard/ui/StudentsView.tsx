@@ -14,7 +14,6 @@ interface StudentRow {
     classId: string | null;
     className: string;
     nevoId: string;
-    maskedNevoId: string;
     lastActive: string;
     raw: any;
 }
@@ -32,8 +31,10 @@ export function StudentsView() {
     const [classOptions, setClassOptions] = useState<ClassOption[]>([{ id: null, label: 'All classes' }]);
     const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
     const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+    const [selectedStudentAction, setSelectedStudentAction] = useState<'view' | 'move-class'>('view');
     const [showClassFilter, setShowClassFilter] = useState(false);
     const [showEnrollModal, setShowEnrollModal] = useState(false);
+    const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const [pagination, setPagination] = useState({
         totalCount: 0,
@@ -123,11 +124,12 @@ export function StudentsView() {
         [selectedStudentId, students],
     );
 
-    if (selectedStudentId && selectedStudent) {
+    if (selectedStudentId) {
         return (
             <StudentDetailView
                 studentId={selectedStudentId}
-                studentData={selectedStudent.raw}
+                studentData={selectedStudent?.raw}
+                initialAction={selectedStudentAction}
                 onBack={() => setSelectedStudentId(null)}
                 onStudentUpdated={async () => {
                     const res = await getSchoolStudentsPage({
@@ -267,7 +269,7 @@ export function StudentsView() {
                                 <p className="truncate text-[14px] text-[#2B2B2F]/65">{student.className}</p>
 
                                 <div className="flex items-center gap-2">
-                                    <span className="text-[13px] text-[#2B2B2F]/50">{student.maskedNevoId}</span>
+                                    <span className="text-[13px] text-[#2B2B2F]/50">{student.nevoId}</span>
                                     <button
                                         type="button"
                                         onClick={() => void copyStudentId(student.id, student.nevoId, setCopiedStudentId)}
@@ -282,16 +284,42 @@ export function StudentsView() {
 
                                 <p className="text-[14px] text-[#2B2B2F]/55">{student.lastActive}</p>
 
-                                <div className="flex items-center justify-end gap-4 text-[13px] text-[#3B3F6E]">
-                                    <button type="button" onClick={() => setSelectedStudentId(student.id)}>
-                                        View
-                                    </button>
-                                    <button type="button" onClick={() => setSelectedStudentId(student.id)} className="leading-[16px] text-left opacity-80">
-                                        Move class
-                                    </button>
-                                    <button type="button" className="opacity-90" aria-label="More actions">
+                                <div className="relative flex items-center justify-end text-[13px] text-[#3B3F6E]">
+                                    <button
+                                        type="button"
+                                        onClick={() => setOpenActionMenuId((current) => (current === student.id ? null : student.id))}
+                                        className="rounded-full p-2 opacity-90"
+                                        aria-label="More actions"
+                                    >
                                         <DotsIcon />
                                     </button>
+
+                                    {openActionMenuId === student.id ? (
+                                        <div className="absolute right-0 top-[38px] z-20 w-[148px] overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-white shadow-[0_12px_24px_rgba(0,0,0,0.08)]">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedStudentAction('view');
+                                                    setSelectedStudentId(student.id);
+                                                    setOpenActionMenuId(null);
+                                                }}
+                                                className="flex w-full items-center px-4 py-3 text-left text-[14px] text-[#3B3F6E] hover:bg-[#F7F1E6]"
+                                            >
+                                                View
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedStudentAction('move-class');
+                                                    setSelectedStudentId(student.id);
+                                                    setOpenActionMenuId(null);
+                                                }}
+                                                className="flex w-full items-center px-4 py-3 text-left text-[14px] text-[#3B3F6E] hover:bg-[#F7F1E6]"
+                                            >
+                                                Move class
+                                            </button>
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
                         ))}
@@ -409,7 +437,7 @@ function EnrollStudentModal({
     const [classId, setClassId] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [createdNevoId, setCreatedNevoId] = useState<string | null>(null);
+    const [createdStudent, setCreatedStudent] = useState<{ nevoId: string; className: string } | null>(null);
 
     const canSubmit = Boolean(firstName.trim() && age.trim() && classId);
 
@@ -432,8 +460,19 @@ function EnrollStudentModal({
             return;
         }
 
-        const nevoId = 'data' in res ? res.data?.nevo_id : null;
-        setCreatedNevoId(nevoId || 'NEVO-XXXX');
+        const data = 'data' in res ? res.data : null;
+        if (!data?.nevo_id) {
+            setError('Student created, but no Nevo ID was returned.');
+            return;
+        }
+
+        setCreatedStudent({
+            nevoId: data.nevo_id,
+            className:
+                classOptions.find((option) => option.id === classId)?.label ||
+                data.class_name ||
+                'Assigned class',
+        });
     };
 
     const handleDone = async () => {
@@ -441,7 +480,7 @@ function EnrollStudentModal({
     };
 
     const handlePrint = () => {
-        if (!createdNevoId) return;
+        if (!createdStudent?.nevoId) return;
 
         const printWindow = window.open('', '_blank', 'width=420,height=320');
         if (!printWindow) return;
@@ -463,10 +502,17 @@ function EnrollStudentModal({
                             letter-spacing: 4px;
                             line-height: 1.35;
                         }
+                        .sub {
+                            margin-top: 12px;
+                            color: #3B3F6E;
+                            font-size: 14px;
+                            font-weight: 500;
+                            letter-spacing: 0;
+                        }
                     </style>
                 </head>
                 <body>
-                    <div class="card">Student ID:<br/>${createdNevoId}</div>
+                    <div class="card">Student ID:<br/>${createdStudent.nevoId}<div class="sub">${createdStudent.className}</div></div>
                     <script>window.onload = () => window.print();</script>
                 </body>
             </html>
@@ -480,14 +526,15 @@ function EnrollStudentModal({
                 className="w-full max-w-[480px] rounded-[16px] bg-white p-8 shadow-[0_8px_32px_rgba(0,0,0,0.12)]"
                 onClick={(event) => event.stopPropagation()}
             >
-                {createdNevoId ? (
+                {createdStudent ? (
                     <div className="flex flex-col gap-6">
-                        <div className="rounded-[12px] border-2 border-[#3B3F6E] bg-[#F7F1E6] px-[26px] py-[22px]">
+                        <div className="rounded-[12px] border-2 border-[#3B3F6E] bg-[#F7F1E6] px-[26px] py-[22px] text-center">
                             <p className="text-[24px] font-bold uppercase leading-[32px] tracking-[4px] text-[#3B3F6E]">
                                 Student ID:
                                 <br />
-                                {createdNevoId}
+                                {createdStudent.nevoId}
                             </p>
+                            <p className="mt-3 text-[14px] text-[#2B2B2F]/60">{createdStudent.className}</p>
                         </div>
 
                         <div className="flex flex-col gap-3">
@@ -501,7 +548,7 @@ function EnrollStudentModal({
                             <button
                                 type="button"
                                 onClick={() => {
-                                    setCreatedNevoId(null);
+                                    setCreatedStudent(null);
                                     setFirstName('');
                                     setAge('');
                                     setClassId('');
@@ -610,12 +657,12 @@ function StudentsTableSkeleton() {
 }
 
 function mapStudentRow(student: any): StudentRow {
-    const id = String(student.student_id || student.id || student.nevo_id || crypto.randomUUID());
+    const id = String(student.student_id || student.id || student.nevo_id || '');
     const name =
         student.full_name ||
         [student.first_name, student.last_name].filter(Boolean).join(' ').trim() ||
         'Student';
-    const nevoId = String(student.nevo_id || student.student_id || 'NEVO-XXX-000');
+    const nevoId = String(student.nevo_id || student.student_id || '');
 
     return {
         id,
@@ -624,14 +671,13 @@ function mapStudentRow(student: any): StudentRow {
         classId: student.class_id ? String(student.class_id) : null,
         className: student.class_name || 'Unassigned',
         nevoId,
-        maskedNevoId: maskNevoId(nevoId),
-        lastActive: student.last_active_label || student.last_active || 'Never',
+        lastActive: student.last_active_label || student.last_active || 'No activity yet',
         raw: {
             ...student,
             name,
             class_name: student.class_name || 'Unassigned',
             nevo_id: nevoId,
-            last_active: student.last_active_label || student.last_active || 'Never',
+            last_active: student.last_active_label || student.last_active || 'No activity yet',
         },
     };
 }
@@ -680,18 +726,6 @@ function getInitials(name: string) {
         .slice(0, 2)
         .map((part) => part[0]?.toUpperCase() || '')
         .join('') || 'ST';
-}
-
-function maskNevoId(nevoId: string) {
-    if (/^NEVO-[A-Z0-9]{3,}-\d+$/i.test(nevoId)) {
-        const parts = nevoId.split('-');
-        if (parts.length >= 3) {
-            return `NEVO-XXX-${parts[parts.length - 1]}`;
-        }
-    }
-
-    const digits = nevoId.replace(/\D/g, '').slice(-3).padStart(3, '0');
-    return `NEVO-XXX-${digits}`;
 }
 
 async function copyStudentId(

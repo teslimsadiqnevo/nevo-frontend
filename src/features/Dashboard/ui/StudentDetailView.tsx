@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 import {
     getSchoolClassesOverview,
+    getSchoolStudentDetail,
     moveSchoolStudentToClass,
     removeSchoolStudent,
     resetSchoolStudentId,
@@ -14,6 +15,7 @@ interface StudentDetailViewProps {
     studentData?: any;
     onBack: () => void;
     onStudentUpdated?: () => Promise<void> | void;
+    initialAction?: 'view' | 'move-class';
 }
 
 interface ClassChoice {
@@ -24,10 +26,11 @@ interface ClassChoice {
 }
 
 interface LessonActivityItem {
+    lesson_id: string;
     title: string;
-    statusLabel: string;
-    timeLabel: string;
-    badgeClass: string;
+    status: string;
+    status_label: string;
+    time_label: string;
 }
 
 export function StudentDetailView({
@@ -35,20 +38,49 @@ export function StudentDetailView({
     studentData,
     onBack,
     onStudentUpdated,
+    initialAction = 'view',
 }: StudentDetailViewProps) {
     const guardAuth = useAuthGuard('school');
     const [classes, setClasses] = useState<ClassChoice[]>([]);
     const [loadingClasses, setLoadingClasses] = useState(true);
+    const [loadingDetail, setLoadingDetail] = useState(true);
     const [showMoveModal, setShowMoveModal] = useState(false);
     const [showMoveSuccess, setShowMoveSuccess] = useState(false);
     const [showRemoveModal, setShowRemoveModal] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const [actionError, setActionError] = useState<string | null>(null);
+    const [detailError, setDetailError] = useState<string | null>(null);
     const [detailState, setDetailState] = useState(studentData || {});
 
     useEffect(() => {
         setDetailState(studentData || {});
     }, [studentData]);
+
+    useEffect(() => {
+        let mounted = true;
+
+        void (async () => {
+            setLoadingDetail(true);
+            const res = await getSchoolStudentDetail(String(studentId));
+
+            if (!mounted) return;
+            if (guardAuth(res)) return;
+
+            if ('error' in res && res.error) {
+                setDetailError(res.error);
+                setLoadingDetail(false);
+                return;
+            }
+
+            setDetailState('data' in res ? res.data : {});
+            setDetailError(null);
+            setLoadingDetail(false);
+        })();
+
+        return () => {
+            mounted = false;
+        };
+    }, [guardAuth, studentId]);
 
     useEffect(() => {
         let mounted = true;
@@ -79,7 +111,7 @@ export function StudentDetailView({
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [guardAuth]);
 
     useEffect(() => {
         if (!toast) return;
@@ -87,25 +119,32 @@ export function StudentDetailView({
         return () => clearTimeout(timer);
     }, [toast]);
 
+    useEffect(() => {
+        if (initialAction === 'move-class' && !loadingDetail) {
+            setShowMoveModal(true);
+        }
+    }, [initialAction, loadingDetail]);
+
     const fullName =
+        detailState?.full_name ||
         detailState?.name ||
         [detailState?.first_name, detailState?.last_name].filter(Boolean).join(' ').trim() ||
         'Student';
-    const firstName = fullName.split(' ')[0] || 'Student';
-    const initials = getInitials(fullName);
-    const nevoId = String(detailState?.nevo_id || detailState?.student_id || `NEVO-LAG-${String(studentId).slice(-4)}`);
-    const maskedNevoId = maskDetailNevoId(nevoId);
-    const className = detailState?.class_name || detailState?.classInfo || 'Unassigned';
-    const subjectLine = detailState?.subject
-        ? `${className} · ${detailState.subject}`
-        : className;
-    const enrolledLabel = detailState?.enrolled_at_label || detailState?.enrolled_at || '12 Jan 2026';
-    const lastActiveLabel = detailState?.last_active_label || detailState?.last_active || 'Today';
+    const firstName = detailState?.first_name || fullName.split(' ')[0] || 'Student';
+    const initials = detailState?.initials || getInitials(fullName);
+    const nevoId = String(detailState?.nevo_id || detailState?.student_id || studentId);
+    const className = detailState?.class_name || 'Unassigned';
     const currentTeacher = detailState?.teacher_name || findTeacherNameForClass(classes, detailState?.class_id, className);
-    const cameraLabel = detailState?.camera_status_label || (detailState?.camera_enabled === false ? 'Disabled' : 'Enabled');
-    const lessonActivity: LessonActivityItem[] = normalizeLessonActivity(detailState);
+    const enrolledLabel = detailState?.enrolled_at_label || 'Unknown';
+    const lastActiveLabel = detailState?.last_active_label || 'No activity yet';
+    const profileLabel = detailState?.profile_completed ? 'Completed' : 'Pending';
+    const pinLabel = detailState?.has_pin ? 'Set' : 'Not set';
+    const lessonActivity: LessonActivityItem[] = Array.isArray(detailState?.lesson_activity)
+        ? detailState.lesson_activity
+        : [];
+
     const selectedClassChoice = useMemo(
-        () => classes.find((classItem) => String(classItem.id) === String(detailState?.class_id || '')),
+        () => classes.find((classItem) => String(classItem.id) === String(detailState?.class_id || '')) || null,
         [classes, detailState?.class_id],
     );
 
@@ -127,6 +166,51 @@ export function StudentDetailView({
         onBack();
     };
 
+    if (loadingDetail) {
+        return (
+            <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex items-center gap-2 self-start text-[15px] font-normal text-[#3B3F6E]"
+                >
+                    <BackIcon />
+                    Students
+                </button>
+                <div className="grid grid-cols-[1fr_380px] gap-6">
+                    <div className="space-y-6">
+                        <div className="h-[110px] rounded-[18px] bg-white/70" />
+                        <div className="h-[220px] rounded-[18px] bg-white/70" />
+                        <div className="h-[240px] rounded-[18px] bg-white/70" />
+                    </div>
+                    <div className="space-y-5">
+                        <div className="h-[260px] rounded-[18px] bg-white/70" />
+                        <div className="h-[220px] rounded-[18px] bg-white/70" />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (detailError) {
+        return (
+            <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
+                <button
+                    type="button"
+                    onClick={onBack}
+                    className="flex items-center gap-2 self-start text-[15px] font-normal text-[#3B3F6E]"
+                >
+                    <BackIcon />
+                    Students
+                </button>
+                <div className="rounded-[16px] border border-[#E0D9CE] bg-white px-6 py-10 text-center">
+                    <p className="text-[16px] font-semibold text-[#3B3F6E]">Couldn&apos;t load student details.</p>
+                    <p className="mt-2 text-[14px] text-[#2B2B2F]/60">{detailError}</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <>
             <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-5">
@@ -147,24 +231,29 @@ export function StudentDetailView({
 
                 <div className="grid grid-cols-[1fr_380px] gap-6">
                     <div className="min-w-0">
-                        <div className="flex items-start gap-4 pt-3">
-                            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#3B3F6E] text-[21px] font-semibold text-[#F7F1E6]">
-                                {initials}
-                            </div>
-                            <div className="min-w-0">
-                                <h1 className="text-[20px] font-bold leading-[28px] text-[#2B2B2F]">{fullName}</h1>
-                                <div className="mt-1 flex items-center gap-2 text-[14px] text-[#2B2B2F]/55">
-                                    <span>{nevoId}</span>
-                                    <button type="button" onClick={() => void copyValue(nevoId, () => setToast('Nevo ID copied'))}>
-                                        <CopyIcon />
-                                    </button>
+                        <div className="rounded-[18px] border border-[#E0D9CE] bg-white px-6 py-6">
+                            <div className="flex items-start gap-4">
+                                <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-[#3B3F6E] text-[21px] font-semibold text-[#F7F1E6]">
+                                    {initials}
                                 </div>
-                                <p className="mt-1 text-[15px] text-[#2B2B2F]/60">{subjectLine}</p>
-                                <p className="mt-4 text-[14px] text-[#2B2B2F]/45">
-                                    Enrolled: {enrolledLabel}
-                                    <span className="mx-3">•</span>
-                                    Last active: {detailState?.last_active_label || 'Today'}
-                                </p>
+                                <div className="min-w-0">
+                                    <h1 className="text-[22px] font-bold leading-[30px] text-[#2B2B2F]">{fullName}</h1>
+                                    <div className="mt-1 flex items-center gap-2 text-[14px] text-[#2B2B2F]/55">
+                                        <span>{nevoId}</span>
+                                        <button type="button" onClick={() => void copyValue(nevoId, () => setToast('Nevo ID copied'))}>
+                                            <CopyIcon />
+                                        </button>
+                                    </div>
+                                    <p className="mt-2 text-[15px] text-[#2B2B2F]/60">
+                                        {className}
+                                        {currentTeacher ? ` · ${currentTeacher}` : ''}
+                                    </p>
+                                    <p className="mt-4 text-[14px] text-[#2B2B2F]/45">
+                                        Enrolled: {enrolledLabel}
+                                        <span className="mx-3">•</span>
+                                        Last active: {lastActiveLabel}
+                                    </p>
+                                </div>
                             </div>
                         </div>
 
@@ -188,22 +277,23 @@ export function StudentDetailView({
                         <section className="mt-8">
                             <h2 className="mb-4 text-[15px] font-semibold uppercase tracking-[0.02em] text-[#6F78A8]">Lesson activity</h2>
                             {lessonActivity.length > 0 ? (
-                                <div className="flex flex-col gap-5">
-                                    {lessonActivity.map((lesson: LessonActivityItem) => (
-                                        <div key={`${lesson.title}-${lesson.timeLabel}`} className="grid grid-cols-[1fr_auto_auto] items-center gap-4">
-                                            <p className="text-[15px] font-medium text-[#2B2B2F]">{lesson.title}</p>
-                                            <span className={`rounded-full px-3 py-1 text-[14px] ${lesson.badgeClass}`}>
-                                                {lesson.statusLabel}
-                                            </span>
-                                            <span className="text-[14px] text-[#2B2B2F]/45">{lesson.timeLabel}</span>
-                                        </div>
-                                    ))}
-                                    <button type="button" className="mt-1 self-start text-[15px] font-medium text-[#9A9CCB]">
-                                        View all lessons
-                                    </button>
+                                <div className="rounded-[16px] border border-[#E0D9CE] bg-white px-5 py-3">
+                                    <div className="flex flex-col gap-4">
+                                        {lessonActivity.map((lesson) => (
+                                            <div key={`${lesson.lesson_id}-${lesson.time_label}`} className="grid grid-cols-[1fr_auto_auto] items-center gap-4">
+                                                <p className="text-[15px] font-medium text-[#2B2B2F]">{lesson.title}</p>
+                                                <span className={`rounded-full px-3 py-1 text-[14px] ${statusBadgeClass(lesson.status)}`}>
+                                                    {lesson.status_label}
+                                                </span>
+                                                <span className="text-[14px] text-[#2B2B2F]/45">{lesson.time_label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
                             ) : (
-                                <div className="py-12 text-center text-[15px] text-[#2B2B2F]/45">No lesson activity yet.</div>
+                                <div className="rounded-[16px] border border-[#E0D9CE] bg-white py-12 text-center text-[15px] text-[#2B2B2F]/45">
+                                    No lesson activity yet.
+                                </div>
                             )}
                         </section>
                     </div>
@@ -232,9 +322,8 @@ export function StudentDetailView({
                                         }
                                         const nextId =
                                             ('data' in res && (res.data as any)?.nevo_id) ||
-                                            ('data' in res && (res.data as any)?.student_id) ||
                                             nevoId;
-                                        setDetailState((current: any) => ({ ...current, nevo_id: nextId }));
+                                        setDetailState((current: any) => ({ ...current, nevo_id: nextId, student_id: nextId }));
                                         setToast('Student ID reset');
                                         await onStudentUpdated?.();
                                     }}
@@ -244,7 +333,7 @@ export function StudentDetailView({
                                     Reset student ID
                                 </button>
                                 <p className="px-1 text-[14px] text-[#2B2B2F]/45">
-                                    Use this if a student has lost access to their account.
+                                    Generate a new Nevo ID if the current one has been exposed or lost.
                                 </p>
                                 <div className="my-2 h-px bg-[#E0D9CE]" />
                                 <button
@@ -264,7 +353,7 @@ export function StudentDetailView({
                             <div className="space-y-4">
                                 <InfoRow
                                     label="Nevo ID"
-                                    value={maskedNevoId}
+                                    value={nevoId}
                                     trailing={
                                         <button type="button" onClick={() => void copyValue(nevoId, () => setToast('Nevo ID copied'))}>
                                             <CopyIcon />
@@ -273,11 +362,9 @@ export function StudentDetailView({
                                 />
                                 <InfoRow label="Enrolled" value={enrolledLabel} />
                                 <InfoRow label="Last active" value={lastActiveLabel} />
-                                <InfoRow
-                                    label="Camera"
-                                    value={cameraLabel}
-                                    isBadge={cameraLabel.toLowerCase() === 'enabled'}
-                                />
+                                <InfoRow label="PIN status" value={pinLabel} isBadge={detailState?.has_pin} />
+                                <InfoRow label="Profile" value={profileLabel} isBadge={detailState?.profile_completed} />
+                                <InfoRow label="Status" value={detailState?.status_reason || 'No status yet'} />
                             </div>
                         </div>
                     </div>
@@ -363,10 +450,10 @@ function MoveStudentModal({
 
                 <div className="mt-4 flex items-center gap-3 border-b border-[#EDE7DD] pb-4">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#3B3F6E] text-[12px] font-semibold text-white">
-                        {getInitials(currentTeacherName)}
+                        {getInitials(studentName)}
                     </div>
                     <div>
-                        <p className="text-[15px] font-medium text-[#2B2B2F]">{currentTeacherName}</p>
+                        <p className="text-[15px] font-medium text-[#2B2B2F]">{studentName}</p>
                         <p className="text-[13px] text-[#2B2B2F]/45">{currentClassName}</p>
                     </div>
                 </div>
@@ -407,9 +494,7 @@ function MoveStudentModal({
                                             <p className="text-[13px] text-[#2B2B2F]/55">{classItem.teacherName}</p>
                                         </div>
                                         <span className="text-[12px] text-[#2B2B2F]/45">{classItem.studentCount} students</span>
-                                        <span className="ml-3">
-                                            {selected ? <SelectedCheckIcon /> : null}
-                                        </span>
+                                        <span className="ml-3">{selected ? <SelectedCheckIcon /> : null}</span>
                                     </button>
                                 );
                             })
@@ -540,7 +625,7 @@ function RemoveStudentModal({
                 </ul>
 
                 <p className="mt-6 text-[14px] font-medium text-[#6F78A8]">
-                    To confirm, type the student's first name below:
+                    To confirm, type the student&apos;s first name below:
                 </p>
 
                 <input
@@ -592,7 +677,7 @@ function RemoveStudentModal({
     );
 }
 
-function ModalShell({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+function ModalShell({ children, onClose }: { children: ReactNode; onClose: () => void }) {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={onClose}>
             <div onClick={(event) => event.stopPropagation()}>{children}</div>
@@ -608,7 +693,7 @@ function InfoRow({
 }: {
     label: string;
     value: string;
-    trailing?: React.ReactNode;
+    trailing?: ReactNode;
     isBadge?: boolean;
 }) {
     return (
@@ -624,45 +709,18 @@ function InfoRow({
     );
 }
 
-function normalizeLessonActivity(studentData: any): LessonActivityItem[] {
-    const rows = Array.isArray(studentData?.lesson_activity)
-        ? studentData.lesson_activity
-        : Array.isArray(studentData?.lessons_in_progress)
-          ? studentData.lessons_in_progress
-          : [];
-
-    return rows.slice(0, 5).map((lesson: any) => {
-        const status = String(lesson.status || lesson.state || lesson.progress_status || '').toLowerCase();
-        if (status.includes('complete')) {
-            return {
-                title: lesson.title || lesson.name || 'Lesson',
-                statusLabel: 'Completed',
-                timeLabel: lesson.last_active_label || lesson.date || 'Recently',
-                badgeClass: 'bg-[rgba(122,184,122,0.15)] text-[#7AB87A]',
-            };
-        }
-        if (status.includes('progress') || Number(lesson.progress || lesson.completion_percent || 0) > 0) {
-            return {
-                title: lesson.title || lesson.name || 'Lesson',
-                statusLabel: 'In progress',
-                timeLabel: lesson.last_active_label || lesson.date || 'Recently',
-                badgeClass: 'bg-[rgba(154,156,203,0.12)] text-[#9A9CCB]',
-            };
-        }
-        return {
-            title: lesson.title || lesson.name || 'Lesson',
-            statusLabel: 'Not started',
-            timeLabel: lesson.last_active_label || lesson.date || 'Recently',
-            badgeClass: 'bg-[rgba(247,241,230,1)] text-[#2B2B2F]/45',
-        };
-    });
-}
-
 function findTeacherNameForClass(classes: ClassChoice[], classId?: string, className?: string) {
     const byId = classes.find((classItem) => String(classItem.id) === String(classId || ''));
     if (byId) return byId.teacherName;
     const byName = classes.find((classItem) => classItem.name === className);
     return byName?.teacherName || '';
+}
+
+function statusBadgeClass(status: string) {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized.includes('complete')) return 'bg-[rgba(122,184,122,0.15)] text-[#7AB87A]';
+    if (normalized.includes('start') || normalized.includes('progress')) return 'bg-[rgba(154,156,203,0.12)] text-[#9A9CCB]';
+    return 'bg-[rgba(247,241,230,1)] text-[#2B2B2F]/45';
 }
 
 function getInitials(name: string) {
@@ -672,14 +730,6 @@ function getInitials(name: string) {
         .slice(0, 2)
         .map((part) => part[0]?.toUpperCase() || '')
         .join('') || 'ST';
-}
-
-function maskDetailNevoId(nevoId: string) {
-    const parts = nevoId.split('-');
-    if (parts.length >= 3) {
-        return `${parts[0]}-***-***`;
-    }
-    return 'NEVO-***-***';
 }
 
 async function copyValue(value: string, onDone: () => void) {
