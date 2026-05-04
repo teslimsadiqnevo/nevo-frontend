@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { StudentSidebar } from "@/widgets/StudentSidebar";
+import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
 import {
   getStudentDashboard,
   getStudentLessons,
@@ -55,6 +56,7 @@ export function StudentDashboard({
   view?: string;
   user?: any;
 }) {
+  const [showAskNevoDrawer, setShowAskNevoDrawer] = useState(false);
   const guardAuth = useAuthGuard("student");
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
@@ -224,7 +226,7 @@ export function StudentDashboard({
 
   return (
     <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
-      <StudentSidebar />
+      <StudentSidebar onAskNevo={() => setShowAskNevoDrawer(true)} />
       <main className="flex-1 overflow-y-auto relative px-[44px] py-[32px]">
         {selectedLesson ? (
           <LessonDetailView
@@ -274,6 +276,12 @@ export function StudentDashboard({
         )}
       </main>
     </div>
+      <AskNevoDrawer
+        open={showAskNevoDrawer}
+        onClose={() => setShowAskNevoDrawer(false)}
+        context={"student-dashboard"}
+        page={"student-dashboard"}
+      />
   );
 }
 

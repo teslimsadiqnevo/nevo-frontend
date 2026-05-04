@@ -13,7 +13,7 @@ const navItems = [
   { name: "Profile", view: "profile" },
 ] as const;
 
-export function StudentSidebar() {
+export function StudentSidebar({ onAskNevo }: { onAskNevo?: () => void }) {
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view") || null;
 
@@ -59,7 +59,7 @@ export function StudentSidebar() {
 
       {/* Ask Nevo Button */}
       <div className="px-4 pb-6 pt-2">
-        <button className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm">
+        <button onClick={onAskNevo} className="flex justify-center items-center gap-2 w-full bg-[#4A5080] text-[#F7F1E6] py-[12px] rounded-[20px] font-semibold text-[14px] border border-white/30 hover:bg-[#555B8B] transition-colors cursor-pointer backdrop-blur-sm">
           <Icon
             type="galaxy"
             width={16}
