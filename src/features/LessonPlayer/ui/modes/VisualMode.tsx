@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { StageShell } from '../StageShell';
 import type { LessonPaceDensity, Stage, StageKey, ToolbarState } from '../../api/types';
 
@@ -52,6 +52,111 @@ export function VisualMode({
         .map((sentence) => sentence.trim())
         .filter(Boolean)
         .slice(0, 3);
+    const visualScopeKey = `${stage.key}:${content.conceptId}:${content.imageUrl}:${content.imageFetchStatus}`;
+    const [imageState, setImageState] = useState({
+        scopeKey: visualScopeKey,
+        imageUrl: content.imageUrl,
+        imageAltText: content.imageAltText || '',
+        fetchStatus: content.imageFetchStatus,
+    });
+    const resolvedImageState =
+        imageState.scopeKey === visualScopeKey
+            ? imageState
+            : {
+                scopeKey: visualScopeKey,
+                imageUrl: content.imageUrl,
+                imageAltText: content.imageAltText || '',
+                fetchStatus: content.imageFetchStatus,
+            };
+
+    useEffect(() => {
+        let isCancelled = false;
+        let intervalId: ReturnType<typeof setInterval> | null = null;
+
+        if (content.imageFetchStatus !== 'pending' || !content.conceptId) {
+            return () => {
+                isCancelled = true;
+            };
+        }
+
+        const pollForImage = async () => {
+            try {
+                const response = await fetch(
+                    `/api/concepts/${encodeURIComponent(content.conceptId)}/image`,
+                    { cache: 'no-store' },
+                );
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || isCancelled) {
+                    return;
+                }
+
+                const nextStatus =
+                    data?.image_fetch_status === 'resolved' ||
+                    data?.image_fetch_status === 'failed'
+                        ? data.image_fetch_status
+                        : 'pending';
+
+                setImageState((current) =>
+                    current.scopeKey !== visualScopeKey
+                        ? current
+                        : {
+                            scopeKey: visualScopeKey,
+                            imageUrl:
+                                typeof data?.image_url === 'string' && data.image_url
+                                    ? data.image_url
+                                    : current.imageUrl,
+                            imageAltText: content.imageAltText || current.imageAltText,
+                            fetchStatus: nextStatus,
+                        },
+                );
+
+                if (nextStatus !== 'pending' && intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            } catch {
+                if (!isCancelled) {
+                    setImageState((current) =>
+                        current.scopeKey !== visualScopeKey
+                            ? current
+                            : { ...current, fetchStatus: current.imageUrl ? 'resolved' : 'failed' },
+                    );
+                }
+                if (intervalId) {
+                    clearInterval(intervalId);
+                    intervalId = null;
+                }
+            }
+        };
+
+        void pollForImage();
+        intervalId = setInterval(() => {
+            void pollForImage();
+        }, 3000);
+
+        return () => {
+            isCancelled = true;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
+        };
+    }, [
+        content.conceptId,
+        content.imageAltText,
+        content.imageFetchStatus,
+        content.imageUrl,
+        visualScopeKey,
+    ]);
+
+    const hasResolvedImage = Boolean(resolvedImageState.imageUrl);
+    const loaderSteps = useMemo(
+        () => [
+            'Reading this concept',
+            'Composing a classroom-safe visual',
+            'Fitting it for the lesson player',
+        ],
+        [],
+    );
 
     return (
         <StageShell
@@ -75,12 +180,58 @@ export function VisualMode({
                 <div
                     className={[
                         'relative w-full rounded-xl border-2 border-[#E0D9CE] overflow-hidden',
-                        content.imageUrl ? 'bg-cover bg-center bg-graphite-10' : 'bg-[linear-gradient(135deg,#f1ece2_0%,#ebe4d7_45%,#e1d8c9_100%)]',
+                        hasResolvedImage
+                            ? 'bg-[#F5F0E8]'
+                            : 'bg-[linear-gradient(135deg,#f1ece2_0%,#ebe4d7_45%,#e1d8c9_100%)]',
                         isCalmDensity ? 'h-[280px]' : 'h-[280px]',
                     ].join(' ')}
-                    style={content.imageUrl ? { backgroundImage: `url(${content.imageUrl})` } : undefined}
                 >
-                    {!content.imageUrl ? (
+                    {hasResolvedImage ? (
+                        <img
+                            src={resolvedImageState.imageUrl}
+                            alt={resolvedImageState.imageAltText || `Visual explanation for ${stage.label}`}
+                            className="h-full w-full object-contain p-4"
+                        />
+                    ) : resolvedImageState.fetchStatus === 'pending' ? (
+                        <div className="absolute inset-0 flex flex-col justify-between p-6">
+                            <div className="flex items-center justify-between">
+                                <span className="rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-indigo">
+                                    Visual loading
+                                </span>
+                                <span className="rounded-full bg-[#3B3F6E] px-3 py-1 text-[11px] font-semibold text-parchment">
+                                    {stage.modes.reading.keyTerm}
+                                </span>
+                            </div>
+
+                            <div className="mx-auto flex w-full max-w-[460px] flex-col gap-3">
+                                {loaderSteps.map((step, index) => (
+                                    <div
+                                        key={`${step}:${index}`}
+                                        className="overflow-hidden rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-[0_12px_24px_rgba(59,63,110,0.08)]"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-indigo" />
+                                            <span className="text-[13px] font-medium leading-5 text-graphite">
+                                                {step}
+                                            </span>
+                                        </div>
+                                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#E6DDCE]">
+                                            <div
+                                                className="h-full rounded-full bg-indigo/80"
+                                                style={{ width: `${45 + index * 18}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex justify-end">
+                                <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-[12px] text-indigo/80">
+                                    Nevo is generating a concept illustration
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
                         <div className="absolute inset-0 flex flex-col justify-between p-6">
                             <div className="flex items-center justify-between">
                                 <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-indigo">
@@ -104,11 +255,13 @@ export function VisualMode({
 
                             <div className="flex justify-end">
                                 <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-[12px] text-indigo/80">
-                                    Picture-led explanation for this concept
+                                    {resolvedImageState.fetchStatus === 'failed'
+                                        ? 'Showing a visual fallback while the image is unavailable'
+                                        : 'Picture-led explanation for this concept'}
                                 </div>
                             </div>
                         </div>
-                    ) : null}
+                    )}
 
                     {content.highlight ? (
                         <div className="absolute inset-0 flex items-center justify-center">

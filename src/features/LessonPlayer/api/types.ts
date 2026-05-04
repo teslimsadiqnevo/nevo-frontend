@@ -69,7 +69,10 @@ export type LessonMicroQuizPromptOverlayData = {
 };
 
 export type VisualContent = {
+    conceptId: string;
     imageUrl: string;
+    imageAltText?: string;
+    imageFetchStatus: 'pending' | 'resolved' | 'failed';
     body: string;
     bodySimplified: string;
     bodyExpanded: string;

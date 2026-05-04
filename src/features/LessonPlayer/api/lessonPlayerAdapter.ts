@@ -24,6 +24,7 @@ type BackendConcept = {
     learning_mode_delivered?: string;
     image_url?: string | null;
     image_alt_text?: string | null;
+    image_fetch_status?: 'pending' | 'resolved' | 'failed' | string | null;
     steps?: BackendConceptStep[] | null;
     contains_formal_representation?: boolean;
     formal_representation?: string | null;
@@ -172,7 +173,17 @@ function buildStage(stageKey: StageKey, concept: BackendConcept): Stage {
         labelExpanded: labels.expanded,
         modes: {
             visual: {
+                conceptId: concept.concept_id,
                 imageUrl: concept.image_url || '',
+                imageAltText: concept.image_alt_text || undefined,
+                imageFetchStatus:
+                    concept.image_fetch_status === 'pending' ||
+                    concept.image_fetch_status === 'resolved' ||
+                    concept.image_fetch_status === 'failed'
+                        ? concept.image_fetch_status
+                        : concept.image_url
+                          ? 'resolved'
+                          : 'failed',
                 body: visualBody,
                 bodySimplified: simplified,
                 bodyExpanded: expanded,

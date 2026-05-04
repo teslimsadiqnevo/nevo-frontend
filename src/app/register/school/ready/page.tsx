@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/shared/ui";
+import QRCode from "react-qr-code";
 import { getSchoolCode, getSchoolOnboardingStatus } from "@/features/Dashboard/api/school";
 
 export default function SchoolReadyPage() {
     const router = useRouter();
+    const qrWrapperRef = useRef<HTMLDivElement | null>(null);
     const [showCopied, setShowCopied] = useState(false);
     const [pageLoading, setPageLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -48,6 +49,23 @@ export default function SchoolReadyPage() {
         
         // Show banner
         setShowCopied(true);
+    };
+
+    const handleDownloadQr = () => {
+        const svg = qrWrapperRef.current?.querySelector("svg");
+        if (!svg || typeof window === "undefined") return;
+
+        const serializer = new XMLSerializer();
+        const svgMarkup = serializer.serializeToString(svg);
+        const blob = new Blob([svgMarkup], { type: "image/svg+xml;charset=utf-8" });
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = objectUrl;
+        link.download = `${codeString || "school-code"}-qr.svg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(objectUrl);
     };
 
     useEffect(() => {
@@ -107,15 +125,26 @@ export default function SchoolReadyPage() {
                     </button>
                     <button 
                         type="button" 
+                        onClick={handleDownloadQr}
                         className="w-[180px] flex items-center justify-center font-medium text-[15px] text-[#3B3F6E] border-2 border-[#3B3F6E] rounded-lg py-[10px] hover:bg-[#3B3F6E]/5 active:scale-[0.98] transition-all cursor-pointer"
                     >
                         Download QR
                     </button>
                 </div>
 
-                {/* Target Mock QR Logic Vector Render */}
                 <div className="flex items-center justify-center w-full mb-[42px]">
-                    <Icon type="qr" width={120} height={120} />
+                    <div
+                        ref={qrWrapperRef}
+                        className="rounded-2xl bg-white p-4 shadow-sm border border-[#E9E7E2]"
+                    >
+                        <QRCode
+                            value={codeString}
+                            size={120}
+                            bgColor="#FFFFFF"
+                            fgColor="#3B3F6E"
+                            level="M"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex flex-col items-center gap-3 w-full mb-[85px] max-w-[480px]">
