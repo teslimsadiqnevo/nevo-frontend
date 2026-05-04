@@ -11,6 +11,8 @@ import {
   getStudentProgressOverview,
   getStudentConnections,
   getStudentDownloads,
+  getStudentSchoolById,
+  getStudentSchoolClasses,
   getStudentSettings,
   getLessonDownloadPackage,
   recordStudentDownload,
@@ -2426,6 +2428,10 @@ function StudentProfileView({
     defaultStudentSettings,
   );
   const [localProfile, setLocalProfile] = useState<any>(profile);
+  const [resolvedNames, setResolvedNames] = useState<{
+    schoolName?: string;
+    className?: string;
+  }>({});
   const [showLogout, setShowLogout] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
@@ -2433,6 +2439,109 @@ function StudentProfileView({
   useEffect(() => {
     setLocalProfile(profile);
   }, [profile]);
+
+  useEffect(() => {
+    const inlineSettings = {
+      ...(localProfile?.accessibility || {}),
+      ...(localProfile?.settings || {}),
+    };
+
+    if (Object.keys(inlineSettings).length > 0) {
+      setSettings(normalizeStudentSettings(inlineSettings));
+    }
+  }, [localProfile]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const schoolId =
+      localProfile?.school_id ||
+      localProfile?.schoolId ||
+      localProfile?.school?.id ||
+      user?.school_id ||
+      user?.schoolId ||
+      user?.school?.id;
+    const classId =
+      localProfile?.class_id ||
+      localProfile?.classId ||
+      localProfile?.class?.id ||
+      user?.class_id ||
+      user?.classId ||
+      user?.class?.id;
+
+    const existingSchoolName =
+      localProfile?.school?.school_name ||
+      localProfile?.school?.name ||
+      localProfile?.school_name ||
+      user?.school?.school_name ||
+      user?.school?.name ||
+      user?.school_name;
+    const existingClassName =
+      localProfile?.class?.class_name ||
+      localProfile?.class?.name ||
+      localProfile?.class_name ||
+      localProfile?.grade_level ||
+      user?.class?.class_name ||
+      user?.class?.name ||
+      user?.class_name;
+
+    async function loadOrganizationNames() {
+      const nextResolved: { schoolName?: string; className?: string } = {};
+
+      if (!existingSchoolName && schoolId) {
+        const schoolRes = await getStudentSchoolById(String(schoolId));
+        if (!cancelled && !guardAuth(schoolRes as any) && schoolRes?.data) {
+          nextResolved.schoolName =
+            schoolRes.data.school_name ||
+            schoolRes.data.name ||
+            schoolRes.data.data?.school_name ||
+            schoolRes.data.data?.name ||
+            "";
+        }
+      }
+
+      if (!existingClassName && schoolId && classId) {
+        const classesRes = await getStudentSchoolClasses(String(schoolId));
+        if (!cancelled && !guardAuth(classesRes as any) && classesRes?.data) {
+          const classList = Array.isArray(classesRes.data)
+            ? classesRes.data
+            : Array.isArray(classesRes.data?.classes)
+              ? classesRes.data.classes
+              : Array.isArray(classesRes.data?.data)
+                ? classesRes.data.data
+                : [];
+
+          const matchedClass = classList.find((item: any) => {
+            const candidateId =
+              item?.id || item?.class_id || item?.classId || item?.uuid;
+            return String(candidateId) === String(classId);
+          });
+
+          nextResolved.className =
+            matchedClass?.class_name || matchedClass?.name || "";
+        }
+      }
+
+      if (!cancelled) {
+        setResolvedNames(nextResolved);
+      }
+    }
+
+    if (
+      (!existingSchoolName && schoolId) ||
+      (!existingClassName && schoolId && classId)
+    ) {
+      loadOrganizationNames().catch((err) => {
+        console.error("Failed to resolve student organization names", err);
+      });
+    } else {
+      setResolvedNames({});
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [guardAuth, localProfile, user]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2453,7 +2562,11 @@ function StudentProfileView({
   }, []);
 
   const displayName =
-    user?.name || localProfile?.first_name || localProfile?.name || "Student";
+    user?.name ||
+    localProfile?.student_name ||
+    localProfile?.first_name ||
+    localProfile?.name ||
+    "Student";
   const initials = displayName
     ? displayName
         .split(" ")
@@ -2465,34 +2578,42 @@ function StudentProfileView({
   const schoolObj = localProfile?.school || user?.school || {};
   const classObj = localProfile?.class || user?.class || {};
   const schoolName =
+    resolvedNames.schoolName ||
     schoolObj.school_name ||
     schoolObj.name ||
     localProfile?.school_name ||
     user?.school_name ||
-    "School not available";
+    "";
   const gradeLevel =
+    resolvedNames.className ||
     classObj.class_name ||
     classObj.name ||
     localProfile?.class_name ||
     localProfile?.grade_level ||
     user?.class_name ||
-    "Class not assigned";
+    "";
+  const subtitleParts = [schoolName, gradeLevel].filter(Boolean);
   const nevoId = getStudentDisplayId(localProfile, user) || "Unavailable";
   const learningProfile = localProfile?.learning_profile || localProfile || null;
+  const howYouLearn = localProfile?.how_you_learn || {};
 
   // Convert backend learning_profile to UI mapping
   const learningStyle =
     learningProfile?.learning_preference ||
     learningProfile?.learning_modality ||
     learningProfile?.learningStyle ||
+    howYouLearn?.learning_style ||
     "Not set";
-  const focusTime = learningProfile?.focus_duration
-    ? `${learningProfile.focus_duration} min`
-    : learningProfile?.focusTime || "Not set";
+  const focusDuration =
+    learningProfile?.focus_duration ??
+    learningProfile?.focusTime ??
+    howYouLearn?.focus_time_minutes;
+  const focusTime = focusDuration ? `${focusDuration} min` : "Not set";
   const challengeLevel =
     learningProfile?.challenge_preference ||
     learningProfile?.challenge_pref ||
     learningProfile?.challengeLevel ||
+    howYouLearn?.challenge_level ||
     "Not set";
 
   const handleCopyId = () => {
@@ -2553,9 +2674,11 @@ function StudentProfileView({
           <h1 className="text-[20px] font-bold text-[#2B2B2F]">
             {displayName}
           </h1>
-          <p className="text-[13px] text-graphite-60">
-            {schoolName} · {gradeLevel}
-          </p>
+          {subtitleParts.length > 0 ? (
+            <p className="text-[13px] text-graphite-60">
+              {subtitleParts.join(" · ")}
+            </p>
+          ) : null}
         </div>
       </div>
 

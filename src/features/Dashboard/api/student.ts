@@ -82,6 +82,26 @@ export async function getStudentProfile() {
     }
 }
 
+export async function getStudentSchoolById(schoolId: string) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/schools/${encodeURIComponent(schoolId)}`, { headers });
+        return unwrap(res, "Failed to fetch school");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function getStudentSchoolClasses(schoolId: string) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/schools/${encodeURIComponent(schoolId)}/classes`, { headers });
+        return unwrap(res, "Failed to fetch classes");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
 export async function getStudentProgress() {
     try {
         const headers = await getAuthHeader();
