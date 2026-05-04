@@ -2102,9 +2102,14 @@ function StudentConnectView({ profile }: { profile?: any }) {
     profile?.nevo_id ||
     profile?.nevoId ||
     profile?.nevo ||
+    profile?.student_id ||
+    profile?.studentId ||
     profile?.id ||
     profile?.data?.nevo_id ||
     profile?.data?.nevoId ||
+    profile?.data?.student_id ||
+    profile?.data?.studentId ||
+    profile?.data?.nevo ||
     profile?.data?.id ||
     "NEVO-XXXX";
 
