@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Icon } from "@/shared/ui";
-import { fetchClassesBySchoolId, type SchoolClassOption } from "../api/mockData";
+import { fetchClassesBySchoolId, type SchoolClassOption } from "../api/schoolLookup";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 export function Step3({ onNext, onBack }: { onNext?: () => void, onBack?: () => void }) {

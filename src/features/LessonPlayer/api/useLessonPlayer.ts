@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { getLessonPlayer } from './mockData';
+import { getLessonPlayer } from './lessonPlayerAdapter';
 import type { LessonPlayerData } from './types';
 
 type LessonPlayerHookState = {

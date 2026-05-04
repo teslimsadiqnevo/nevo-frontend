@@ -96,26 +96,8 @@ function normalizeSubjectFromObject(name: string, value: unknown): StudentProgre
         color: DEFAULT_BAR_COLOR,
         conceptsAttempted,
         conceptsUnderstood,
-        conceptList: Array.isArray(subject.concepts)
-            ? (subject.concepts as Array<Record<string, unknown>>)
-                  .map((concept) => ({
-                      name:
-                          (typeof concept.name === 'string' && concept.name) ||
-                          (typeof concept.title === 'string' && concept.title) ||
-                          'Concept',
-                      understood: Boolean(concept.understood ?? concept.complete ?? concept.completed),
-                  }))
-            : [],
-        lessons: lessonsCompleted > 0
-            ? [
-                  {
-                      name: `Introduction to ${toTitle(name)}`,
-                      progress: Math.min(lessonsCompleted, 5),
-                      total: 5,
-                      complete: lessonsCompleted >= 5,
-                  },
-              ]
-            : [],
+        conceptList: [],
+        lessons: [],
     };
 }
 

@@ -8,8 +8,14 @@ import {
   getStudentDashboard,
   getStudentLessons,
   getStudentProfile,
-  getStudentProgress,
+  getStudentProgressOverview,
   getStudentConnections,
+  getStudentDownloads,
+  getStudentSettings,
+  getLessonDownloadPackage,
+  recordStudentDownload,
+  removeStudentDownload,
+  updateStudentLearningProfile,
   updateStudentSettings,
 } from "../api/student";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
@@ -96,6 +102,56 @@ export type Lesson = {
   };
 };
 
+type StudentSettingsState = {
+  adaptAutomatically: boolean;
+  cameraForLearningSignals: boolean;
+  voiceGuidance: boolean;
+  notifications: boolean;
+};
+
+const defaultStudentSettings: StudentSettingsState = {
+  adaptAutomatically: true,
+  cameraForLearningSignals: false,
+  voiceGuidance: true,
+  notifications: false,
+};
+
+function normalizeStudentSettings(data: any): StudentSettingsState {
+  return {
+    adaptAutomatically: Boolean(
+      data?.adapt_automatically ?? data?.adaptAutomatically ?? true,
+    ),
+    cameraForLearningSignals: Boolean(
+      data?.camera_for_learning_signals ??
+        data?.cameraForLearningSignals ??
+        false,
+    ),
+    voiceGuidance: Boolean(
+      data?.voice_guidance ?? data?.voiceGuidance ?? true,
+    ),
+    notifications: Boolean(data?.notifications ?? false),
+  };
+}
+
+function formatStorageSize(sizeBytes: number) {
+  if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) return "0 MB";
+  const mb = sizeBytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1)} MB`;
+  const kb = sizeBytes / 1024;
+  return `${Math.max(1, Math.round(kb))} KB`;
+}
+
+function getStudentDisplayId(profile: any, user?: any) {
+  return (
+    profile?.nevo_id ||
+    profile?.student_id ||
+    profile?.studentId ||
+    user?.nevoId ||
+    user?.student_id ||
+    null
+  );
+}
+
 // ─── Subject pill color map ────────────────────────────────────────────────────
 const subjectColors: Record<
   string,
@@ -167,7 +223,7 @@ export function StudentDashboard({
             getStudentDashboard(),
             getStudentLessons(),
             getStudentProfile(),
-            getStudentProgress(),
+            getStudentProgressOverview(),
             getStudentConnections(),
           ],
         );
@@ -1052,10 +1108,71 @@ function LessonDetailView({
   onBack: () => void;
 }) {
   const [downloadOffline, setDownloadOffline] = useState(false);
+  const [downloadBusy, setDownloadBusy] = useState(false);
   const colors = subjectColors[lesson.subject] || {
     bg: "#E9E7E2",
     text: "#3B3F6E",
     banner: "#C0BDD4",
+  };
+  const lessonId = String(lesson.id);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadDownloadState() {
+      const res = await getStudentDownloads();
+      if (cancelled) return;
+      if (Array.isArray(res?.data?.downloads)) {
+        setDownloadOffline(
+          res.data.downloads.some((entry: any) => entry.lesson_id === lessonId),
+        );
+      }
+    }
+
+    loadDownloadState().catch((err) => {
+      console.error("Failed to load lesson download state", err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId]);
+
+  const toggleOfflineDownload = async () => {
+    if (downloadBusy) return;
+    setDownloadBusy(true);
+    try {
+      if (!downloadOffline) {
+        const packageRes = await getLessonDownloadPackage(lessonId);
+        if (packageRes?.error || !packageRes?.data) {
+          throw new Error(packageRes?.error || "Failed to fetch lesson package");
+        }
+        localStorage.setItem(
+          `nevo-offline-lesson-${lessonId}`,
+          JSON.stringify(packageRes.data),
+        );
+        const recordRes = await recordStudentDownload({
+          lesson_id: packageRes.data.lesson_id || lessonId,
+          version_hash: packageRes.data.version_hash,
+          size_bytes: Number(packageRes.data.estimated_size_bytes || 0),
+        });
+        if (recordRes?.error) {
+          throw new Error(recordRes.error);
+        }
+        setDownloadOffline(true);
+      } else {
+        const removeRes = await removeStudentDownload(lessonId);
+        if (removeRes?.error) {
+          throw new Error(removeRes.error);
+        }
+        localStorage.removeItem(`nevo-offline-lesson-${lessonId}`);
+        setDownloadOffline(false);
+      }
+    } catch (err) {
+      console.error("Failed to update offline lesson state", err);
+    } finally {
+      setDownloadBusy(false);
+    }
   };
 
   return (
@@ -1215,7 +1332,8 @@ function LessonDetailView({
             </div>
             {/* Toggle */}
             <button
-              onClick={() => setDownloadOffline(!downloadOffline)}
+              onClick={toggleOfflineDownload}
+              disabled={downloadBusy}
               className={`w-[44px] h-[24px] rounded-full transition-colors duration-200 cursor-pointer relative ${
                 downloadOffline ? "bg-[#3B3F6E]" : "bg-[#D5D3CE]"
               }`}
@@ -1284,7 +1402,7 @@ function LessonActionBar({ lesson }: { lesson: Lesson }) {
 
 // ─── Downloads Mock Data ───────────────────────────────────────────────────────
 interface DownloadedLesson {
-  id: number;
+  id: string;
   title: string;
   subject: string;
   size: string;
@@ -1293,20 +1411,82 @@ interface DownloadedLesson {
 // ─── Downloads View ────────────────────────────────────────────────────────────
 function StudentDownloadsView() {
   const [lessons, setLessons] = useState<DownloadedLesson[]>([]);
-  const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<DownloadedLesson | null>(
     null,
   );
+  const [loading, setLoading] = useState(true);
+  const [removing, setRemoving] = useState(false);
+  const [totalSizeBytes, setTotalSizeBytes] = useState(0);
+  const router = useRouter();
 
-  const totalSize = lessons.length * 12;
+  useEffect(() => {
+    let cancelled = false;
 
-  const handleRemove = () => {
-    if (removeTarget) {
-      setLessons((prev) => prev.filter((l) => l.id !== removeTarget.id));
+    async function loadDownloads() {
+      setLoading(true);
+      const res = await getStudentDownloads();
+      if (cancelled) return;
+
+      if (res?.data) {
+        const downloads = Array.isArray(res.data.downloads)
+          ? res.data.downloads
+          : [];
+        setLessons(
+          downloads.map(
+            (entry: any): DownloadedLesson => ({
+              id: String(entry.lesson_id),
+              title: entry.title || "Lesson",
+              subject: entry.subject || "Subject",
+              size: formatStorageSize(Number(entry.estimated_size_bytes || 0)),
+            }),
+          ),
+        );
+        setTotalSizeBytes(Number(res.data.total_size_bytes || 0));
+      }
+
+      setLoading(false);
+    }
+
+    loadDownloads().catch((err) => {
+      console.error("Failed to load downloads", err);
+      if (!cancelled) setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleRemove = async () => {
+    if (!removeTarget || removing) return;
+    setRemoving(true);
+    try {
+      const res = await removeStudentDownload(removeTarget.id);
+      if (res?.error) {
+        throw new Error(res.error);
+      }
+      localStorage.removeItem(`nevo-offline-lesson-${removeTarget.id}`);
+      setLessons((prev) => prev.filter((lesson) => lesson.id !== removeTarget.id));
       setRemoveTarget(null);
       setMenuOpenId(null);
+    } catch (err) {
+      console.error("Failed to remove download", err);
+    } finally {
+      setRemoving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="max-w-[820px]">
+        <h1 className="text-[24px] font-bold text-[#3B3F6E] tracking-[-0.01em] mb-6">
+          Downloads
+        </h1>
+        <p className="text-[14px] text-graphite-60">Loading downloads...</p>
+      </div>
+    );
+  }
 
   if (lessons.length === 0) {
     return (
@@ -1358,7 +1538,10 @@ function StudentDownloadsView() {
           Download lessons to access them offline.
         </p>
 
-        <button className="px-7 py-[11px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[14px] font-semibold transition-colors cursor-pointer">
+        <button
+          onClick={() => router.push("/dashboard?view=lessons")}
+          className="px-7 py-[11px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[14px] font-semibold transition-colors cursor-pointer"
+        >
           Browse lessons
         </button>
       </div>
@@ -1400,7 +1583,7 @@ function StudentDownloadsView() {
           Downloads
         </h1>
         <span className="text-[13px] text-graphite-60 font-medium">
-          {totalSize} MB used
+          {formatStorageSize(totalSizeBytes)} used
         </span>
       </div>
 
@@ -1493,6 +1676,7 @@ function StudentDownloadsView() {
               <div className="flex gap-4">
                 <button
                   onClick={handleRemove}
+                  disabled={removing}
                   className="flex-1 py-[13px] bg-transparent border-2 border-[#E8B4B4] text-[#C0392B] rounded-full text-[14px] font-semibold hover:bg-[#FEF5F5] transition-colors cursor-pointer"
                 >
                   Remove
@@ -1512,572 +1696,6 @@ function StudentDownloadsView() {
   );
 }
 
-interface SubjectDetail {
-  name: string;
-  concepts: number;
-  maxConcepts: number;
-  color: string;
-  conceptsAttempted: number;
-  conceptsUnderstood: number;
-  conceptList: { name: string; understood: boolean }[];
-  lessons: {
-    name: string;
-    progress: number;
-    total: number;
-    complete: boolean;
-  }[];
-}
-
-// ─── Progress View ─────────────────────────────────────────────────────────────
-function StudentProgressView({ progressData }: { progressData?: any }) {
-  const [hasProgress, setHasProgress] = useState(true);
-  const [selectedSubject, setSelectedSubject] = useState<SubjectDetail | null>(
-    null,
-  );
-
-  // Map real data if available
-  const displayStats = progressData
-    ? [
-        { value: "7", label: "days in a row" }, // Streak is currently not returned by backend
-        {
-          value: String(
-            progressData.total_lessons_completed ||
-              progressData.total_lessons_started ||
-              24,
-          ),
-          label: "concepts",
-        },
-        { value: "12", label: "breakthroughs" },
-      ]
-    : [];
-
-  const rawSubjects =
-    progressData?.subject_performance || progressData?.subjects || progressData;
-  const displaySubjects =
-    rawSubjects &&
-    !Array.isArray(rawSubjects) &&
-    Object.keys(rawSubjects).length > 0
-      ? Object.entries(rawSubjects).map(([subj, perf]: [string, any]) => ({
-          name: subj,
-          concepts: Math.max(1, Math.round((perf.average_score || 0) / 10)),
-          maxConcepts: 15,
-          color: "#3B3F6E",
-          conceptsAttempted: 5,
-          conceptsUnderstood: Math.round(((perf.average_score || 0) / 100) * 5),
-          conceptList: [
-            {
-              name: "Basic concept",
-              understood: (perf.average_score || 0) > 50,
-            },
-            {
-              name: "Advanced concept",
-              understood: (perf.average_score || 0) > 80,
-            },
-          ],
-          lessons: [
-            {
-              name: `Introduction to ${subj}`,
-              progress: perf.lessons_completed || 1,
-              total: 5,
-              complete: (perf.lessons_completed || 0) >= 5,
-            },
-          ],
-        }))
-      : Array.isArray(rawSubjects)
-        ? rawSubjects.map((perf: any) => ({
-            name: perf.subject || perf.name || "Subject",
-            concepts: perf.concepts_understood || perf.concepts || 0,
-            maxConcepts: perf.concepts_attempted || perf.maxConcepts || 15,
-            color: perf.color || "#3B3F6E",
-            conceptsAttempted:
-              perf.concepts_attempted || perf.conceptsAttempted || 0,
-            conceptsUnderstood:
-              perf.concepts_understood || perf.conceptsUnderstood || 0,
-            conceptList: perf.conceptList || [],
-            lessons: perf.lessons || [],
-          }))
-        : [];
-
-  const recentActivity: any[] = Array.isArray(progressData?.recent_activity)
-    ? progressData.recent_activity
-    : [];
-
-  if (!hasProgress) {
-    return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-96px)]">
-        <div className="relative mb-6">
-          <div className="absolute -top-3 left-8 w-[8px] h-[8px] rounded-full bg-[#E5C76B]" />
-          <div className="absolute -top-1 right-4 w-[8px] h-[8px] rounded-full bg-[#E5C76B] opacity-60" />
-          <div className="absolute bottom-4 -left-2 text-[#D5D3CE] text-[16px] font-light">
-            +
-          </div>
-          <div className="absolute top-6 -right-3 text-[#A9A5D1] text-[14px] font-light">
-            ✦
-          </div>
-          <div className="absolute bottom-2 right-2 text-[#E5C76B] text-[10px]">
-            •
-          </div>
-          <div className="w-[140px] h-[110px] bg-[#EEECEA] rounded-xl flex items-center justify-center">
-            <svg width="80" height="70" viewBox="0 0 80 70" fill="none">
-              <rect
-                x="15"
-                y="8"
-                width="50"
-                height="54"
-                rx="4"
-                stroke="#C8C6C1"
-                strokeWidth="1.5"
-                fill="#FDFBF9"
-              />
-              <rect
-                x="20"
-                y="8"
-                width="45"
-                height="54"
-                rx="3"
-                stroke="#C8C6C1"
-                strokeWidth="1.5"
-                fill="white"
-              />
-              <line
-                x1="28"
-                y1="22"
-                x2="55"
-                y2="22"
-                stroke="#DDD8F0"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <line
-                x1="28"
-                y1="30"
-                x2="55"
-                y2="30"
-                stroke="#DDD8F0"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <line
-                x1="28"
-                y1="38"
-                x2="48"
-                y2="38"
-                stroke="#DDD8F0"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-              <path
-                d="M28 50L35 44L42 47L55 40"
-                stroke="#A9A5D1"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </div>
-        </div>
-        <h2 className="text-[20px] font-bold text-[#3B3F6E] mb-3 text-center">
-          Start Your Learning Journey
-        </h2>
-        <p className="text-[14px] text-graphite-60 text-center max-w-[340px] leading-relaxed mb-6">
-          Your progress will show here as you learn. Complete lessons to track
-          your achievements and see how far you&apos;ve come.
-        </p>
-        <button className="px-7 py-[11px] bg-transparent border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-[14px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer">
-          Start a lesson
-        </button>
-      </div>
-    );
-  }
-
-  // Subject detail drill-down
-  if (selectedSubject) {
-    return (
-      <SubjectDetailView
-        subject={selectedSubject}
-        onBack={() => setSelectedSubject(null)}
-      />
-    );
-  }
-
-  return (
-    <div className="max-w-[820px]">
-      {/* Top stat cards */}
-      <div className="grid grid-cols-3 gap-4 mb-10">
-        {displayStats.map((stat) => (
-          <div
-            key={stat.label}
-            className="bg-transparent rounded-2xl px-6 py-5 border border-[#E9E7E2]"
-          >
-            <div className="text-[36px] font-bold text-[#3B3F6E] leading-tight mb-1">
-              {stat.value}
-            </div>
-            <div className="text-[13px] text-graphite-60 font-medium">
-              {stat.label}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Your Subjects */}
-      <section className="mb-10">
-        <h3 className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase mb-5">
-          Your Subjects
-        </h3>
-        <div className="flex flex-col gap-4">
-          {displaySubjects.map((subj) => {
-            const pct = (subj.concepts / subj.maxConcepts) * 100;
-            return (
-              <div
-                key={subj.name}
-                className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => setSelectedSubject(subj)}
-              >
-                <span className="text-[14px] font-semibold text-[#2B2B2F] w-[120px] shrink-0">
-                  {subj.name}
-                </span>
-                <div className="flex-1 h-[8px] bg-[#E9E7E2] rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${pct}%`, backgroundColor: subj.color }}
-                  />
-                </div>
-                <span className="text-[12px] text-graphite-60 font-medium w-[80px] shrink-0 text-right">
-                  {subj.concepts} concepts
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </section>
-
-      {/* Recent */}
-      <section>
-        <h3 className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase mb-5">
-          Recent
-        </h3>
-        <div className="flex flex-col gap-0">
-          {recentActivity.map((item, i) => (
-            <div
-              key={i}
-              className="flex items-center justify-between py-4 border-b border-[#F0EDE7] last:border-b-0"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-[7px] h-[7px] rounded-full bg-[#3B3F6E] shrink-0" />
-                <span className="text-[14px] text-[#2B2B2F] font-medium">
-                  {item.text}
-                </span>
-              </div>
-              <span className="text-[12px] text-graphite-40 font-medium shrink-0 ml-4">
-                {item.time}
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Subject Detail View ───────────────────────────────────────────────────────
-function SubjectDetailView({
-  subject,
-  onBack,
-}: {
-  subject: SubjectDetail;
-  onBack: () => void;
-}) {
-  const hasActivity =
-    subject.conceptList.length > 0 || subject.lessons.length > 0;
-
-  return (
-    <div className="max-w-[820px]">
-      {/* Header */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 mb-8 cursor-pointer group"
-      >
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-          <path
-            d="M15 18L9 12L15 6"
-            stroke="#3B3F6E"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span className="text-[20px] font-bold text-[#3B3F6E] group-hover:text-[#2C2F52] transition-colors">
-          {subject.name}
-        </span>
-      </button>
-
-      {!hasActivity ? (
-        /* Empty subject state */
-        <div className="flex flex-col items-center justify-center h-[calc(100vh-240px)]">
-          <div className="w-[140px] h-[110px] bg-[#EEECEA] rounded-2xl flex items-center justify-center mb-5">
-            <svg width="60" height="50" viewBox="0 0 60 50" fill="none">
-              {/* Clipboard */}
-              <rect
-                x="10"
-                y="5"
-                width="22"
-                height="28"
-                rx="3"
-                stroke="#3B3F6E"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <rect
-                x="15"
-                y="2"
-                width="12"
-                height="6"
-                rx="2"
-                stroke="#3B3F6E"
-                strokeWidth="1.2"
-                fill="#EEECEA"
-              />
-              <line
-                x1="15"
-                y1="15"
-                x2="27"
-                y2="15"
-                stroke="#A9A5D1"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-              <line
-                x1="15"
-                y1="20"
-                x2="24"
-                y2="20"
-                stroke="#A9A5D1"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-              <line
-                x1="15"
-                y1="25"
-                x2="27"
-                y2="25"
-                stroke="#A9A5D1"
-                strokeWidth="1.2"
-                strokeLinecap="round"
-              />
-              {/* Compass/gear */}
-              <circle
-                cx="42"
-                cy="22"
-                r="10"
-                stroke="#3B3F6E"
-                strokeWidth="1.5"
-                fill="none"
-              />
-              <circle
-                cx="42"
-                cy="22"
-                r="3"
-                stroke="#3B3F6E"
-                strokeWidth="1.2"
-                fill="none"
-              />
-              <line
-                x1="42"
-                y1="12"
-                x2="42"
-                y2="15"
-                stroke="#3B3F6E"
-                strokeWidth="1.2"
-              />
-              <line
-                x1="42"
-                y1="29"
-                x2="42"
-                y2="32"
-                stroke="#3B3F6E"
-                strokeWidth="1.2"
-              />
-              <line
-                x1="32"
-                y1="22"
-                x2="35"
-                y2="22"
-                stroke="#3B3F6E"
-                strokeWidth="1.2"
-              />
-              <line
-                x1="49"
-                y1="22"
-                x2="52"
-                y2="22"
-                stroke="#3B3F6E"
-                strokeWidth="1.2"
-              />
-            </svg>
-          </div>
-          <p className="text-[14px] text-graphite-60 font-medium">
-            No activity in this subject yet.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Stats */}
-          <div className="grid grid-cols-2 gap-4 mb-10">
-            <div className="bg-transparent rounded-2xl px-6 py-5 border border-[#E9E7E2]">
-              <div className="text-[36px] font-bold text-[#3B3F6E] leading-tight mb-1">
-                {subject.conceptsAttempted}
-              </div>
-              <div className="text-[13px] text-graphite-60 font-medium">
-                Concepts attempted
-              </div>
-            </div>
-            <div className="bg-transparent rounded-2xl px-6 py-5 border border-[#E9E7E2]">
-              <div className="text-[36px] font-bold text-[#3B3F6E] leading-tight mb-1">
-                {subject.conceptsUnderstood}
-              </div>
-              <div className="text-[13px] text-graphite-60 font-medium">
-                Concepts understood
-              </div>
-            </div>
-          </div>
-
-          {/* Concepts */}
-          {subject.conceptList.length > 0 && (
-            <section className="mb-10">
-              <h3 className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase mb-5">
-                Concepts
-              </h3>
-              <div className="flex flex-col">
-                {subject.conceptList.map((concept) => (
-                  <div
-                    key={concept.name}
-                    className="flex items-center justify-between py-4 border-b border-[#F0EDE7] last:border-b-0"
-                  >
-                    <span className="text-[14px] text-[#2B2B2F] font-medium">
-                      {concept.name}
-                    </span>
-                    {concept.understood ? (
-                      <div className="w-[22px] h-[22px] rounded-full bg-[#4CAF50] flex items-center justify-center">
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                        >
-                          <path
-                            d="M3 7L6 10L11 4"
-                            stroke="white"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
-                    ) : (
-                      <div className="w-[22px] h-[22px] rounded-full border-2 border-[#D5D3CE]" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Lessons */}
-          {subject.lessons.length > 0 && (
-            <section>
-              <h3 className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase mb-5">
-                Lessons
-              </h3>
-              <div className="flex flex-col gap-4">
-                {subject.lessons.map((lesson) => {
-                  const pct = (lesson.progress / lesson.total) * 100;
-                  return (
-                    <div
-                      key={lesson.name}
-                      className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-5 py-4"
-                    >
-                      <div className="flex items-center gap-3 mb-2">
-                        <svg
-                          width="16"
-                          height="16"
-                          viewBox="0 0 20 20"
-                          fill="none"
-                          className="shrink-0 opacity-50"
-                        >
-                          <rect
-                            x="3"
-                            y="2"
-                            width="14"
-                            height="16"
-                            rx="2"
-                            stroke="#3B3F6E"
-                            strokeWidth="1.5"
-                          />
-                          <line
-                            x1="7"
-                            y1="6"
-                            x2="13"
-                            y2="6"
-                            stroke="#3B3F6E"
-                            strokeWidth="1"
-                            strokeLinecap="round"
-                          />
-                          <line
-                            x1="7"
-                            y1="10"
-                            x2="13"
-                            y2="10"
-                            stroke="#3B3F6E"
-                            strokeWidth="1"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                        <span className="text-[14px] font-semibold text-[#2B2B2F] flex-1">
-                          {lesson.name}
-                        </span>
-                        <span className="text-[12px] text-graphite-60 font-medium shrink-0">
-                          {lesson.complete ? (
-                            <span className="flex items-center gap-1">
-                              <svg
-                                width="12"
-                                height="12"
-                                viewBox="0 0 14 14"
-                                fill="none"
-                              >
-                                <path
-                                  d="M3 7L6 10L11 4"
-                                  stroke="#4CAF50"
-                                  strokeWidth="2"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              Complete
-                            </span>
-                          ) : (
-                            `${lesson.progress}/${lesson.total} activities`
-                          )}
-                        </span>
-                      </div>
-                      <div className="w-full h-[5px] bg-[#E9E7E2] rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-[#3B3F6E] rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-// ─── Profile Config Data ─────────────────────────────────────────────────────────
 function StudentConnectView({ profile }: { profile?: any }) {
   const [classCode, setClassCode] = useState("");
   const [copied, setCopied] = useState(false);
@@ -2104,7 +1722,7 @@ function StudentConnectView({ profile }: { profile?: any }) {
     profile?.data?.studentId ||
     profile?.data?.nevo ||
     profile?.data?.id ||
-    "NEVO-XXXX";
+    "Unavailable";
 
   const handleCopy = () => {
     navigator.clipboard?.writeText(nevoId).catch(() => {});
@@ -2793,76 +2411,6 @@ function StudentConnectView({ profile }: { profile?: any }) {
   );
 }
 
-interface PreferenceCategory {
-  key: string;
-  label: string;
-  options: string[];
-  selected: string[];
-}
-
-const defaultPreferences: PreferenceCategory[] = [
-  {
-    key: "learningPreference",
-    label: "Learning Preference",
-    options: [
-      "Watching and looking",
-      "Listening to explanations",
-      "Doing with hands",
-      "Reading on my own",
-    ],
-    selected: ["Watching and looking"],
-  },
-  {
-    key: "whatHelps",
-    label: "What Helps You Understand",
-    options: [
-      "Pictures and diagrams",
-      "Step-by-step instructions",
-      "Examples and stories",
-      "Trying it myself",
-    ],
-    selected: ["Pictures and diagrams"],
-  },
-  {
-    key: "focusDuration",
-    label: "Focus Duration",
-    options: [
-      "About 5 minutes",
-      "About 10 minutes",
-      "About 15 minutes or more",
-    ],
-    selected: ["About 10 minutes"],
-  },
-  {
-    key: "whenHard",
-    label: "When Something Feels Hard",
-    options: ["Take a break", "Keep trying", "Ask for help"],
-    selected: ["Ask for help"],
-  },
-  {
-    key: "motivation",
-    label: "Motivation",
-    options: ["Encouragement", "Rewards", "Switch activities"],
-    selected: ["Encouragement"],
-  },
-  {
-    key: "challengeLevel",
-    label: "Challenge Level",
-    options: [
-      "Easy and straightforward",
-      "A little challenging",
-      "Really hard",
-    ],
-    selected: ["A little challenging"],
-  },
-  {
-    key: "learningEnvironment",
-    label: "Learning Environment",
-    options: ["Quiet and calm", "Visual and colorful", "Moving and touching"],
-    selected: ["Quiet and calm"],
-  },
-];
-
 // ─── Profile View ──────────────────────────────────────────────────────────────
 function StudentProfileView({
   user,
@@ -2874,18 +2422,38 @@ function StudentProfileView({
   onLogout: () => Promise<void>;
 }) {
   const guardAuth = useAuthGuard("student");
-  const [settings, setSettings] = useState({
-    adaptAutomatically: true,
-    cameraForLearningSignals: false,
-    voiceGuidance: true,
-    notifications: false,
-  });
+  const [settings, setSettings] = useState<StudentSettingsState>(
+    defaultStudentSettings,
+  );
+  const [localProfile, setLocalProfile] = useState<any>(profile);
   const [showLogout, setShowLogout] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [idCopied, setIdCopied] = useState(false);
 
-  // Provide fallbacks if backend doesn't have it
-  const displayName = user?.name || profile?.first_name || profile?.name || "";
+  useEffect(() => {
+    setLocalProfile(profile);
+  }, [profile]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSettings() {
+      const res = await getStudentSettings();
+      if (cancelled || guardAuth(res as any) || !res?.data) return;
+      setSettings(normalizeStudentSettings(res.data));
+    }
+
+    loadSettings().catch((err) => {
+      console.error("Failed to load student settings", err);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayName =
+    user?.name || localProfile?.first_name || localProfile?.name || "Student";
   const initials = displayName
     ? displayName
         .split(" ")
@@ -2894,37 +2462,38 @@ function StudentProfileView({
         .substring(0, 2)
         .toUpperCase()
     : "";
-  const schoolObj = profile?.school || user?.school || {};
-  const classObj = profile?.class || user?.class || {};
+  const schoolObj = localProfile?.school || user?.school || {};
+  const classObj = localProfile?.class || user?.class || {};
   const schoolName =
     schoolObj.school_name ||
     schoolObj.name ||
-    profile?.school_name ||
+    localProfile?.school_name ||
     user?.school_name ||
-    "Greenfield Academy";
+    "School not available";
   const gradeLevel =
     classObj.class_name ||
     classObj.name ||
-    profile?.class_name ||
-    profile?.grade_level ||
+    localProfile?.class_name ||
+    localProfile?.grade_level ||
     user?.class_name ||
-    "JSS 2";
-  const nevoId =
-    profile?.nevo_id || profile?.student_id || user?.nevoId || "NEVO-XXXX";
-  const learningProfile = profile?.learning_profile || profile || null;
+    "Class not assigned";
+  const nevoId = getStudentDisplayId(localProfile, user) || "Unavailable";
+  const learningProfile = localProfile?.learning_profile || localProfile || null;
 
   // Convert backend learning_profile to UI mapping
   const learningStyle =
+    learningProfile?.learning_preference ||
     learningProfile?.learning_modality ||
     learningProfile?.learningStyle ||
-    "Visual";
+    "Not set";
   const focusTime = learningProfile?.focus_duration
     ? `${learningProfile.focus_duration} min`
-    : learningProfile?.focusTime || "15 mins";
+    : learningProfile?.focusTime || "Not set";
   const challengeLevel =
+    learningProfile?.challenge_preference ||
     learningProfile?.challenge_pref ||
     learningProfile?.challengeLevel ||
-    "Moderate";
+    "Not set";
 
   const handleCopyId = () => {
     navigator.clipboard?.writeText(nevoId).catch(() => {});
@@ -2937,7 +2506,15 @@ function StudentProfileView({
     setSettings((prev) => ({ ...prev, [key]: newValue }));
 
     try {
-      const res = await updateStudentSettings({ [key]: newValue });
+      const requestKeyMap: Record<keyof StudentSettingsState, string> = {
+        adaptAutomatically: "adapt_automatically",
+        cameraForLearningSignals: "camera_for_learning_signals",
+        voiceGuidance: "voice_guidance",
+        notifications: "notifications",
+      };
+      const res = await updateStudentSettings({
+        [requestKeyMap[key]]: newValue,
+      });
       if (guardAuth(res as any)) return;
       if (res?.error) {
         throw new Error(res.error);
@@ -2950,7 +2527,19 @@ function StudentProfileView({
   };
 
   if (showPreferences) {
-    return <EditPreferencesView onBack={() => setShowPreferences(false)} />;
+    return (
+      <EditPreferencesView
+        profile={learningProfile}
+        onBack={() => setShowPreferences(false)}
+        onSaved={(updatedProfile) => {
+          setLocalProfile((prev: any) => ({
+            ...(prev || {}),
+            ...updatedProfile,
+          }));
+          setShowPreferences(false);
+        }}
+      />
+    );
   }
 
   return (
@@ -2967,9 +2556,6 @@ function StudentProfileView({
           <p className="text-[13px] text-graphite-60">
             {schoolName} · {gradeLevel}
           </p>
-          <button className="text-[12px] text-[#3B3F6E] font-semibold hover:text-[#2C2F52] transition-colors cursor-pointer mt-0.5">
-            Edit profile
-          </button>
         </div>
       </div>
 
@@ -3152,26 +2738,29 @@ function StudentProfileView({
 }
 
 // ─── Edit Preferences View ─────────────────────────────────────────────────────
-function EditPreferencesView({ onBack }: { onBack: () => void }) {
-  const [preferences, setPreferences] = useState<PreferenceCategory[]>(
-    defaultPreferences.map((p) => ({ ...p, selected: [...p.selected] })),
-  );
+function EditPreferencesView({
+  profile,
+  onBack,
+  onSaved,
+}: {
+  profile: any;
+  onBack: () => void;
+  onSaved: (updatedProfile: Record<string, unknown>) => void;
+}) {
   const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
+  const [form, setForm] = useState({
+    learning_preference: profile?.learning_preference || "visual",
+    focus_duration: Number(profile?.focus_duration || 15),
+    challenge_preference: profile?.challenge_preference || "moderate",
+    motivation_trigger: profile?.motivation_trigger || "encouragement",
+    pace_preference: profile?.pace_preference || "steady",
+    tts_preference: profile?.tts_preference || "on_demand",
+  });
 
-  const toggleOption = (categoryKey: string, option: string) => {
-    setPreferences((prev) =>
-      prev.map((cat) => {
-        if (cat.key !== categoryKey) return cat;
-        const isSelected = cat.selected.includes(option);
-        return {
-          ...cat,
-          selected: isSelected
-            ? cat.selected.filter((s) => s !== option)
-            : [...cat.selected, option],
-        };
-      }),
-    );
+  const updateField = (key: keyof typeof form, value: string | number) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
     setHasChanges(true);
   };
 
@@ -3183,9 +2772,28 @@ function EditPreferencesView({ onBack }: { onBack: () => void }) {
     }
   };
 
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        attention_span_minutes: Number(form.focus_duration),
+      };
+      const res = await updateStudentLearningProfile(payload);
+      if (res?.error) {
+        throw new Error(res.error);
+      }
+      onSaved(payload);
+    } catch (err) {
+      console.error("Failed to save student preferences", err);
+    } finally {
+      setSaving(false);
+      setShowSaveModal(false);
+    }
+  };
+
   return (
     <div className="max-w-[820px]">
-      {/* Back button */}
       <button
         onClick={handleBack}
         className="flex items-center gap-2 mb-6 cursor-pointer group"
@@ -3201,49 +2809,86 @@ function EditPreferencesView({ onBack }: { onBack: () => void }) {
         </svg>
       </button>
 
-      {/* Title */}
       <h2 className="text-[18px] font-bold text-[#3B3F6E] text-center mb-8">
         Your learning style
       </h2>
 
-      {/* Preference categories */}
       <div className="flex flex-col gap-7">
-        {preferences.map((cat) => (
-          <div key={cat.key}>
-            <h4 className="text-[11px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase mb-3">
-              {cat.label}
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {cat.options.map((option) => {
-                const isActive = cat.selected.includes(option);
-                return (
-                  <button
-                    key={option}
-                    onClick={() => toggleOption(cat.key, option)}
-                    className={`px-4 py-[8px] rounded-full text-[13px] font-medium border-2 transition-all cursor-pointer ${
-                      isActive
-                        ? "bg-[#3B3F6E] text-white border-[#3B3F6E]"
-                        : "bg-white text-[#2B2B2F] border-[#E9E7E2] hover:border-[#3B3F6E]"
-                    }`}
-                  >
-                    {option}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        ))}
+        <PreferenceGroup
+          label="Learning Preference"
+          options={[
+            { value: "visual", label: "Watching and looking" },
+            { value: "audio", label: "Listening to explanations" },
+            { value: "action", label: "Doing with hands" },
+            { value: "reading", label: "Reading on my own" },
+          ]}
+          value={String(form.learning_preference)}
+          onSelect={(value) => updateField("learning_preference", value)}
+        />
+        <PreferenceGroup
+          label="Focus Time"
+          options={[
+            { value: "5", label: "5 minutes" },
+            { value: "10", label: "10 minutes" },
+            { value: "15", label: "15 minutes" },
+            { value: "20", label: "20 minutes" },
+          ]}
+          value={String(form.focus_duration)}
+          onSelect={(value) => updateField("focus_duration", Number(value))}
+        />
+        <PreferenceGroup
+          label="Challenge Level"
+          options={[
+            { value: "gentle", label: "Gentle" },
+            { value: "moderate", label: "Moderate" },
+            { value: "stretch", label: "Stretch me" },
+          ]}
+          value={String(form.challenge_preference)}
+          onSelect={(value) => updateField("challenge_preference", value)}
+        />
+        <PreferenceGroup
+          label="Pace"
+          options={[
+            { value: "slower", label: "Take it slowly" },
+            { value: "steady", label: "Steady pace" },
+            { value: "faster", label: "Move faster" },
+          ]}
+          value={String(form.pace_preference)}
+          onSelect={(value) => updateField("pace_preference", value)}
+        />
+        <PreferenceGroup
+          label="Voice Guidance"
+          options={[
+            { value: "off", label: "Keep voice off" },
+            { value: "on_demand", label: "Only when I ask" },
+            { value: "always", label: "Read aloud often" },
+          ]}
+          value={String(form.tts_preference)}
+          onSelect={(value) => updateField("tts_preference", value)}
+        />
+        <PreferenceGroup
+          label="Motivation Trigger"
+          options={[
+            { value: "encouragement", label: "Encouragement" },
+            { value: "progress", label: "Progress tracking" },
+            { value: "challenge", label: "A good challenge" },
+          ]}
+          value={String(form.motivation_trigger)}
+          onSelect={(value) => updateField("motivation_trigger", value)}
+        />
       </div>
 
-      {/* Save button */}
-      <button className="w-full mt-8 py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer">
+      <button
+        onClick={handleSave}
+        disabled={saving}
+        className="w-full mt-8 py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer"
+      >
         Save preferences
       </button>
       <p className="text-[12px] text-graphite-40 text-center mt-3">
-        Saving your preferences won&apos;t affect lessons already in progress.
+        Saving your preferences updates how Nevo adapts future lessons.
       </p>
 
-      {/* Save changes modal */}
       {showSaveModal && (
         <>
           <div
@@ -3260,10 +2905,7 @@ function EditPreferencesView({ onBack }: { onBack: () => void }) {
               </h3>
               <div className="flex gap-4">
                 <button
-                  onClick={() => {
-                    setShowSaveModal(false);
-                    onBack();
-                  }}
+                  onClick={handleSave}
                   className="flex-1 py-[13px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[14px] font-semibold transition-colors cursor-pointer"
                 >
                   Save
@@ -3282,6 +2924,44 @@ function EditPreferencesView({ onBack }: { onBack: () => void }) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function PreferenceGroup({
+  label,
+  options,
+  value,
+  onSelect,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  value: string;
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <div>
+      <h4 className="text-[11px] font-bold text-[#3B3F6E] tracking-[0.08em] uppercase mb-3">
+        {label}
+      </h4>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => {
+          const isActive = option.value === value;
+          return (
+            <button
+              key={option.value}
+              onClick={() => onSelect(option.value)}
+              className={`px-4 py-[8px] rounded-full text-[13px] font-medium border-2 transition-all cursor-pointer ${
+                isActive
+                  ? "bg-[#3B3F6E] text-white border-[#3B3F6E]"
+                  : "bg-white text-[#2B2B2F] border-[#E9E7E2] hover:border-[#3B3F6E]"
+              }`}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }

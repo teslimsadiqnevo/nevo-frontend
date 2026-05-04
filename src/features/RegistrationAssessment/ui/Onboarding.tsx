@@ -9,7 +9,7 @@ export function Onboarding({ onNext }: { onNext: () => void }) {
     const storedNevoId = useRegistrationStore((s) => s.nevoId);
     const [showQR, setShowQR] = useState(false);
     const [copied, setCopied] = useState(false);
-    const nevoId = storedNevoId || "NEVO-XXXXX";
+    const nevoId = storedNevoId || "Unavailable";
 
     const copyToClipboard = async () => {
         try {

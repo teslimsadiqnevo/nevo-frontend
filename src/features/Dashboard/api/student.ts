@@ -92,6 +92,28 @@ export async function getStudentProgress() {
     }
 }
 
+export async function getStudentProgressOverview() {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/students/me/progress/overview`, { headers });
+        return unwrap(res, "Failed to fetch progress overview");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function getStudentSubjectDetail(subject: string) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/students/me/progress/subjects/${encodeURIComponent(subject)}`, {
+            headers,
+        });
+        return unwrap(res, "Failed to fetch subject detail");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
 export async function getStudentConnections() {
     try {
         const headers = await getAuthHeader();
@@ -121,6 +143,20 @@ export async function getStudentSettings() {
         const headers = await getAuthHeader();
         const res = await apiFetch(`/students/me/settings`, { headers });
         return unwrap(res, "Failed to fetch settings");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
+export async function updateStudentLearningProfile(profile: Record<string, unknown>) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/students/me/learning-profile`, {
+            method: "PATCH",
+            headers,
+            body: JSON.stringify(profile),
+        });
+        return unwrap(res, "Failed to update learning profile");
     } catch (e: any) {
         return { data: null, error: e.message };
     }

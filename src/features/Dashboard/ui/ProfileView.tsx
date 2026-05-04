@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { getTeacherProfile, updateTeacherProfile } from '../api/teacher';
 import { normalizeTeacherProfile } from '../lib/teacherProfile';
 import { UserAvatar } from '@/shared/ui';
@@ -16,9 +16,27 @@ interface ProfileData {
 }
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
+type GuardableResult = { error?: string; authExpired?: boolean } | null | undefined;
+type UploadRouteResponse = { public_url?: string; detail?: unknown; message?: unknown; error?: unknown };
 
-const ALL_SUBJECTS = ['Mathematics', 'English', 'Physics', 'Chemistry'];
-const ALL_LEVELS = ['Secondary', 'Primary', 'Tertiary'];
+const DEFAULT_SUBJECT_OPTIONS = [
+    'Mathematics',
+    'English',
+    'Physics',
+    'Chemistry',
+    'Biology',
+    'Basic Science',
+    'History',
+    'Geography',
+    'Civic Education',
+    'Economics',
+    'Literature',
+    'Computer Science',
+    'Agricultural Science',
+    'Business Studies',
+    'Creative Arts',
+];
+const DEFAULT_LEVEL_OPTIONS = ['Primary', 'Secondary', 'Tertiary'];
 
 const initialProfile: ProfileData = {
     fullName: '',
@@ -61,13 +79,15 @@ export function ProfileView({
     const [showLogout, setShowLogout] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
     const previewBlobRef = useRef<string | null>(null);
+    const subjectOptions = Array.from(new Set([...DEFAULT_SUBJECT_OPTIONS, ...profile.subjects, ...saved.subjects]));
+    const levelOptions = Array.from(new Set([...DEFAULT_LEVEL_OPTIONS, ...profile.educationLevels, ...saved.educationLevels]));
 
-    const loadProfile = async () => {
+    const loadProfile = useCallback(async () => {
         setLoadState('loading');
         setNotice(null);
 
         const res = await getTeacherProfile();
-        if (guardAuth(res as any)) {
+        if (guardAuth(res as GuardableResult)) {
             return;
         }
         if (!('data' in res)) {
@@ -85,23 +105,22 @@ export function ProfileView({
             avatarUrl: isBlobUrl(normalized.avatarUrl) ? '' : normalized.avatarUrl,
         };
 
-        if (isProfileEmpty(mapped)) {
-            setProfile({ ...initialProfile });
-            setSaved({ ...initialProfile });
-            setLoadState('empty');
-            return;
-        }
+        const nextProfile = isProfileEmpty(mapped) ? { ...initialProfile } : mapped;
 
-        setProfile(mapped);
-        setSaved(mapped);
+        setProfile(nextProfile);
+        setSaved(nextProfile);
         setAvatarBroken(false);
-        onProfileSaved?.(mapped);
+        onProfileSaved?.(nextProfile);
         setLoadState('ready');
-    };
+    }, [guardAuth, onProfileSaved]);
 
     useEffect(() => {
-        void loadProfile();
-    }, []);
+        const timeoutId = window.setTimeout(() => {
+            void loadProfile();
+        }, 0);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [loadProfile]);
 
     useEffect(() => {
         return () => {
@@ -144,10 +163,10 @@ export function ProfileView({
                 method: 'POST',
                 body: uploadBody,
             });
-            const uploadJson = await uploadRes.json().catch(() => ({}));
+            const uploadJson: UploadRouteResponse = await uploadRes.json().catch(() => ({}));
 
             if (!uploadRes.ok || !uploadJson?.public_url) {
-                if (guardAuth({ error: buildRouteError(uploadRes.status, uploadJson) } as any)) {
+                if (guardAuth({ error: buildRouteError(uploadRes.status, uploadJson) })) {
                     setIsSaving(false);
                     return;
                 }
@@ -159,16 +178,17 @@ export function ProfileView({
             uploadedAvatarUrl = String(uploadJson.public_url);
         }
 
-        const payload: Record<string, any> = {
+        const payload: Record<string, unknown> = {
             first_name: firstName,
             last_name: lastName,
+            email: profile.email.trim(),
             subjects: profile.subjects,
             education_levels: profile.educationLevels,
             avatar_url: uploadedAvatarUrl || null,
         };
 
         const profileRes = await updateTeacherProfile(payload);
-        if (guardAuth(profileRes as any)) {
+        if (guardAuth(profileRes as GuardableResult)) {
             setIsSaving(false);
             return;
         }
@@ -238,17 +258,6 @@ export function ProfileView({
             <ProfileViewMessageState
                 title="We couldn't load this profile."
                 description="Try again to fetch the latest teacher details."
-                actionLabel="Retry"
-                onAction={loadProfile}
-            />
-        );
-    }
-
-    if (loadState === 'empty') {
-        return (
-            <ProfileViewMessageState
-                title="No profile details yet."
-                description="Once teacher profile information is available, it will appear here."
                 actionLabel="Retry"
                 onAction={loadProfile}
             />
@@ -343,7 +352,7 @@ export function ProfileView({
             <div className="mb-6">
                 <label className="text-[13px] text-graphite-60 mb-2.5 block">Subject(s)</label>
                 <div className="flex flex-wrap gap-2">
-                    {ALL_SUBJECTS.map((subject) => {
+                    {subjectOptions.map((subject) => {
                         const selected = profile.subjects.includes(subject);
                         return (
                             <button
@@ -366,7 +375,7 @@ export function ProfileView({
             <div className="mb-8">
                 <label className="text-[13px] text-graphite-60 mb-2.5 block">Education level(s)</label>
                 <div className="flex flex-wrap gap-2">
-                    {ALL_LEVELS.map((level) => {
+                    {levelOptions.map((level) => {
                         const selected = profile.educationLevels.includes(level);
                         return (
                             <button
@@ -424,7 +433,7 @@ export function ProfileView({
                         <div className="mx-auto w-10 h-1 bg-[#D0CCC5] rounded-full mb-6" />
 
                         <h3 className="text-[16px] font-semibold text-[#2B2B2F] text-center mb-1">Discard changes?</h3>
-                        <p className="text-[13px] text-graphite-40 text-center mb-6">Your edits won't be saved.</p>
+            <p className="text-[13px] text-graphite-40 text-center mb-6">Your edits won&apos;t be saved.</p>
 
                         <button
                             onClick={() => {
@@ -455,7 +464,7 @@ export function ProfileView({
     );
 }
 
-function buildRouteError(status: number, data: any) {
+function buildRouteError(status: number, data: UploadRouteResponse) {
     const detail = data?.detail || data?.message || data?.error || (status === 401 ? 'Unauthorized' : 'Request failed');
     return typeof detail === 'string' ? detail : JSON.stringify(detail ?? '');
 }

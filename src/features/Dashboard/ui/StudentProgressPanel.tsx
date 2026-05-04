@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { getStudentSubjectDetail } from '../api/student';
 import { normalizeStudentProgress, type StudentProgressSubject } from '../api/studentProgress';
 
 type StudentProgressPanelProps = {
@@ -135,7 +136,68 @@ export function StudentProgressPanel({ progressData }: StudentProgressPanelProps
 }
 
 function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBack: () => void }) {
-    const hasActivity = subject.conceptList.length > 0 || subject.lessons.length > 0;
+    const [detail, setDetail] = useState<SubjectDetail>(subject);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+
+        async function loadDetail() {
+            setLoading(true);
+            setError(null);
+            try {
+                const res = await getStudentSubjectDetail(subject.name);
+                if (cancelled) return;
+                if (res?.error) {
+                    throw new Error(res.error);
+                }
+
+                const data = (res as any)?.data || {};
+                setDetail({
+                    ...subject,
+                    conceptsAttempted: Number(data.concepts_learned ?? subject.conceptsAttempted ?? 0),
+                    conceptsUnderstood: Number(data.concepts_reinforced ?? subject.conceptsUnderstood ?? 0),
+                    conceptList: Array.isArray(data.concepts)
+                        ? data.concepts.map((concept: Record<string, unknown>) => ({
+                              name:
+                                  (typeof concept.name === 'string' && concept.name) ||
+                                  (typeof concept.title === 'string' && concept.title) ||
+                                  'Concept',
+                              understood: Boolean(concept.understood ?? concept.complete ?? concept.completed),
+                          }))
+                        : [],
+                    lessons: Array.isArray(data.lessons)
+                        ? data.lessons.map((lesson: Record<string, unknown>) => ({
+                              name:
+                                  (typeof lesson.name === 'string' && lesson.name) ||
+                                  (typeof lesson.title === 'string' && lesson.title) ||
+                                  'Lesson',
+                              progress: Number(lesson.progress ?? lesson.completed ?? 0),
+                              total: Math.max(Number(lesson.total ?? lesson.total_steps ?? 1), 1),
+                              complete: Boolean(lesson.complete ?? lesson.completed),
+                          }))
+                        : [],
+                });
+            } catch (err) {
+                if (cancelled) return;
+                setError(err instanceof Error ? err.message : 'Failed to load subject detail');
+                setDetail(subject);
+            } finally {
+                if (!cancelled) {
+                    setLoading(false);
+                }
+            }
+        }
+
+        void loadDetail();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [subject]);
+
+    const hasActivity = detail.conceptList.length > 0 || detail.lessons.length > 0;
 
     return (
         <div className="max-w-[820px]">
@@ -146,7 +208,22 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                 <span className="text-[20px] font-bold text-indigo transition-colors group-hover:text-[#2C2F52]">{subject.name}</span>
             </button>
 
-            {!hasActivity ? (
+            {loading ? (
+                <div className="flex h-[calc(100vh-240px)] items-center justify-center">
+                    <p className="text-[14px] font-medium text-graphite/60">Loading subject detail...</p>
+                </div>
+            ) : error ? (
+                <div className="flex h-[calc(100vh-240px)] flex-col items-center justify-center gap-3">
+                    <p className="text-[14px] font-medium text-[#C0392B]">{error}</p>
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="rounded-full border border-indigo px-5 py-2 text-[13px] font-semibold text-indigo"
+                    >
+                        Back
+                    </button>
+                </div>
+            ) : !hasActivity ? (
                 <div className="flex h-[calc(100vh-240px)] flex-col items-center justify-center">
                     <div className="mb-5 flex h-[110px] w-[140px] items-center justify-center rounded-2xl bg-[#EEECEA]">
                         <svg width="60" height="50" viewBox="0 0 60 50" fill="none">
@@ -165,20 +242,20 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                 <>
                     <div className="mb-10 grid grid-cols-2 gap-4">
                         <div className="rounded-2xl border border-[#E9E7E2] bg-transparent px-6 py-5">
-                            <div className="mb-1 text-[36px] font-bold leading-tight text-indigo">{subject.conceptsAttempted}</div>
+                            <div className="mb-1 text-[36px] font-bold leading-tight text-indigo">{detail.conceptsAttempted}</div>
                             <div className="text-[13px] font-medium text-graphite/60">Concepts attempted</div>
                         </div>
                         <div className="rounded-2xl border border-[#E9E7E2] bg-transparent px-6 py-5">
-                            <div className="mb-1 text-[36px] font-bold leading-tight text-indigo">{subject.conceptsUnderstood}</div>
+                            <div className="mb-1 text-[36px] font-bold leading-tight text-indigo">{detail.conceptsUnderstood}</div>
                             <div className="text-[13px] font-medium text-graphite/60">Concepts understood</div>
                         </div>
                     </div>
 
-                    {subject.conceptList.length > 0 ? (
+                    {detail.conceptList.length > 0 ? (
                         <section className="mb-10">
                             <h3 className="mb-5 text-[12px] font-bold uppercase tracking-[0.08em] text-indigo">Concepts</h3>
                             <div className="flex flex-col">
-                                {subject.conceptList.map((concept) => (
+                                {detail.conceptList.map((concept) => (
                                     <div key={concept.name} className="flex items-center justify-between border-b border-[#F0EDE7] py-4 last:border-b-0">
                                         <span className="text-[14px] font-medium text-black">{concept.name}</span>
                                         {concept.understood ? (
@@ -196,11 +273,11 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                         </section>
                     ) : null}
 
-                    {subject.lessons.length > 0 ? (
+                    {detail.lessons.length > 0 ? (
                         <section>
                             <h3 className="mb-5 text-[12px] font-bold uppercase tracking-[0.08em] text-indigo">Lessons</h3>
                             <div className="flex flex-col gap-4">
-                                {subject.lessons.map((lesson) => {
+                                {detail.lessons.map((lesson) => {
                                     const pct = (lesson.progress / Math.max(lesson.total, 1)) * 100;
                                     return (
                                         <div key={lesson.name} className="rounded-2xl border border-[#E9E7E2] bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
