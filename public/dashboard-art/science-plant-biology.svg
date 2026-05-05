@@ -1,0 +1,17 @@
+<svg width="1240" height="360" viewBox="0 0 1240 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1240" height="360" rx="32" fill="#EAF5E6"/>
+  <circle cx="1044" cy="92" r="112" fill="#D9EDD4"/>
+  <circle cx="1118" cy="270" r="132" fill="#CEE5C7"/>
+  <rect x="102" y="92" width="318" height="176" rx="28" fill="#FCFCFC"/>
+  <path d="M260 246V150" stroke="#3B3F6E" stroke-width="12" stroke-linecap="round"/>
+  <path d="M260 162C230 158 206 138 196 112C232 110 260 126 260 162Z" fill="#6BCF7F"/>
+  <path d="M260 184C218 184 186 160 174 126C220 126 252 144 260 184Z" fill="#9FD38F"/>
+  <path d="M260 162C292 158 320 136 334 108C298 108 270 124 260 162Z" fill="#59B86F"/>
+  <path d="M260 186C302 186 336 160 350 126C304 126 272 144 260 186Z" fill="#84C978"/>
+  <rect x="232" y="246" width="56" height="30" rx="10" fill="#A56A43"/>
+  <rect x="612" y="96" width="292" height="164" rx="28" fill="#FCFCFC"/>
+  <circle cx="678" cy="178" r="34" fill="#6BCF7F"/>
+  <circle cx="740" cy="178" r="34" fill="#84C978"/>
+  <circle cx="802" cy="178" r="34" fill="#59B86F"/>
+  <text x="650" y="228" fill="#3B3F6E" font-family="Arial, sans-serif" font-size="28" font-weight="700">cells · roots · leaves</text>
+</svg>

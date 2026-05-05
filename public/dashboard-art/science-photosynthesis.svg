@@ -1,0 +1,18 @@
+<svg width="1240" height="360" viewBox="0 0 1240 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1240" height="360" rx="32" fill="#EAF4DD"/>
+  <circle cx="1040" cy="86" r="112" fill="#DCECC9"/>
+  <circle cx="1114" cy="270" r="132" fill="#D2E4BC"/>
+  <circle cx="216" cy="98" r="34" fill="#F3D26E"/>
+  <path d="M312 252V154" stroke="#3B3F6E" stroke-width="12" stroke-linecap="round"/>
+  <path d="M312 174C274 172 244 148 232 116C280 114 308 136 312 174Z" fill="#6BCF7F"/>
+  <path d="M312 202C352 198 384 172 398 136C350 136 320 160 312 202Z" fill="#59B86F"/>
+  <path d="M178 114C220 128 246 146 270 174" stroke="#F2C24B" stroke-width="8" stroke-linecap="round"/>
+  <path d="M470 146C510 146 546 178 546 218V252H470C428 252 394 218 394 176V146H470Z" fill="#FCFCFC"/>
+  <text x="424" y="192" fill="#3B3F6E" font-family="Arial, sans-serif" font-size="30" font-weight="700">CO₂ in</text>
+  <text x="424" y="228" fill="#3B3F6E" font-family="Arial, sans-serif" font-size="28" font-weight="700">O₂ out</text>
+  <rect x="652" y="92" width="274" height="176" rx="28" fill="#FCFCFC"/>
+  <path d="M692 214H886" stroke="#3B3F6E" stroke-width="8" stroke-linecap="round"/>
+  <path d="M692 176H824" stroke="#6BCF7F" stroke-width="18" stroke-linecap="round"/>
+  <path d="M824 176L852 150" stroke="#6BCF7F" stroke-width="12" stroke-linecap="round"/>
+  <path d="M824 176L852 202" stroke="#6BCF7F" stroke-width="12" stroke-linecap="round"/>
+</svg>

@@ -55,7 +55,14 @@ type TeacherClassCard = {
     studentCount: number;
     subjectLabel: string;
     levelLabel: string;
-    isPlaceholder?: boolean;
+};
+
+type TeacherRosterClass = {
+    id: string;
+    name: string;
+    subject?: string;
+    educationLevel?: string;
+    studentCount?: number;
 };
 
 type UnknownRecord = Record<string, unknown>;
@@ -227,7 +234,66 @@ function normalizeClassSubject(subject: unknown) {
     return trimmed.length > 18 ? `${trimmed.slice(0, 17)}…` : trimmed;
 }
 
-function buildTeacherClassCards(students: unknown[]): TeacherClassCard[] {
+function normalizeEducationLevel(level: unknown, fallbackClassName: string) {
+    if (typeof level === 'string' && level.trim()) {
+        const trimmed = level.trim();
+        return trimmed.length > 18 ? `${trimmed.slice(0, 17)}…` : trimmed;
+    }
+
+    return normalizeClassLevel(fallbackClassName);
+}
+
+function buildTeacherClassCards(classes: TeacherRosterClass[], students: unknown[]): TeacherClassCard[] {
+    if (classes.length > 0) {
+        const studentCountsByClassId = new Map<string, number>();
+        const studentCountsByClassName = new Map<string, number>();
+
+        students.forEach((entry) => {
+            const student = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null;
+            if (!student) return;
+
+            const classId =
+                student.class_id != null && String(student.class_id).trim()
+                    ? String(student.class_id).trim()
+                    : null;
+            const className =
+                typeof student.class_name === 'string' && student.class_name.trim()
+                    ? student.class_name.trim().toLowerCase()
+                    : typeof student.class === 'string' && student.class.trim()
+                      ? student.class.trim().toLowerCase()
+                      : typeof student.group_name === 'string' && student.group_name.trim()
+                        ? student.group_name.trim().toLowerCase()
+                        : null;
+
+            if (classId) {
+                studentCountsByClassId.set(classId, (studentCountsByClassId.get(classId) ?? 0) + 1);
+            }
+
+            if (className) {
+                studentCountsByClassName.set(className, (studentCountsByClassName.get(className) ?? 0) + 1);
+            }
+        });
+
+        return [...classes]
+            .sort((a, b) => a.name.localeCompare(b.name))
+            .map((classItem) => {
+                const normalizedName = classItem.name.trim().toLowerCase();
+                const liveCount =
+                    studentCountsByClassId.get(classItem.id) ??
+                    studentCountsByClassName.get(normalizedName) ??
+                    classItem.studentCount ??
+                    0;
+
+                return {
+                    id: classItem.id,
+                    title: classItem.name,
+                    studentCount: liveCount,
+                    subjectLabel: normalizeClassSubject(classItem.subject),
+                    levelLabel: normalizeEducationLevel(classItem.educationLevel, classItem.name),
+                };
+            });
+    }
+
     const grouped = new Map<
         string,
         { id: string; title: string; studentCount: number; subjects: Map<string, number> }
@@ -258,9 +324,8 @@ function buildTeacherClassCards(students: unknown[]): TeacherClassCard[] {
         });
     });
 
-    const cards: TeacherClassCard[] = Array.from(grouped.values())
+    return Array.from(grouped.values())
         .sort((a, b) => a.title.localeCompare(b.title))
-        .slice(0, 3)
         .map((group) => {
             const topSubject =
                 Array.from(group.subjects.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'No subject';
@@ -273,19 +338,6 @@ function buildTeacherClassCards(students: unknown[]): TeacherClassCard[] {
                 levelLabel: normalizeClassLevel(group.title),
             };
         });
-
-    while (cards.length < 3) {
-        cards.push({
-            id: `placeholder-${cards.length}`,
-            title: 'No class yet',
-            studentCount: 0,
-            subjectLabel: 'No subject',
-            levelLabel: 'No level',
-            isPlaceholder: true,
-        });
-    }
-
-    return cards;
 }
 
 function buildActivityText(item: Record<string, unknown>) {
@@ -496,6 +548,7 @@ function TeacherHomeView({
     const router = useRouter();
     const [data, setData] = useState<UnknownRecord | null>(null);
     const [students, setStudents] = useState<unknown[]>([]);
+    const [classes, setClasses] = useState<TeacherRosterClass[]>([]);
     const [loading, setLoading] = useState(true);
     const guardAuth = useAuthGuard('teacher');
 
@@ -504,9 +557,21 @@ function TeacherHomeView({
         (async () => {
             if (!mounted) return;
 
-            const [homeRes, studentsRes] = await Promise.all([
+            const [homeRes, studentsRes, classesRes] = await Promise.all([
                 getTeacherDashboardHome(),
                 getTeacherStudents(),
+                fetch('/api/teacher/classes').then(async (res) => {
+                    const payload = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                        return {
+                            error:
+                                typeof payload?.detail === 'string'
+                                    ? payload.detail
+                                    : 'Could not load teacher classes.',
+                        };
+                    }
+                    return { data: payload };
+                }),
             ]);
 
             if (guardAuth(homeRes) || guardAuth(studentsRes) || !mounted) return;
@@ -520,6 +585,40 @@ function TeacherHomeView({
                     : Array.isArray((studentPayload as { students?: unknown[] } | null | undefined)?.students)
                       ? ((studentPayload as { students?: unknown[] }).students ?? [])
                       : [],
+            );
+            const rawClasses =
+                Array.isArray((classesRes as { data?: { classes?: unknown[] } }).data?.classes)
+                    ? ((classesRes as { data: { classes: unknown[] } }).data.classes ?? [])
+                    : [];
+            setClasses(
+                rawClasses.reduce<TeacherRosterClass[]>((acc, entry) => {
+                    const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null;
+                    if (!item) return acc;
+
+                    const id = item.id ?? item.class_id;
+                    const name = item.name ?? item.class_name;
+                    if (id == null || typeof name !== 'string' || !name.trim()) return acc;
+
+                    acc.push({
+                        id: String(id),
+                        name: name.trim(),
+                        subject:
+                            typeof item.subject === 'string'
+                                ? item.subject
+                                : Array.isArray(item.subjects)
+                                  ? item.subjects.filter((value): value is string => typeof value === 'string').join(', ')
+                                  : undefined,
+                        educationLevel:
+                            typeof item.education_level === 'string'
+                                ? item.education_level
+                                : typeof item.level === 'string'
+                                  ? item.level
+                                  : undefined,
+                        studentCount: toCount(item.student_count ?? item.students_count ?? 0),
+                    });
+
+                    return acc;
+                }, []),
             );
             setLoading(false);
         })();
@@ -542,7 +641,7 @@ function TeacherHomeView({
     );
     const topicsBuildingWell = toCount(weekStats?.topics_building_well ?? 0);
     const activity = normalizeRecentActivity(data);
-    const classCards = useMemo(() => buildTeacherClassCards(students), [students]);
+    const classCards = useMemo(() => buildTeacherClassCards(classes, students), [classes, students]);
 
     if (loading) {
         return <DashboardSplashState message="Populating your teacher dashboard..." />;
@@ -571,44 +670,50 @@ function TeacherHomeView({
                         Manage
                     </button>
                 </div>
-                <div className="grid grid-cols-3 gap-[22px]">
-                    {classCards.map((classItem) => (
-                        <div
-                            key={classItem.id}
-                            className="flex min-h-[150px] flex-col justify-between rounded-[10px] border border-[#E0D9CE] bg-[#F7F1E6] p-[10px]"
-                        >
-                            <div className="flex flex-col gap-5">
-                                <div className="flex flex-col gap-3">
-                                    <div className="flex flex-col gap-3">
-                                        <h3 className="text-[15px] font-bold leading-4 text-[#3B3F6E]/80">
-                                            {classItem.title}
-                                        </h3>
-                                        <p className="text-[12px] font-medium leading-4 text-[#3B3F6E]/70">
-                                            {classItem.studentCount} {classItem.studentCount === 1 ? 'student' : 'students'}
-                                        </p>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        <span className="rounded-[5px] bg-[#9A9CCB]/20 px-2 py-1 text-[12px] font-medium leading-4 text-[#3B3F6E]">
-                                            {classItem.subjectLabel}
-                                        </span>
-                                        <span className="rounded-[5px] bg-[#9A9CCB]/20 px-2 py-1 text-[12px] font-medium leading-4 text-[#3B3F6E]">
-                                            {classItem.levelLabel}
-                                        </span>
-                                    </div>
-                                </div>
-                                <p className="text-[12px] font-medium leading-4 text-[#3B3F6E]/70">
-                                    {classItem.isPlaceholder ? 'Waiting for class data' : 'Class overview'}
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => router.push('/dashboard?view=students')}
-                                className="mt-4 text-left text-[12px] font-medium leading-4 text-[#3B3F6E]/55 cursor-pointer"
+                {classCards.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-[22px] md:grid-cols-2 xl:grid-cols-3">
+                        {classCards.map((classItem) => (
+                            <div
+                                key={classItem.id}
+                                className="flex min-h-[150px] flex-col justify-between rounded-[10px] border border-[#E0D9CE] bg-[#F7F1E6] p-[10px]"
                             >
-                                View class
-                            </button>
-                        </div>
-                    ))}
-                </div>
+                                <div className="flex flex-col gap-5">
+                                    <div className="flex flex-col gap-3">
+                                        <div className="flex flex-col gap-3">
+                                            <h3 className="text-[15px] font-bold leading-4 text-[#3B3F6E]/80">
+                                                {classItem.title}
+                                            </h3>
+                                            <p className="text-[12px] font-medium leading-4 text-[#3B3F6E]/70">
+                                                {classItem.studentCount} {classItem.studentCount === 1 ? 'student' : 'students'}
+                                            </p>
+                                        </div>
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className="rounded-[5px] bg-[#9A9CCB]/20 px-2 py-1 text-[12px] font-medium leading-4 text-[#3B3F6E]">
+                                                {classItem.subjectLabel}
+                                            </span>
+                                            <span className="rounded-[5px] bg-[#9A9CCB]/20 px-2 py-1 text-[12px] font-medium leading-4 text-[#3B3F6E]">
+                                                {classItem.levelLabel}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p className="text-[12px] font-medium leading-4 text-[#3B3F6E]/70">
+                                        Class overview
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => router.push('/dashboard?view=students')}
+                                    className="mt-4 text-left text-[12px] font-medium leading-4 text-[#3B3F6E]/55 cursor-pointer"
+                                >
+                                    View class
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="rounded-[10px] border border-[#E0D9CE] bg-[#F7F1E6] px-4 py-5 text-[13px] text-[#3B3F6E]/65">
+                        No classes assigned yet.
+                    </div>
+                )}
             </section>
 
             <section className="mb-8 flex flex-col gap-4">

@@ -63,7 +63,6 @@ function ConceptResultRow({ result }: { result: LessonConceptResult }) {
 }
 
 export function LessonCompletionScreen({
-    lessonId,
     completion,
     showNextLesson,
 }: LessonCompletionScreenProps) {
@@ -71,8 +70,8 @@ export function LessonCompletionScreen({
     const nextLesson = showNextLesson ? completion.nextLesson : undefined;
 
     return (
-        <div className="min-h-screen bg-white">
-            <div className="mx-auto flex w-[1024px] min-h-[900px] flex-col bg-parchment">
+        <div className="min-h-screen bg-white px-0 sm:px-4 lg:px-6">
+            <div className="mx-auto flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment sm:min-h-[900px]">
                 <div className="flex h-14 items-center px-4">
                     <button
                         type="button"
@@ -92,7 +91,7 @@ export function LessonCompletionScreen({
                     </button>
                 </div>
 
-                <div className="mx-auto flex w-[640px] flex-col gap-8 px-0 pb-12 pt-14">
+                <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-4 pb-12 pt-10 sm:px-6 sm:pt-14">
                     <div className="flex flex-col gap-2">
                         <h1 className="text-[20px] font-bold leading-[30px] text-indigo">{completion.heading}</h1>
                         <div className="inline-flex w-fit rounded-2xl bg-lavender-20 px-3 py-2 text-[11px] font-medium leading-4 text-indigo">
@@ -101,7 +100,7 @@ export function LessonCompletionScreen({
                         <div className="text-[12px] leading-4 text-indigo/50">{completion.completedAtLabel}</div>
                     </div>
 
-                    <div className="flex gap-[14px]">
+                    <div className="grid grid-cols-1 gap-[14px] sm:grid-cols-3">
                         {completion.metrics.map((metric) => (
                             <SummaryMetricCard key={`${metric.label}:${metric.value}`} metric={metric} />
                         ))}
@@ -137,7 +136,7 @@ export function LessonCompletionScreen({
                                     ) : null}
                                     <span className="text-[12px] leading-4 text-graphite/60">{nextLesson.durationLabel}</span>
                                 </div>
-                                <div className="mt-5 flex justify-end">
+                                <div className="mt-5 flex justify-start sm:justify-end">
                                     <button
                                         type="button"
                                         onClick={() => router.push(`/lesson/${nextLesson.id}`)}

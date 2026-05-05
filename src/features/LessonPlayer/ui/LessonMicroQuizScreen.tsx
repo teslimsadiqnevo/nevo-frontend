@@ -108,8 +108,8 @@ export function LessonMicroQuizScreen({ lessonId, data, index }: LessonMicroQuiz
     const activePrompt = activePromptIndex !== null ? question.feedbackPrompts[activePromptIndex] : null;
 
     return (
-        <div className="min-h-screen bg-white py-12 flex justify-center">
-            <div className="relative flex flex-col w-[1024px] min-h-[900px] bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+        <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+            <div className="relative flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                 <div className="h-1 w-full bg-[#E0D9CE]">
                     <div className="h-full bg-indigo" style={{ width: `${question.progressPercent}%` }} />
                 </div>
@@ -129,7 +129,7 @@ export function LessonMicroQuizScreen({ lessonId, data, index }: LessonMicroQuiz
                     <span className="text-[13px] leading-5 text-indigo/60">{question.progressLabel}</span>
                 </div>
 
-                <div className="px-8 pt-8">
+                <div className="px-4 pt-8 sm:px-6 lg:px-8">
                     <h1 className="text-[17px] font-semibold leading-6 text-indigo">{question.prompt}</h1>
                     {showSupportExplanation ? (
                         <p className="mt-3 text-[14px] leading-[21px] text-graphite/65">
@@ -143,7 +143,7 @@ export function LessonMicroQuizScreen({ lessonId, data, index }: LessonMicroQuiz
                     ) : null}
                 </div>
 
-                <div className="px-8 pt-6">
+                <div className="px-4 pt-6 sm:px-6 lg:px-8">
                     <div className="flex flex-col gap-2">
                         {question.options.map((option, optionIndex) => {
                             let state: 'default' | 'selected' | 'correct' | 'incorrect' = 'default';
@@ -176,7 +176,7 @@ export function LessonMicroQuizScreen({ lessonId, data, index }: LessonMicroQuiz
                     </div>
                 </div>
 
-                <div className="px-8 pt-4">
+                <div className="px-4 pt-4 sm:px-6 lg:px-8">
                     <button
                         type="button"
                         onClick={resultState === 'correct' ? continueFlow : submit}

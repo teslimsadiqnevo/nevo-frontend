@@ -254,7 +254,7 @@ function AssessmentQuestionView({
                 })}
             </div>
 
-            <div className={`mt-4 flex flex-col items-center ${isKids ? 'w-[480px]' : 'w-[520px]'}`}>
+            <div className={`mt-4 flex w-full flex-col items-center ${isKids ? 'max-w-[480px]' : 'max-w-[520px]'}`}>
                 <button
                     type="button"
                     onClick={onSubmit}
@@ -319,15 +319,15 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
 
     if (view === 'correct') {
         return (
-            <div className="min-h-screen bg-white py-12 flex justify-center">
-                <div className="flex w-[1024px] min-h-[900px] flex-col bg-[#F0FAF0] shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+                <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-[#F0FAF0] shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-[#F0FAF0]">
                         <div className="h-full rounded-full bg-indigo" style={{ width: '65%' }} />
                     </div>
-                    <div className="px-12 pt-6">
+                    <div className="px-4 pt-4 sm:px-8 sm:pt-6 lg:px-12">
                         <AssessmentBackButton onClick={() => router.back()} />
                     </div>
-                    <div className="flex flex-1 flex-col items-center px-12 pt-16">
+                    <div className="flex flex-1 flex-col items-center px-4 pt-12 sm:px-8 sm:pt-16 lg:px-12">
                         <div className="flex h-24 w-24 items-center justify-center rounded-full border-[3px] border-[#7AB87A] bg-parchment">
                             <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
                                 <path d="M11 20.5L17.5 27L29.5 14.5" stroke="#7AB87A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
@@ -342,7 +342,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
                         <button
                             type="button"
                             onClick={() => router.push(`/lesson/${lessonId}/complete`)}
-                            className="mt-8 flex h-[52px] w-[200px] items-center justify-center rounded-xl bg-indigo text-[15px] font-semibold text-parchment cursor-pointer border-none"
+                            className="mt-8 flex h-[52px] w-full max-w-[240px] items-center justify-center rounded-xl border-none bg-indigo text-[15px] font-semibold text-parchment cursor-pointer"
                         >
                             {feedback.correct.ctaLabel}
                         </button>
@@ -357,15 +357,15 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
 
     if (view === 'incorrect') {
         return (
-            <div className="min-h-screen bg-white py-12 flex justify-center">
-                <div className="flex w-[1024px] min-h-[900px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+                <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-parchment">
                         <div className="h-full rounded-full bg-indigo" style={{ width: '42%' }} />
                     </div>
-                    <div className="px-12 pt-6">
+                    <div className="px-4 pt-4 sm:px-8 sm:pt-6 lg:px-12">
                         <AssessmentBackButton onClick={() => router.back()} />
                     </div>
-                    <div className="flex flex-1 flex-col items-center px-12 pt-16 pb-[72px]">
+                    <div className="flex flex-1 flex-col items-center px-4 pb-12 pt-12 sm:px-8 sm:pt-16 lg:px-12 lg:pb-[72px]">
                         <div className="flex h-24 w-24 items-center justify-center rounded-full border-[3px] border-[#E8A84A] bg-parchment">
                             <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
                                 <circle cx="18" cy="18" r="15" stroke="#E8A84A" strokeWidth="2.5" />
@@ -379,14 +379,14 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
                         <p className="mt-4 max-w-[640px] text-center text-[15px] leading-6 text-graphite/70">
                             {feedback.incorrect.description}
                         </p>
-                        <div className="mt-8 flex items-center gap-3">
+                        <div className="mt-8 flex w-full max-w-[360px] flex-col items-center gap-3 sm:flex-row sm:justify-center">
                             <button
                                 type="button"
                                 onClick={() => {
                                     setSelectedOptionId(null);
                                     setView('question');
                                 }}
-                                className="flex h-12 w-40 items-center justify-center rounded-xl border-2 border-indigo bg-transparent text-[15px] font-medium text-indigo cursor-pointer"
+                                className="flex h-12 w-full items-center justify-center rounded-xl border-2 border-indigo bg-transparent text-[15px] font-medium text-indigo cursor-pointer sm:w-40"
                             >
                                 {feedback.incorrect.primaryCtaLabel}
                             </button>
@@ -409,15 +409,15 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
 
     if (view === 'correction') {
         return (
-            <div className="min-h-screen bg-white py-12 flex justify-center">
-                <div className="flex w-[1024px] min-h-[900px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+                <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-parchment">
                         <div className="h-full rounded-full bg-indigo" style={{ width: '58%' }} />
                     </div>
-                    <div className="px-12 pt-6">
+                    <div className="px-4 pt-4 sm:px-8 sm:pt-6 lg:px-12">
                         <AssessmentBackButton onClick={() => router.back()} />
                     </div>
-                    <div className="flex flex-1 flex-col items-center px-12 pt-16 pb-[72px]">
+                    <div className="flex flex-1 flex-col items-center px-4 pb-12 pt-12 sm:px-8 sm:pt-16 lg:px-12 lg:pb-[72px]">
                         <div className="w-full max-w-[680px]">
                             <div>
                                 <div className="pl-1 text-[11px] uppercase leading-4 text-[#E8A84A]/70">
@@ -449,7 +449,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
                         <button
                             type="button"
                             onClick={() => router.push(`/lesson/${lessonId}/complete`)}
-                            className="mt-8 flex h-[52px] w-[200px] items-center justify-center rounded-xl bg-indigo text-[15px] font-semibold text-parchment cursor-pointer border-none"
+                            className="mt-8 flex h-[52px] w-full max-w-[240px] items-center justify-center rounded-xl border-none bg-indigo text-[15px] font-semibold text-parchment cursor-pointer"
                         >
                             {feedback.correction.ctaLabel}
                         </button>
@@ -460,8 +460,8 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
     }
 
     return (
-        <div className="min-h-screen bg-white py-12 flex justify-center">
-            <div className="flex flex-col items-center w-[1024px] min-h-[900px] bg-parchment px-0 pt-12 pb-[331px] shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+        <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+            <div className="flex min-h-screen w-full max-w-[1024px] flex-col items-center bg-parchment px-4 pb-16 pt-10 shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px] sm:px-8 sm:pb-24 sm:pt-12 lg:px-12 lg:pb-[331px]">
                 <AssessmentQuestionView
                     variant={variant}
                     question={question}

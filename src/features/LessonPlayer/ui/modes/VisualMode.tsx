@@ -183,14 +183,14 @@ export function VisualMode({
                         hasResolvedImage
                             ? 'bg-[#F5F0E8]'
                             : 'bg-[linear-gradient(135deg,#f1ece2_0%,#ebe4d7_45%,#e1d8c9_100%)]',
-                        isCalmDensity ? 'h-[280px]' : 'h-[280px]',
+                        isCalmDensity ? 'min-h-[240px] sm:min-h-[280px]' : 'min-h-[240px] sm:min-h-[280px]',
                     ].join(' ')}
                 >
                     {hasResolvedImage ? (
                         <img
                             src={resolvedImageState.imageUrl}
                             alt={resolvedImageState.imageAltText || `Visual explanation for ${stage.label}`}
-                            className="h-full w-full object-contain p-4"
+                            className="h-full w-full object-contain p-3 sm:p-4"
                         />
                     ) : resolvedImageState.fetchStatus === 'pending' ? (
                         <div className="absolute inset-0 flex flex-col justify-between p-6">
@@ -291,7 +291,7 @@ export function VisualMode({
                     ) : null}
 
                     {stageKey === 'relate' ? (
-                        <div className="absolute left-0 right-0 bottom-0 flex justify-center items-center gap-3 pb-6">
+                        <div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center justify-center gap-3 px-4 pb-6">
                             {RELATE_CHIPS.map((chip) => (
                                 <div
                                     key={chip}

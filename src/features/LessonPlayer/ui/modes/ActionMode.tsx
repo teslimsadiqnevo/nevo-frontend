@@ -170,8 +170,8 @@ export function ActionMode({
             media={
                 <div className="w-full flex flex-col gap-5">
                     <div className="rounded-[20px] border border-[rgba(59,63,110,0.12)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="min-w-0">
                                 <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-lavender">
                                     Current action
                                 </p>
@@ -229,7 +229,7 @@ export function ActionMode({
                             <button
                                 type="button"
                                 onClick={completeCurrentStep}
-                                className="ml-auto flex h-11 items-center justify-center rounded-full bg-indigo px-6 text-[14px] font-semibold text-parchment cursor-pointer border-none shadow-[0_12px_24px_rgba(59,63,110,0.18)]"
+                                className="flex h-11 w-full items-center justify-center rounded-full border-none bg-indigo px-6 text-[14px] font-semibold text-parchment shadow-[0_12px_24px_rgba(59,63,110,0.18)] cursor-pointer sm:ml-auto sm:w-auto"
                             >
                                 {isFinalStep ? continueLabel : 'Mark step done'}
                             </button>

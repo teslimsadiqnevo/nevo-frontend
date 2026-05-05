@@ -4,7 +4,7 @@ import { Icon, NevoLogo } from "@/shared/ui";
 import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const navItems = [
   { name: "Home", view: null },
@@ -17,6 +17,7 @@ const navItems = [
 
 export function StudentSidebar() {
   const [showAskNevo, setShowAskNevo] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
   const searchParams = useSearchParams();
   const currentView = searchParams.get("view") || null;
   const askPage = currentView || "home";
@@ -26,11 +27,20 @@ export function StudentSidebar() {
       : "Home"
   }`;
 
+  useEffect(() => {
+    const syncViewport = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, []);
+
   return (
     <>
-      <aside className="w-[220px] min-w-[220px] bg-[#3B3F6E] flex flex-col h-full">
-        {/* Logo */}
-        <div className="px-6 pt-6 pb-5">
+      <aside className="flex w-full flex-col bg-[#3B3F6E] lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:h-screen lg:w-[220px] lg:min-w-[220px]">
+        <div className="px-6 pb-4 pt-6 lg:pb-5">
           <NevoLogo
             className="h-6 w-auto"
             width={80}
@@ -39,8 +49,7 @@ export function StudentSidebar() {
           />
         </div>
 
-        {/* Navigation */}
-        <nav className="flex flex-col gap-1 px-0 flex-1">
+        <nav className="flex flex-1 gap-2 overflow-x-auto px-4 pb-4 lg:flex-col lg:gap-1 lg:overflow-y-auto lg:overflow-x-visible lg:px-0 lg:pb-0">
           {navItems.map((item) => {
             const isActive = item.view === currentView;
             const role = searchParams.get("role");
@@ -56,7 +65,7 @@ export function StudentSidebar() {
               <Link
                 key={item.name}
                 href={href}
-                className={`relative flex items-center gap-3 px-6 py-3.5 transition-all text-[14px] ${
+                className={`relative flex min-w-fit items-center gap-3 rounded-2xl px-5 py-3 transition-all text-[14px] lg:rounded-none lg:px-6 lg:py-3.5 ${
                   isActive
                     ? "bg-[#4A5080] text-[#F7F1E6] font-medium"
                     : "text-white/60 font-medium hover:bg-white/8 hover:text-white/90"
@@ -65,15 +74,14 @@ export function StudentSidebar() {
                 <StudentSidebarIcon name={item.name} active={isActive} />
                 <span>{item.name}</span>
                 {isActive && (
-                  <span className="absolute left-0 top-0 h-full w-[3px] bg-[#F7F1E6]" />
+                  <span className="absolute left-0 top-0 hidden h-full w-[3px] bg-[#F7F1E6] lg:block" />
                 )}
               </Link>
             );
           })}
         </nav>
 
-        {/* Ask Nevo Button */}
-        <div className="px-4 pb-6 pt-2">
+        <div className="px-4 pb-4 pt-0 lg:pb-6 lg:pt-2">
           <button
             type="button"
             onClick={() => setShowAskNevo(true)}
@@ -93,7 +101,7 @@ export function StudentSidebar() {
       <AskNevoDrawer
         open={showAskNevo}
         onClose={() => setShowAskNevo(false)}
-        leftInset={220}
+        leftInset={isDesktop ? 220 : 0}
         page={askPage}
         context={askContext}
       />

@@ -1,0 +1,14 @@
+<svg width="1240" height="360" viewBox="0 0 1240 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1240" height="360" rx="32" fill="#F3E6D4"/>
+  <circle cx="1042" cy="86" r="112" fill="#E7D3BA"/>
+  <circle cx="1116" cy="270" r="132" fill="#DDC3A2"/>
+  <path d="M116 250L204 126L292 250H116Z" fill="#C8B896"/>
+  <path d="M210 250L320 90L430 250H210Z" fill="#B59E74"/>
+  <path d="M148 250H398" stroke="#3B3F6E" stroke-opacity="0.12" stroke-width="6" stroke-linecap="round"/>
+  <rect x="602" y="90" width="302" height="176" rx="28" fill="#FCFCFC"/>
+  <rect x="654" y="132" width="28" height="88" rx="12" fill="#D3B27C"/>
+  <rect x="700" y="112" width="28" height="108" rx="12" fill="#C8A66D"/>
+  <rect x="746" y="146" width="28" height="74" rx="12" fill="#B58E58"/>
+  <rect x="792" y="126" width="28" height="94" rx="12" fill="#A97B4A"/>
+  <text x="650" y="244" fill="#3B3F6E" font-family="Arial, sans-serif" font-size="26" font-weight="700">timelines · empires · culture</text>
+</svg>

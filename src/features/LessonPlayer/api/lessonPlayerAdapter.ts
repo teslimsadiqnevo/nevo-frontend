@@ -1,5 +1,9 @@
 import type { LearningMode } from '@/shared/store/useRegistrationStore';
 import {
+    getStoredOfflineLessonPackage,
+    type OfflineLessonContentBlock,
+} from '@/features/Dashboard/lib/offlineLessons';
+import {
     STAGE_ORDER,
     type LessonAssessmentData,
     type LessonCompletionData,
@@ -45,6 +49,16 @@ type BackendLessonPayload = {
     concepts: BackendConcept[];
     adapted_lesson_id: string;
     original_lesson_id: string;
+};
+
+type OfflineLessonPayload = {
+    lesson_id: string;
+    title: string;
+    subject?: string | null;
+    topic?: string | null;
+    version_hash: string;
+    estimated_size_bytes: number;
+    content_blocks: OfflineLessonContentBlock[];
 };
 
 const STAGE_LABELS: Record<
@@ -402,6 +416,117 @@ function buildCompletion(payload: BackendLessonPayload, concepts: BackendConcept
     };
 }
 
+function coerceOfflineConcept(
+    block: OfflineLessonContentBlock,
+    index: number,
+    fallbackTitle: string,
+): BackendConcept | null {
+    const conceptText =
+        (typeof block.concept_text === 'string' && block.concept_text.trim()) ||
+        (typeof block.content === 'string' && block.content.trim()) ||
+        (typeof block.text === 'string' && block.text.trim()) ||
+        (typeof block.body === 'string' && block.body.trim()) ||
+        '';
+
+    if (!conceptText) return null;
+
+    const options = Array.isArray(block.checkpoint_options)
+        ? block.checkpoint_options.filter((option): option is string => typeof option === 'string' && option.trim().length > 0)
+        : [];
+
+    return {
+        concept_id:
+            (typeof block.concept_id === 'string' && block.concept_id.trim()) ||
+            `offline-concept-${index + 1}`,
+        concept_text: conceptText,
+        tts_text:
+            typeof block.tts_text === 'string' && block.tts_text.trim()
+                ? block.tts_text
+                : conceptText,
+        learning_mode_delivered:
+            typeof block.learning_mode_delivered === 'string' ? block.learning_mode_delivered : undefined,
+        image_url:
+            (typeof block.image_url === 'string' && block.image_url) ||
+            (typeof block.media_url === 'string' && block.media_url) ||
+            (typeof block.url === 'string' && block.url) ||
+            (typeof block.ai_generated_url === 'string' && block.ai_generated_url) ||
+            null,
+        image_alt_text:
+            typeof block.image_alt_text === 'string' ? block.image_alt_text : null,
+        image_fetch_status:
+            typeof block.image_url === 'string' ||
+            typeof block.media_url === 'string' ||
+            typeof block.url === 'string' ||
+            typeof block.ai_generated_url === 'string'
+                ? 'resolved'
+                : 'failed',
+        steps: Array.isArray(block.steps)
+            ? block.steps.reduce<BackendConceptStep[]>((acc, step, stepIndex) => {
+                  if (typeof step === 'string' && step.trim()) {
+                      acc.push({ step_number: stepIndex + 1, text: step.trim() });
+                      return acc;
+                  }
+                  if (step && typeof step === 'object') {
+                      const stepRecord = step as Record<string, unknown>;
+                      const stepText =
+                          (typeof stepRecord.text === 'string' && stepRecord.text.trim()) ||
+                          (typeof stepRecord.step_text === 'string' && stepRecord.step_text.trim()) ||
+                          '';
+                      if (stepText) {
+                          acc.push({
+                              step_number: Number(stepRecord.step_number ?? stepIndex + 1),
+                              text: stepText,
+                          });
+                      }
+                  }
+                  return acc;
+              }, [])
+            : null,
+        contains_formal_representation: typeof block.formal_representation === 'string',
+        formal_representation:
+            typeof block.formal_representation === 'string' ? block.formal_representation : null,
+        checkpoint_question:
+            (typeof block.checkpoint_question === 'string' && block.checkpoint_question.trim()) ||
+            `What is the main idea of ${fallbackTitle}?`,
+        checkpoint_options: options.length > 0 ? options : ['I understand the idea', 'I need more help'],
+        checkpoint_answer:
+            (typeof block.checkpoint_answer === 'string' && block.checkpoint_answer.trim()) || 'A',
+        checkpoint_tts_text:
+            typeof block.checkpoint_tts_text === 'string' ? block.checkpoint_tts_text : undefined,
+        key_term:
+            (typeof block.key_term === 'string' && block.key_term.trim()) ||
+            fallbackTitle,
+        difficulty_level: Number(block.difficulty_level ?? 1),
+        estimated_read_time_seconds: Number(block.estimated_read_time_seconds ?? 20),
+    };
+}
+
+function adaptOfflineLessonPayload(payload: OfflineLessonPayload): LessonPlayerData {
+    const concepts =
+        Array.isArray(payload.content_blocks) && payload.content_blocks.length > 0
+            ? payload.content_blocks
+                  .map((block, index) => coerceOfflineConcept(block, index, payload.title))
+                  .filter((concept): concept is BackendConcept => concept !== null)
+            : [];
+
+    const adaptedPayload: BackendLessonPayload = {
+        lesson_title: payload.title,
+        adaptation_style: `Offline lesson package${payload.topic ? ` • ${payload.topic}` : ''}`,
+        learning_mode_delivered: 'visual',
+        adapt_automatically: true,
+        concepts,
+        adapted_lesson_id: payload.lesson_id,
+        original_lesson_id: payload.lesson_id,
+    };
+
+    const adapted = adaptLessonPayload(adaptedPayload);
+    return {
+        ...adapted,
+        subject: payload.subject || adapted.subject,
+        topic: payload.topic || adapted.topic,
+    };
+}
+
 function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
     const recommendedMode = normalizeLearningMode(payload.learning_mode_delivered);
     const sourceConcepts = Array.isArray(payload.concepts) && payload.concepts.length > 0
@@ -500,14 +625,30 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
 }
 
 export async function getLessonPlayer(lessonId: string): Promise<LessonPlayerData> {
-    const res = await fetch(`/api/lessons/${lessonId}/play`);
-    const data = await res.json().catch(() => ({}));
+    const offlinePackage = getStoredOfflineLessonPackage(lessonId);
 
-    if (!res.ok) {
-        throw new Error(
-            typeof data?.detail === 'string' ? data.detail : 'Failed to load lesson.',
-        );
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && offlinePackage) {
+        return adaptOfflineLessonPayload(offlinePackage);
     }
 
-    return adaptLessonPayload(data as BackendLessonPayload);
+    try {
+        const res = await fetch(`/api/lessons/${lessonId}/play`);
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+            if (offlinePackage) {
+                return adaptOfflineLessonPayload(offlinePackage);
+            }
+            throw new Error(
+                typeof data?.detail === 'string' ? data.detail : 'Failed to load lesson.',
+            );
+        }
+
+        return adaptLessonPayload(data as BackendLessonPayload);
+    } catch (error) {
+        if (offlinePackage) {
+            return adaptOfflineLessonPayload(offlinePackage);
+        }
+        throw error;
+    }
 }

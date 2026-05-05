@@ -1,0 +1,14 @@
+<svg width="1240" height="360" viewBox="0 0 1240 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1240" height="360" rx="32" fill="#F6EEDB"/>
+  <circle cx="1042" cy="88" r="112" fill="#E8D9BC"/>
+  <circle cx="1112" cy="266" r="132" fill="#E0D0B0"/>
+  <circle cx="270" cy="184" r="112" fill="#FCFAF3"/>
+  <path d="M270 184L382 184C382 122.144 331.856 72 270 72V184Z" fill="#E7A85D"/>
+  <path d="M270 184L270 72C208.144 72 158 122.144 158 184H270Z" fill="#9A9CCB"/>
+  <path d="M270 184L158 184C158 245.856 208.144 296 270 296V184Z" fill="#6BCF7F"/>
+  <path d="M270 184L270 296C331.856 296 382 245.856 382 184H270Z" fill="#F2D67C"/>
+  <circle cx="270" cy="184" r="112" stroke="#3B3F6E" stroke-opacity="0.08" stroke-width="4"/>
+  <rect x="604" y="98" width="292" height="164" rx="28" fill="#FCFAF3"/>
+  <text x="664" y="168" fill="#3B3F6E" font-family="Arial, sans-serif" font-size="56" font-weight="700">3/4</text>
+  <text x="664" y="220" fill="#3B3F6E" fill-opacity="0.68" font-family="Arial, sans-serif" font-size="28" font-weight="600">fraction of a whole</text>
+</svg>

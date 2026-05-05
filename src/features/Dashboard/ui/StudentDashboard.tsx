@@ -23,6 +23,15 @@ import {
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
 import { useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import { getLessonArtwork } from "../lib/lessonArtwork";
+import {
+  getStoredOfflineLessonPackage,
+  listStoredOfflineLessonPackages,
+  prepareOfflineLessonPackage,
+  removeOfflineLessonPackage,
+  saveOfflineLessonPackage,
+  type OfflineLessonPackage,
+} from "../lib/offlineLessons";
 import dynamic from "next/dynamic";
 
 const StudentProgressPanel = dynamic(
@@ -108,6 +117,15 @@ export type Lesson = {
   status: "completed" | "in_progress" | "not_started";
   objectives?: string[];
   bannerColor?: string;
+  image_url?: string;
+  media_url?: string;
+  imageUrl?: string;
+  thumbnail_url?: string;
+  thumbnailUrl?: string;
+  cover_image?: string;
+  coverImage?: string;
+  banner_image_url?: string;
+  bannerImageUrl?: string;
   stepProgress?: {
     currentStep: number;
     totalSteps: number;
@@ -176,6 +194,51 @@ const subjectColors: Record<
   Literature: { bg: "#F5E0E9", text: "#8B3A62", banner: "#D4A0B8" },
   Geography: { bg: "#D6EAF3", text: "#1B6B8A", banner: "#8BBEDB" },
 };
+
+function getLessonVisualUrl(lesson: Lesson) {
+  return getLessonArtwork(lesson);
+}
+
+function normalizeProgress(lesson: Lesson | null) {
+  const stepProgress = lesson?.stepProgress;
+  if (!stepProgress) {
+    return {
+      currentStep: lesson?.status === "in_progress" ? 2 : 1,
+      totalSteps: 5,
+      progressPercentage: lesson?.status === "in_progress" ? 40 : 0,
+    };
+  }
+
+  return {
+    currentStep: Math.max(1, stepProgress.currentStep || 1),
+    totalSteps: Math.max(1, stepProgress.totalSteps || 5),
+    progressPercentage: Math.max(
+      0,
+      Math.min(100, stepProgress.progressPercentage || 0),
+    ),
+  };
+}
+
+function getLessonActionLabel(lesson: Lesson | null) {
+  if (!lesson) return "Open Lesson";
+  if (lesson.status === "completed") return "Review Lesson";
+  if (lesson.status === "in_progress") return "Continue Lesson";
+  return "Start Lesson";
+}
+
+function getLessonPickupLabel(
+  lesson: Lesson | null,
+  progress: ReturnType<typeof normalizeProgress>,
+) {
+  if (!lesson) return "Ready when you are";
+  if (lesson.status === "in_progress") {
+    return `Pick up from Step ${progress.currentStep}`;
+  }
+  if (lesson.status === "completed") {
+    return "Revisit what you learned";
+  }
+  return "Start from Step 1";
+}
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 export function StudentDashboard({
@@ -313,6 +376,15 @@ export function StudentDashboard({
             duration: `${estimatedMinutes} min`,
             status: item?.status || "not_started",
             objectives: item?.objectives || [],
+            image_url: item?.image_url,
+            media_url: item?.media_url,
+            imageUrl: item?.imageUrl,
+            thumbnail_url: item?.thumbnail_url,
+            thumbnailUrl: item?.thumbnailUrl,
+            cover_image: item?.cover_image,
+            coverImage: item?.coverImage,
+            banner_image_url: item?.banner_image_url,
+            bannerImageUrl: item?.bannerImageUrl,
             stepProgress:
               item?.progress_percentage != null ||
               item?.current_step != null ||
@@ -397,9 +469,9 @@ export function StudentDashboard({
 
   return (
     <>
-      <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
+      <div className="flex min-h-screen w-full flex-col bg-[#F7F1E6] font-sans">
         <StudentSidebar />
-        <main className="flex-1 overflow-y-auto relative px-[44px] py-[32px]">
+        <main className="relative flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:ml-[220px] lg:min-h-screen lg:px-[44px] lg:py-[32px]">
           {selectedLesson ? (
             <LessonDetailView
               lesson={selectedLesson}
@@ -470,54 +542,65 @@ function StudentHomeView({
 }) {
   const firstName =
     (studentName || user?.name || "Student").split(" ")[0] || "Student";
-  const progress = currentLesson?.stepProgress || {
-    currentStep: 2,
-    totalSteps: 5,
-    progressPercentage: 40,
-  };
+  const featuredLesson = currentLesson || assignedLessons[0] || null;
+  const progress = normalizeProgress(featuredLesson);
+  const assignedCards = featuredLesson
+    ? assignedLessons.filter((lesson) => lesson.id !== featuredLesson.id)
+    : assignedLessons;
+  const topicImageUrl = featuredLesson ? getLessonVisualUrl(featuredLesson) : null;
 
   return (
-    <div className="w-[716px] flex flex-col gap-[40px]">
-      {/* Greeting */}
+    <div className="mx-auto flex w-full max-w-[716px] flex-col gap-10 lg:max-w-[720px]">
       <div>
-        <h1 className="text-[40px] font-bold text-[#2B2B2F] leading-[50px]">
+        <h1 className="text-[36px] font-bold leading-[1.15] text-[#2B2B2F] sm:text-[40px]">
           Hi, {firstName}.
         </h1>
-        <p className="text-[18px] font-medium text-[#2B2B2F]/80 leading-[27px] mt-1">
+        <p className="mt-1 text-[16px] font-medium leading-[1.5] text-[#2B2B2F]/80 sm:text-[18px]">
           Ready to continue where you left off?
         </p>
       </div>
 
-      {/* Continue Lesson Hero */}
-      {currentLesson ? (
+      {featuredLesson ? (
         <div
-          className="w-full bg-[#FCFCFC] rounded-[24px] border border-black/5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] p-[33px] flex flex-col gap-6 cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow box-border"
-          onClick={() => onSelectLesson(currentLesson)}
+          className="flex w-full cursor-pointer flex-col gap-6 rounded-[24px] border border-black/5 bg-[#FAF9F6] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-shadow hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] sm:p-[33px]"
+          onClick={() => onSelectLesson(featuredLesson)}
         >
           <div className="flex flex-col gap-2">
-            <span className="text-[12px] font-bold text-[#3B3F6E] tracking-[0.3px] uppercase">
-              {currentLesson.subject} · {currentLesson.topic}
+            <span className="text-[12px] font-bold uppercase tracking-[0.3px] text-[#3B3F6E]">
+              {featuredLesson.subject} · {featuredLesson.topic}
             </span>
-            <h2 className="text-[32px] font-bold text-[#2B2B2F] leading-[40px]">
-              {currentLesson.title}
+            <h2 className="text-[28px] font-bold leading-[1.2] text-[#2B2B2F] sm:text-[32px]">
+              {featuredLesson.title}
             </h2>
           </div>
 
-          <div className="w-[622px] h-[120px] bg-[#F7F1E6] rounded-[16px] relative overflow-hidden border border-black/5">
-            <div className="absolute inset-0 bg-gradient-to-r from-[#F7F1E6] via-[#F7F1E6]/80 to-transparent flex items-center px-8 z-10">
+          <div
+            className="relative h-[132px] w-full overflow-hidden rounded-[16px] border border-black/5 bg-[#F7F1E6] sm:h-[120px]"
+            style={
+              topicImageUrl
+                ? {
+                    backgroundImage: `url("${topicImageUrl}")`,
+                    backgroundPosition: "center",
+                    backgroundSize: "cover",
+                  }
+                : undefined
+            }
+          >
+            <div className="absolute inset-0 bg-[linear-gradient(90deg,#F7F1E6_0%,rgba(247,241,230,0.92)_42%,rgba(247,241,230,0.18)_100%)]" />
+            <div className="absolute inset-0 flex items-center px-5 sm:px-8">
               <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)] flex items-center justify-center shrink-0">
-                  <div className="w-8 h-8 bg-[#3B3F6E] rounded-full flex items-center justify-center relative">
-                    <div className="w-0 h-0 border-t-[5px] border-t-transparent border-l-[8px] border-l-[#FCFCFC] border-b-[5px] border-b-transparent ml-1" />
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                  <div className="relative flex h-8 w-8 items-center justify-center rounded-full bg-[#3B3F6E]">
+                    <div className="ml-1 h-0 w-0 border-y-[5px] border-y-transparent border-l-[8px] border-l-[#FCFCFC]" />
                   </div>
                 </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-[14px] font-bold text-[#3B3F6E]">
                     Step {progress.currentStep} of {progress.totalSteps}
                   </span>
-                  <div className="w-[128px] h-[6px] bg-black/10 rounded-full overflow-hidden relative">
+                  <div className="relative h-[6px] w-[128px] overflow-hidden rounded-full bg-black/10">
                     <div
-                      className="absolute left-0 top-0 h-full bg-[#3B3F6E] rounded-full"
+                      className="absolute left-0 top-0 h-full rounded-full bg-[#3B3F6E]"
                       style={{
                         width: `${Math.max(0, Math.min(100, progress.progressPercentage))}%`,
                       }}
@@ -528,18 +611,18 @@ function StudentHomeView({
             </div>
           </div>
 
-          <div className="flex items-center justify-between w-[622px] pt-2">
+          <div className="flex w-full flex-col gap-4 pt-2 sm:flex-row sm:items-center sm:justify-between">
             <span className="text-[14px] font-medium text-black/60">
-              Pick up from Step {progress.currentStep}
+              {getLessonPickupLabel(featuredLesson, progress)}
             </span>
             <button
-              className="px-8 py-4 bg-[#3B3F6E] hover:bg-[#2C2F52] text-[#FCFCFC] rounded-2xl text-[16px] font-semibold transition-colors cursor-pointer shadow-[0_4px_6px_-1px_rgba(59,63,110,0.2),0_2px_4px_-2px_rgba(59,63,110,0.2)]"
+              className="w-full rounded-2xl bg-[#3B3F6E] px-8 py-4 text-[16px] font-semibold text-[#FCFCFC] shadow-[0_4px_6px_-1px_rgba(59,63,110,0.2),0_2px_4px_-2px_rgba(59,63,110,0.2)] transition-colors hover:bg-[#2C2F52] sm:w-auto"
               onClick={(e) => {
                 e.stopPropagation();
-                onSelectLesson(currentLesson);
+                onSelectLesson(featuredLesson);
               }}
             >
-              Continue Lesson
+              {getLessonActionLabel(featuredLesson)}
             </button>
           </div>
         </div>
@@ -552,20 +635,21 @@ function StudentHomeView({
         />
       )}
 
-      {/* Assigned Section */}
-      <section className="w-[720px]">
-        <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">
+      <section className="w-full">
+        <h3 className="mb-4 text-[15px] font-semibold text-[#3B3F6E]">
           Assigned
         </h3>
-        {assignedLessons.length > 0 ? (
-          <div className="flex gap-4">
-            {assignedLessons.map((lesson) => (
-              <LessonCard
-                key={lesson.id}
-                lesson={lesson}
-                onClick={() => onSelectLesson(lesson)}
-              />
-            ))}
+        {(assignedCards.length > 0 || (!currentLesson && assignedLessons.length > 0)) ? (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {(assignedCards.length > 0 ? assignedCards : assignedLessons)
+              .slice(0, 4)
+              .map((lesson) => (
+                <LessonCard
+                  key={lesson.id}
+                  lesson={lesson}
+                  onClick={() => onSelectLesson(lesson)}
+                />
+              ))}
           </div>
         ) : (
           <DashboardEmptyState
@@ -577,14 +661,13 @@ function StudentHomeView({
         )}
       </section>
 
-      {/* Recommended Section */}
-      <section className="w-[720px] pb-12">
-        <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">
+      <section className="w-full pb-12">
+        <h3 className="mb-4 text-[15px] font-semibold text-[#3B3F6E]">
           Recommended for you
         </h3>
         {recommendedLessons.length > 0 ? (
-          <div className="flex gap-4">
-            {recommendedLessons.map((lesson) => (
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {recommendedLessons.slice(0, 4).map((lesson) => (
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
@@ -599,7 +682,7 @@ function StudentHomeView({
             title="Recommendations loading"
             description="Complete a lesson first and we'll suggest what's next."
           >
-            <button className="px-6 py-[6px] border border-[#3B3F6E] rounded-xl text-[14px] font-medium text-[#3B3F6E] mt-1 hover:bg-[#3B3F6E] hover:text-[#FCFCFC] transition-colors cursor-pointer">
+            <button className="mt-1 cursor-pointer rounded-xl border border-[#3B3F6E] px-6 py-[6px] text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#3B3F6E] hover:text-[#FCFCFC]">
               Browse all lessons
             </button>
           </DashboardEmptyState>
@@ -728,16 +811,22 @@ function LessonCard({
     text: "#3B3F6E",
     banner: "#C8C8C8",
   };
+  const cardImageUrl = getLessonVisualUrl(lesson);
 
   return (
     <div
-      className="w-[160px] h-[200px] bg-[#F7F1E6] rounded-[12px] border border-[#E0D9CE] p-[1px] box-border cursor-pointer hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)] transition-shadow group flex flex-col"
+      className="group flex h-[200px] min-w-0 cursor-pointer flex-col overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6] p-[1px] box-border transition-shadow hover:shadow-[0_4px_16px_rgba(0,0,0,0.07)]"
       onClick={onClick}
     >
-      {/* Image placeholder / top box */}
-      <div className="w-[156px] h-[80px] bg-[#9A9CCB]/15 rounded-t-[10px] shrink-0" />
+      <div
+        className="h-[80px] w-full shrink-0 rounded-t-[10px] bg-[#9A9CCB]/15"
+        style={{
+          backgroundImage: `linear-gradient(180deg, rgba(247,241,230,0.05) 0%, rgba(247,241,230,0.22) 100%), url("${cardImageUrl}")`,
+          backgroundPosition: "center",
+          backgroundSize: "cover",
+        }}
+      />
 
-      {/* Content */}
       <div className="flex flex-col px-4 py-3 gap-2 flex-1">
         <h4 className="text-[14px] font-semibold text-[#3B3F6E] leading-[21px] line-clamp-2">
           {lesson.title}
@@ -769,6 +858,13 @@ function StudentLessonsView({
   completedLessons: Lesson[];
 }) {
   const [completedOpen, setCompletedOpen] = useState(false);
+  const featuredLesson = currentLesson ?? teacherLessons[0] ?? null;
+  const teacherLessonList =
+    currentLesson || teacherLessons.length === 0
+      ? teacherLessons
+      : teacherLessons.filter((lesson) => lesson.id !== featuredLesson?.id);
+  const featuredProgress = normalizeProgress(featuredLesson);
+  const featuredActionLabel = getLessonActionLabel(featuredLesson);
 
   return (
     <div className="w-full max-w-[688px]">
@@ -782,49 +878,50 @@ function StudentLessonsView({
 
       {/* Current Lesson Hero */}
       <section className="mb-10">
-        {currentLesson ? (
+        {featuredLesson ? (
           <div
-            className="w-full rounded-3xl border border-black/5 bg-[#FCFCFC] p-8 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)]"
-            onClick={() => onSelectLesson(currentLesson)}
+            className="w-full rounded-3xl border border-black/5 bg-[#FCFCFC] p-6 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] sm:p-8"
+            onClick={() => onSelectLesson(featuredLesson)}
           >
-            <div className="flex items-start justify-between gap-8">
-              <div className="flex w-[312px] flex-col justify-between min-h-[221px]">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+              <div className="flex min-h-[221px] w-full flex-col justify-between lg:w-[312px]">
                 <div className="w-full">
                   <span className="text-[12px] font-bold uppercase tracking-[0.6px] text-[#3B3F6E]">
-                    {currentLesson.subject} · {currentLesson.topic}
+                    {featuredLesson.subject} · {featuredLesson.topic}
                   </span>
                   <h2 className="mt-4 text-[32px] font-bold leading-[35px] text-[#2B2B2F]">
-                    {currentLesson.title}
+                    {featuredLesson.title}
                   </h2>
 
                   <span className="mt-6 inline-flex items-center rounded-full bg-[#F7F1E6] px-3 py-1 text-[14px] font-medium leading-[21px] text-[#2B2B2F]/60">
-                    Step {currentLesson.stepProgress?.currentStep || 2} in
-                    progress
+                    {featuredLesson.status === "in_progress"
+                      ? `Step ${featuredProgress.currentStep} in progress`
+                      : featuredLesson.status === "completed"
+                        ? "Completed lesson"
+                        : "Ready to start"}
                   </span>
                 </div>
 
                 <button
-                  className="mt-4 flex h-[56px] w-[158px] items-center gap-2 rounded-2xl bg-[#3B3F6E] px-8 text-[16px] font-semibold text-white shadow-[0_4px_6px_-1px_rgba(59,63,110,0.2),0_2px_4px_-2px_rgba(59,63,110,0.2)] cursor-pointer"
+                  className="mt-4 flex h-[56px] w-full items-center justify-center gap-2 rounded-2xl bg-[#3B3F6E] px-8 text-[16px] font-semibold text-white shadow-[0_4px_6px_-1px_rgba(59,63,110,0.2),0_2px_4px_-2px_rgba(59,63,110,0.2)] cursor-pointer sm:w-[190px]"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onSelectLesson(currentLesson);
+                    onSelectLesson(featuredLesson);
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 14 14" fill="none">
                     <path d="M3 1.5L12 7L3 12.5V1.5Z" fill="white" />
                   </svg>
-                  Continue
+                  {featuredActionLabel.replace("Lesson", "").trim()}
                 </button>
               </div>
 
-              <div className="relative h-[180px] w-[280px] overflow-hidden rounded-2xl bg-[#F7F1E6]">
+              <div className="relative h-[220px] w-full overflow-hidden rounded-2xl bg-[#F7F1E6] lg:h-[180px] lg:w-[280px]">
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(59,63,110,0.1)_0%,rgba(0,0,0,0)_100%)]" />
-                <Image
-                  src="/images/lessons.png"
-                  alt="Lesson preview"
-                  fill
-                  className="object-cover opacity-90"
-                  sizes="280px"
+                <img
+                  src={getLessonImageUrl(featuredLesson)}
+                  alt={featuredLesson.title}
+                  className="h-full w-full object-cover opacity-90"
                 />
               </div>
             </div>
@@ -837,7 +934,8 @@ function StudentLessonsView({
               </div>
               <span className="text-[12px] font-semibold text-black/40">
                 {Math.round(
-                  currentLesson.stepProgress?.progressPercentage || 40,
+                  featuredProgress.progressPercentage ||
+                    (featuredLesson.status === "not_started" ? 0 : 40),
                 )}
                 %
               </span>
@@ -846,7 +944,11 @@ function StudentLessonsView({
               <div
                 className="h-full rounded-full bg-[#3B3F6E]"
                 style={{
-                  width: `${Math.max(20, currentLesson.stepProgress?.progressPercentage || 40)}%`,
+                  width: `${Math.max(
+                    featuredLesson.status === "not_started" ? 8 : 20,
+                    featuredProgress.progressPercentage ||
+                      (featuredLesson.status === "not_started" ? 0 : 40),
+                  )}%`,
                 }}
               />
             </div>
@@ -865,9 +967,9 @@ function StudentLessonsView({
         <h3 className="mb-5 text-[20px] font-bold text-[#2B2B2F]">
           From your teacher
         </h3>
-        {teacherLessons.length > 0 ? (
-          <div className="grid grid-cols-2 gap-5">
-            {teacherLessons.map((lesson) => (
+        {teacherLessonList.length > 0 ? (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+            {teacherLessonList.map((lesson) => (
               <TeacherLessonCard
                 key={lesson.id}
                 lesson={lesson}
@@ -1052,12 +1154,10 @@ function TeacherLessonCard({
     >
       <div className="flex items-start gap-4">
         <div className="relative h-16 w-16 overflow-hidden rounded-2xl bg-[#F7F1E6] shrink-0">
-          <Image
+          <img
             src={imageUrl}
             alt={lesson.title}
-            fill
-            className="object-cover opacity-90"
-            sizes="64px"
+            className="h-full w-full object-cover opacity-90"
           />
         </div>
         <div className="min-w-0 flex-1">
@@ -1134,16 +1234,36 @@ function CompletedLessonRow({
 }
 
 function getLessonImageUrl(lesson: Lesson) {
-  const lessonAny = lesson as Lesson & {
-    image_url?: string;
-    media_url?: string;
-    imageUrl?: string;
-  };
+  const keywords = [
+    lesson.subject,
+    lesson.topic,
+    lesson.title,
+    "education",
+    "learning",
+  ]
+    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .flatMap((value) =>
+      value
+        .toLowerCase()
+        .replace(/[^a-z0-9\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean),
+    )
+    .slice(0, 4);
+
   return (
-    lessonAny.image_url ||
-    lessonAny.media_url ||
-    lessonAny.imageUrl ||
-    "/images/lessons.png"
+    lesson.image_url ||
+    lesson.media_url ||
+    lesson.imageUrl ||
+    lesson.thumbnail_url ||
+    lesson.thumbnailUrl ||
+    lesson.cover_image ||
+    lesson.coverImage ||
+    lesson.banner_image_url ||
+    lesson.bannerImageUrl ||
+    `https://loremflickr.com/800/600/${encodeURIComponent(
+      keywords.join(",") || "education,lesson",
+    )}`
   );
 }
 
@@ -1168,11 +1288,17 @@ function LessonDetailView({
     let cancelled = false;
 
     async function loadDownloadState() {
+      const cachedPackage = getStoredOfflineLessonPackage(lessonId);
+      if (cachedPackage && !cancelled) {
+        setDownloadOffline(true);
+      }
+
       const res = await getStudentDownloads();
       if (cancelled) return;
       if (Array.isArray(res?.data?.downloads)) {
         setDownloadOffline(
-          res.data.downloads.some((entry: any) => entry.lesson_id === lessonId),
+          res.data.downloads.some((entry: any) => entry.lesson_id === lessonId) ||
+            Boolean(cachedPackage),
         );
       }
     }
@@ -1195,25 +1321,27 @@ function LessonDetailView({
         if (packageRes?.error || !packageRes?.data) {
           throw new Error(packageRes?.error || "Failed to fetch lesson package");
         }
-        localStorage.setItem(
-          `nevo-offline-lesson-${lessonId}`,
-          JSON.stringify(packageRes.data),
+        const preparedPackage = await prepareOfflineLessonPackage(
+          packageRes.data as OfflineLessonPackage,
         );
+        saveOfflineLessonPackage(preparedPackage);
         const recordRes = await recordStudentDownload({
-          lesson_id: packageRes.data.lesson_id || lessonId,
-          version_hash: packageRes.data.version_hash,
-          size_bytes: Number(packageRes.data.estimated_size_bytes || 0),
+          lesson_id: preparedPackage.lesson_id || lessonId,
+          version_hash: preparedPackage.version_hash,
+          size_bytes: Number(preparedPackage.estimated_size_bytes || 0),
         });
         if (recordRes?.error) {
-          throw new Error(recordRes.error);
+          console.error("Failed to sync download manifest", recordRes.error);
         }
         setDownloadOffline(true);
       } else {
-        const removeRes = await removeStudentDownload(lessonId);
-        if (removeRes?.error) {
-          throw new Error(removeRes.error);
+        removeOfflineLessonPackage(lessonId);
+        if (typeof navigator === "undefined" || navigator.onLine !== false) {
+          const removeRes = await removeStudentDownload(lessonId);
+          if (removeRes?.error) {
+            console.error("Failed to sync download removal", removeRes.error);
+          }
         }
-        localStorage.removeItem(`nevo-offline-lesson-${lessonId}`);
         setDownloadOffline(false);
       }
     } catch (err) {
@@ -1448,15 +1576,39 @@ function LessonActionBar({ lesson }: { lesson: Lesson }) {
   }
 }
 
-// ─── Downloads Mock Data ───────────────────────────────────────────────────────
 interface DownloadedLesson {
   id: string;
   title: string;
   subject: string;
   size: string;
+  sizeBytes: number;
+  source: "local" | "remote";
 }
 
-// ─── Downloads View ────────────────────────────────────────────────────────────
+function mapOfflinePackageToDownloadedLesson(
+  pkg: OfflineLessonPackage,
+): DownloadedLesson {
+  return {
+    id: String(pkg.lesson_id),
+    title: pkg.title || "Lesson",
+    subject: pkg.subject || "Subject",
+    size: formatStorageSize(Number(pkg.estimated_size_bytes || 0)),
+    sizeBytes: Number(pkg.estimated_size_bytes || 0),
+    source: "local",
+  };
+}
+
+function getStoredDownloadsSnapshot() {
+  const packages = listStoredOfflineLessonPackages();
+  return {
+    lessons: packages.map(mapOfflinePackageToDownloadedLesson),
+    totalSizeBytes: packages.reduce(
+      (total, pkg) => total + Number(pkg.estimated_size_bytes || 0),
+      0,
+    ),
+  };
+}
+
 function StudentDownloadsView() {
   const [lessons, setLessons] = useState<DownloadedLesson[]>([]);
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
@@ -1466,17 +1618,40 @@ function StudentDownloadsView() {
   const [loading, setLoading] = useState(true);
   const [removing, setRemoving] = useState(false);
   const [totalSizeBytes, setTotalSizeBytes] = useState(0);
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== "undefined" ? navigator.onLine === false : false,
+  );
   const router = useRouter();
+
+  useEffect(() => {
+    const syncOnlineState = () => {
+      setIsOffline(typeof navigator !== "undefined" && navigator.onLine === false);
+    };
+
+    syncOnlineState();
+    window.addEventListener("online", syncOnlineState);
+    window.addEventListener("offline", syncOnlineState);
+    return () => {
+      window.removeEventListener("online", syncOnlineState);
+      window.removeEventListener("offline", syncOnlineState);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadDownloads() {
       setLoading(true);
+      const storedSnapshot = getStoredDownloadsSnapshot();
+      if (!cancelled && storedSnapshot.lessons.length > 0) {
+        setLessons(storedSnapshot.lessons);
+        setTotalSizeBytes(storedSnapshot.totalSizeBytes);
+      }
+
       const res = await getStudentDownloads();
       if (cancelled) return;
 
-      if (res?.data) {
+      if (res?.data && storedSnapshot.lessons.length === 0) {
         const downloads = Array.isArray(res.data.downloads)
           ? res.data.downloads
           : [];
@@ -1487,6 +1662,8 @@ function StudentDownloadsView() {
               title: entry.title || "Lesson",
               subject: entry.subject || "Subject",
               size: formatStorageSize(Number(entry.estimated_size_bytes || 0)),
+              sizeBytes: Number(entry.estimated_size_bytes || 0),
+              source: "remote",
             }),
           ),
         );
@@ -1510,14 +1687,24 @@ function StudentDownloadsView() {
     if (!removeTarget || removing) return;
     setRemoving(true);
     try {
-      const res = await removeStudentDownload(removeTarget.id);
-      if (res?.error) {
-        throw new Error(res.error);
+      if (removeTarget.source === "local") {
+        removeOfflineLessonPackage(removeTarget.id);
       }
-      localStorage.removeItem(`nevo-offline-lesson-${removeTarget.id}`);
+      if (typeof navigator === "undefined" || navigator.onLine !== false) {
+        const res = await removeStudentDownload(removeTarget.id);
+        if (res?.error) {
+          throw new Error(res.error);
+        }
+      }
       setLessons((prev) => prev.filter((lesson) => lesson.id !== removeTarget.id));
       setRemoveTarget(null);
       setMenuOpenId(null);
+      if (removeTarget.source === "local") {
+        const storedSnapshot = getStoredDownloadsSnapshot();
+        setTotalSizeBytes(storedSnapshot.totalSizeBytes);
+      } else {
+        setTotalSizeBytes((prev) => Math.max(0, prev - removeTarget.sizeBytes));
+      }
     } catch (err) {
       console.error("Failed to remove download", err);
     } finally {
@@ -1598,32 +1785,33 @@ function StudentDownloadsView() {
 
   return (
     <div className="max-w-[820px]">
-      {/* Offline banner */}
-      <div className="bg-[#FFF8E1] border border-[#F5E6A3] rounded-xl px-5 py-3 mb-6 flex items-center gap-3">
-        <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
-          <path
-            d="M10 2L18 18H2L10 2Z"
-            stroke="#B8860B"
-            strokeWidth="1.5"
-            strokeLinejoin="round"
-            fill="#FFEAA7"
-            fillOpacity="0.5"
-          />
-          <line
-            x1="10"
-            y1="8"
-            x2="10"
-            y2="12"
-            stroke="#B8860B"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-          />
-          <circle cx="10" cy="15" r="0.8" fill="#B8860B" />
-        </svg>
-        <span className="text-[13px] text-[#8B6914] font-medium">
-          You&apos;re offline — downloaded lessons are available below.
-        </span>
-      </div>
+      {isOffline ? (
+        <div className="bg-[#FFF8E1] border border-[#F5E6A3] rounded-xl px-5 py-3 mb-6 flex items-center gap-3">
+          <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
+            <path
+              d="M10 2L18 18H2L10 2Z"
+              stroke="#B8860B"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+              fill="#FFEAA7"
+              fillOpacity="0.5"
+            />
+            <line
+              x1="10"
+              y1="8"
+              x2="10"
+              y2="12"
+              stroke="#B8860B"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <circle cx="10" cy="15" r="0.8" fill="#B8860B" />
+          </svg>
+          <span className="text-[13px] text-[#8B6914] font-medium">
+            You&apos;re offline — downloaded lessons are available below.
+          </span>
+        </div>
+      ) : null}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-6">

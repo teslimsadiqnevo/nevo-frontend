@@ -44,8 +44,8 @@ export function StageShell({
     onContinue,
 }: StageShellProps) {
     return (
-        <div className="flex flex-col w-[1024px] min-h-[900px] bg-parchment mx-auto shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
-            <div className="flex items-center justify-between h-16 px-12">
+        <div className="mx-auto flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
+            <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-12">
                 <button
                     type="button"
                     onClick={onBack}
@@ -63,15 +63,15 @@ export function StageShell({
                     </svg>
                 </button>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3">
                     {headerAction}
-                    <div className="px-4 py-2 rounded-[20px] bg-lavender-20">
+                    <div className="rounded-[20px] bg-lavender-20 px-3 py-2 sm:px-4">
                         <span className="text-[12px] font-medium leading-4 text-indigo">{pillText}</span>
                     </div>
                 </div>
             </div>
 
-            <div className="flex-1 px-12 pt-[31px] pb-6 flex flex-col">
+            <div className="flex flex-1 flex-col px-4 pb-6 pt-6 sm:px-6 sm:pt-8 lg:px-12">
                 <h2 className="text-[13px] font-semibold leading-5 tracking-[0.325px] uppercase text-lavender">
                     {label}
                 </h2>
@@ -80,11 +80,11 @@ export function StageShell({
 
                 {media ? <div className="mt-6">{media}</div> : null}
 
-                <div className={`mt-6 ${bodyWidthClassName}`}>
+                <div className={`mt-6 w-full ${bodyWidthClassName}`}>
                     {body}
                 </div>
 
-                <div className="mt-auto pt-12">
+                <div className="mt-auto pt-8 sm:pt-12">
                     <div className="relative w-full h-1 rounded-full bg-[#E0D9CE]">
                         <div
                             className="absolute left-0 top-0 bottom-0 bg-indigo rounded-full"
@@ -94,21 +94,21 @@ export function StageShell({
                 </div>
             </div>
 
-            <div className="w-full min-h-[78px] bg-parchment border-t border-[#E0D9CE] px-10 py-4">
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
-                    <div className="flex items-center">
+            <div className="w-full min-h-[78px] border-t border-[#E0D9CE] bg-parchment px-4 py-4 sm:px-6 lg:px-10">
+                <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
+                    <div className="flex items-center justify-center lg:justify-start">
                         {onContinue && continueLabel ? (
                             <button
                                 type="button"
                                 onClick={onContinue}
-                                className="flex h-11 items-center justify-center rounded-full bg-indigo px-6 text-[14px] font-semibold text-parchment cursor-pointer border-none shadow-[0_12px_24px_rgba(59,63,110,0.18)]"
+                                className="flex min-h-11 w-full items-center justify-center rounded-full border-none bg-indigo px-6 py-3 text-center text-[14px] font-semibold text-parchment shadow-[0_12px_24px_rgba(59,63,110,0.18)] cursor-pointer sm:w-auto"
                             >
                                 {continueLabel}
                             </button>
                         ) : null}
                     </div>
 
-                    <div className="flex items-center justify-center gap-5">
+                    <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5">
                     {TOOLBAR_BUTTONS.map((button) => {
                         const isActive = toolbarState === button.state;
                         return (
@@ -129,7 +129,7 @@ export function StageShell({
                     })}
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-center lg:justify-end">
                         <AskNevoButton context={askContext} />
                     </div>
                 </div>

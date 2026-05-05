@@ -24,12 +24,12 @@ export function LessonBreakScreen({ lessonId, data, variant, returnStage }: Less
     };
 
     return (
-        <div className="min-h-screen bg-white py-12 flex justify-center">
-            <div className="relative flex items-center justify-center w-[1024px] min-h-[900px] bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+        <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+            <div className="relative flex min-h-screen w-full max-w-[1024px] items-center justify-center bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                 <button
                     type="button"
                     onClick={() => router.push(`/lesson/${lessonId}/${returnStage}`)}
-                    className="absolute left-12 top-5 flex items-center justify-center w-11 h-11 bg-transparent border-none cursor-pointer"
+                    className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center border-none bg-transparent cursor-pointer sm:left-8 sm:top-5 lg:left-12"
                     aria-label="Back to lesson"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -43,7 +43,7 @@ export function LessonBreakScreen({ lessonId, data, variant, returnStage }: Less
                     </svg>
                 </button>
 
-                <div className="w-full max-w-[316px] text-center">
+                <div className="w-full max-w-[316px] px-4 text-center">
                     <div className="mx-auto flex h-[120px] w-[120px] items-center justify-center rounded-full bg-lavender-15">
                         <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
                             <path d="M14 16H34" stroke="rgba(59,63,110,0.45)" strokeWidth="3" strokeLinecap="round" />
@@ -61,7 +61,7 @@ export function LessonBreakScreen({ lessonId, data, variant, returnStage }: Less
                     <button
                         type="button"
                         onClick={goToStage}
-                        className="mx-auto mt-12 flex h-[52px] w-[240px] items-center justify-center rounded-xl bg-indigo text-[15px] font-semibold text-parchment cursor-pointer border-none"
+                        className="mx-auto mt-12 flex h-[52px] w-full max-w-[240px] items-center justify-center rounded-xl border-none bg-indigo text-[15px] font-semibold text-parchment cursor-pointer"
                     >
                         {state.primaryCta}
                     </button>

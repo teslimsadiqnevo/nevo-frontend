@@ -85,12 +85,12 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
 
     return (
         <>
-            <div className="min-h-screen bg-white py-12 flex justify-center">
-                <div className="relative flex items-center justify-center w-[1024px] min-h-[900px] bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+                <div className="relative flex min-h-screen w-full max-w-[1024px] items-center justify-center bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <button
                         type="button"
                         onClick={() => setShowLeaveDialog(true)}
-                        className="absolute left-5 top-5 flex items-center justify-center w-11 h-11 bg-transparent border-none cursor-pointer"
+                        className="absolute left-4 top-4 flex h-11 w-11 items-center justify-center border-none bg-transparent cursor-pointer sm:left-5 sm:top-5"
                         aria-label="Leave lesson"
                     >
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
@@ -104,7 +104,7 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
                         </svg>
                     </button>
 
-                    <div className="w-full max-w-[597px] px-8 text-center">
+                    <div className="w-full max-w-[597px] px-4 text-center sm:px-8">
                         <div className="inline-flex h-8 items-center rounded-2xl bg-lavender-20 px-4">
                             <span className="text-[12px] font-medium leading-4 text-indigo">{data.start.eyebrow}</span>
                         </div>
@@ -143,7 +143,7 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
                             />
                         </div>
 
-                        <div className="mx-auto mt-8 flex w-[280px] items-center gap-3 rounded-xl border border-[#E0D9CE] bg-white p-4 text-left">
+                        <div className="mx-auto mt-8 flex w-full max-w-[280px] items-center gap-3 rounded-xl border border-[#E0D9CE] bg-white p-4 text-left">
                             <StartCardIcon card={activeCard} />
                             <div>
                                 <p className="text-[13px] leading-[18px] text-graphite-70">{activeCard.detail}</p>
@@ -153,7 +153,7 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
                         <button
                             type="button"
                             onClick={beginLesson}
-                            className="mx-auto mt-10 flex h-14 w-[280px] items-center justify-center rounded-xl bg-indigo text-[16px] font-semibold text-parchment cursor-pointer border-none"
+                            className="mx-auto mt-10 flex h-14 w-full max-w-[280px] items-center justify-center rounded-xl border-none bg-indigo text-[16px] font-semibold text-parchment cursor-pointer"
                         >
                             {data.start.primaryCta}
                         </button>

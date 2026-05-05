@@ -111,7 +111,7 @@ export function AudioMode({
                         </span>
                     </div>
                 ) : (
-                    <div className="relative w-full rounded-2xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)] flex items-center justify-center gap-6 px-4 py-3">
+                    <div className="relative flex w-full flex-col items-center justify-center gap-4 rounded-2xl bg-white px-4 py-4 shadow-[0_1px_2px_rgba(0,0,0,0.05)] sm:flex-row sm:gap-6 sm:py-3">
                         <button
                             type="button"
                             onClick={() => {
@@ -132,7 +132,7 @@ export function AudioMode({
                             )}
                         </button>
 
-                        <div className="flex-1 h-12 flex items-center justify-center gap-[2px]">
+                        <div className="flex h-12 w-full flex-1 items-center justify-center gap-[2px]">
                             {Array.from({ length: toolbarState === 'expanded' ? 60 : 40 }).map((_, i) => {
                                 const heights = [12, 24, 18, 32, 22, 36, 28, 16, 30, 20, 26, 14];
                                 const h = heights[i % heights.length];
