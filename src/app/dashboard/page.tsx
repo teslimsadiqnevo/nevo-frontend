@@ -60,6 +60,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const session = await auth();
     const resolvedParams = await searchParams;
     const view = Array.isArray(resolvedParams?.view) ? resolvedParams.view[0] : resolvedParams?.view;
+    const requestedRoleParam = Array.isArray(resolvedParams?.role) ? resolvedParams.role[0] : resolvedParams?.role;
+    const requestedRole = typeof requestedRoleParam === "string" ? requestedRoleParam.toLowerCase() : null;
 
     const cookieStore = await cookies();
     const cookieUserRaw = cookieStore.get("user")?.value;
@@ -72,10 +74,19 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         }
     }
 
-    // Fallback to the `user` cookie for teacher onboarding flows after verification.
+    const sessionRole =
+        (session?.user as { role?: string } | undefined)?.role?.toLowerCase() || null;
+    const cookieRole = cookieUser?.role?.toLowerCase() || null;
+
+    const normalizedRequestedRole =
+        requestedRole === "school" ? "school_admin" : requestedRole;
+
+    // Fallback to the `user` cookie for teacher/school onboarding flows after verification,
+    // but never allow a mismatched stale cookie to override an explicit role request.
     const role =
-        (session?.user as { role?: string } | undefined)?.role?.toLowerCase() ||
-        cookieUser?.role?.toLowerCase() ||
+        sessionRole ||
+        normalizedRequestedRole ||
+        cookieRole ||
         null;
 
     // If there is no session and no disconnected role, redirect to login
@@ -83,8 +94,14 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         redirect("/login/school"); // A sensible default redirect
     }
 
+    const cookieMatchesRole =
+        cookieUser &&
+        cookieRole &&
+        role &&
+        (cookieRole === role || (cookieRole === "school" && role === "school_admin"));
+
     const resolvedUser = ((session?.user as Record<string, unknown> | undefined) ??
-        cookieUser ??
+        (cookieMatchesRole ? cookieUser : undefined) ??
         undefined) as DashboardUser | undefined;
 
     if (role === "school_admin") {

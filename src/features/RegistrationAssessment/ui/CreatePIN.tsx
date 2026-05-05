@@ -56,7 +56,7 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                 nevoId: resolvedNevoId,
                 pin: finalPin,
                 redirect: false,
-                callbackUrl: "/dashboard?view=home",
+                callbackUrl: "/dashboard?view=home&role=student",
             });
 
             if (signInResult?.error) {

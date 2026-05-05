@@ -17,12 +17,13 @@ export function Connect() {
     const [error, setError] = useState<string | null>(null);
     const [teacherName, setTeacherName] = useState<string | null>(null);
     const { token } = useRegistrationStore();
-    const studentDashboardUrl = "/dashboard?view=home";
+    const studentDashboardUrl = "/dashboard?view=home&role=student";
 
     useEffect(() => {
+        const videoElement = videoRef.current;
         return () => {
-            if (isScanning && videoRef.current) {
-                const stream = videoRef.current.srcObject as MediaStream;
+            if (isScanning && videoElement) {
+                const stream = videoElement.srcObject as MediaStream;
                 if (stream) {
                     stream.getTracks().forEach(track => track.stop());
                 }
@@ -51,7 +52,7 @@ export function Connect() {
                     setTeacherName(result.data.teacher_name || result.data.teacher.name);
                 }
             }
-        } catch (err) {
+        } catch {
             setError("Failed to connect to teacher.");
             setIsConnected(false);
         } finally {
@@ -111,7 +112,7 @@ export function Connect() {
     return (
         <div className="flex-1 flex flex-col items-center justify-center w-full relative mt-8 mb-10">
             <h1 className="text-[22px] font-extrabold text-indigo mb-2">Connect to your teacher</h1>
-            <p className="text-[13px] text-graphite-60 font-medium mb-8">Scan your teacher's QR code or enter their code.</p>
+            <p className="text-[13px] text-graphite-60 font-medium mb-8">Scan your teacher&apos;s QR code or enter their code.</p>
 
             {/* Scan QR Code Card */}
             <div className={`w-[480px] rounded-2xl border flex flex-col p-6 bg-transparent relative mb-4 transition-colors duration-300 ${isConnected && code === "QR-CODE-SCANNED" ? 'border-[#7DBF83]' : 'border-indigo/80'}`}>
@@ -134,7 +135,7 @@ export function Connect() {
                             </svg>
                         </div>
                         <h2 className="text-[15px] font-bold text-indigo">Scan QR code</h2>
-                        <p className="text-[13px] text-graphite-60 font-medium">Point your camera at your teacher's QR code.</p>
+                        <p className="text-[13px] text-graphite-60 font-medium">Point your camera at your teacher&apos;s QR code.</p>
                     </div>
                     <button onClick={startScanner} disabled={isConnected} className="px-[18px] py-[9px] bg-indigo text-white rounded-full text-[13px] font-bold active:scale-95 transition-all cursor-pointer hover:bg-opacity-90 disabled:opacity-50">
                         Open scanner
