@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { useAuthGuard } from '@/shared/lib';
+import { useApiTokenExpiryRedirect, useAuthGuard } from '@/shared/lib';
 import { SchoolAdminSidebar } from "@/widgets";
 import { getSchoolDashboardOverview, getSchoolDashboardSummary, getSchoolSettings } from '../api/school';
 
@@ -67,6 +67,7 @@ type InsightItem = {
 };
 
 export function SchoolAdminDashboard({ user }: { user?: DashboardUser }) {
+    useApiTokenExpiryRedirect('school');
     const searchParams = useSearchParams();
     const currentView = searchParams?.get('view') || null;
 

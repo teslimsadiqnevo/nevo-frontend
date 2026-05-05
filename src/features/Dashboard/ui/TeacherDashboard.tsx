@@ -8,7 +8,7 @@ import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
 import { getTeacherDashboardHome, getTeacherProfile, getTeacherStudents } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
-import { useAuthGuard } from "@/shared/lib";
+import { useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
 import logo from "@/shared/ui/icon/assets/default-logo.svg";
 
 const DashboardViewLoader = () => (
@@ -371,6 +371,7 @@ function normalizeRecentActivity(data: UnknownRecord | null | undefined): Teache
 }
 
 export function TeacherDashboard({ view = 'home', user }: { view?: string; user?: TeacherUserLike }) {
+    useApiTokenExpiryRedirect('teacher');
     const router = useRouter();
     const [actionModal, setActionModal] = useState<'upload' | 'assign' | null>(null);
     const [assignLessonId, setAssignLessonId] = useState<string | null>(null);
@@ -491,6 +492,7 @@ function TeacherHomeView({
     user?: TeacherUserLike;
     onAction: (action: 'upload' | 'assign') => void;
 }) {
+    useApiTokenExpiryRedirect('teacher');
     const router = useRouter();
     const [data, setData] = useState<UnknownRecord | null>(null);
     const [students, setStudents] = useState<unknown[]>([]);
