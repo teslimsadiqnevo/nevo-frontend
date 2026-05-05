@@ -1,6 +1,7 @@
 'use client';
 
 import { useLessonPlayer } from '../api/useLessonPlayer';
+import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import { LessonCompletionScreen } from './LessonCompletionScreen';
 
 type LessonCompletionRouteProps = {
@@ -9,6 +10,7 @@ type LessonCompletionRouteProps = {
 };
 
 export function LessonCompletionRoute({ lessonId, showNextLesson }: LessonCompletionRouteProps) {
+    useApiTokenExpiryRedirect('student');
     const { data, loading, error } = useLessonPlayer(lessonId);
 
     if (loading) {

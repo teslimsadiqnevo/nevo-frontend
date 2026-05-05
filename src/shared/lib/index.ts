@@ -5,5 +5,7 @@ export { pathLinks } from "./lib";
 export { works } from "./lib";
 export { roles } from "./lib";
 export { getInitials } from "./getInitials";
+export { getApiTokenExpiryMs, isApiTokenExpired } from "./apiTokenExpiry";
+export { useApiTokenExpiryRedirect } from "./useApiTokenExpiryRedirect";
 export { useAuthGuard } from "./useAuthGuard";
 export type { AuthRole } from "./useAuthGuard";

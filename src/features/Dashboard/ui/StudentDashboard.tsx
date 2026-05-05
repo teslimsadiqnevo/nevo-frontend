@@ -22,7 +22,7 @@ import {
 } from "../api/student";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
-import { useAuthGuard } from "@/shared/lib";
+import { useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
 import dynamic from "next/dynamic";
 
 const StudentProgressPanel = dynamic(
@@ -185,6 +185,7 @@ export function StudentDashboard({
   view?: string;
   user?: any;
 }) {
+  useApiTokenExpiryRedirect("student");
   const guardAuth = useAuthGuard("student");
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);

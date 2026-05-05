@@ -3,6 +3,7 @@
 import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { type LearningMode } from '@/shared/store/useRegistrationStore';
+import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import { STAGE_ORDER, type StageKey, type ToolbarState } from '../api/types';
@@ -22,6 +23,7 @@ type LessonPlayerProps = {
 };
 
 export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
+    useApiTokenExpiryRedirect('student');
     const router = useRouter();
     const { data, loading, error } = useLessonPlayer(lessonId);
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);

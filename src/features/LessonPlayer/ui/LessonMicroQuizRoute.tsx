@@ -1,6 +1,7 @@
 'use client';
 
 import { useLessonPlayer } from '../api/useLessonPlayer';
+import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import { LessonMicroQuizScreen } from './LessonMicroQuizScreen';
 
 type LessonMicroQuizRouteProps = {
@@ -9,6 +10,7 @@ type LessonMicroQuizRouteProps = {
 };
 
 export function LessonMicroQuizRoute({ lessonId, index }: LessonMicroQuizRouteProps) {
+    useApiTokenExpiryRedirect('student');
     const { data, loading, error } = useLessonPlayer(lessonId);
 
     if (loading) {

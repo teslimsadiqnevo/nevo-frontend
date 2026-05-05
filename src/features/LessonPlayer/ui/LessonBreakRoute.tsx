@@ -1,6 +1,7 @@
 'use client';
 
 import { useLessonPlayer } from '../api/useLessonPlayer';
+import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import type { LessonBreakVariant, StageKey } from '../api/types';
 import { LessonBreakScreen } from './LessonBreakScreen';
 
@@ -11,6 +12,7 @@ type LessonBreakRouteProps = {
 };
 
 export function LessonBreakRoute({ lessonId, variant, returnStage }: LessonBreakRouteProps) {
+    useApiTokenExpiryRedirect('student');
     const { data, loading, error } = useLessonPlayer(lessonId);
 
     if (loading) {

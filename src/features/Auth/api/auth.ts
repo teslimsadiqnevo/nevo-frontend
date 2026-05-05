@@ -1,6 +1,33 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import { API_BASE_URL } from "@/shared/lib/api";
+import { getApiTokenExpiryMs } from "@/shared/lib/apiTokenExpiry";
+
+type AuthUserRecord = {
+  id: string;
+  name?: string;
+  first_name?: string;
+  email?: string;
+  role?: string;
+  school_id?: string | null;
+  nevo_id?: string | null;
+  student_id?: string | null;
+};
+
+type AuthApiResponse = {
+  user?: AuthUserRecord;
+  token?: string;
+};
+
+type SessionToken = {
+  sub?: string;
+  role?: string;
+  apiToken?: string;
+  apiTokenExpiresAt?: number | null;
+  schoolId?: string | null;
+  nevoId?: string | null;
+  userId?: string;
+};
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: process.env.AUTH_SECRET || "fallback-secret-for-development-only-123",
@@ -53,7 +80,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           body,
         });
 
-        const data = await res.json();
+        const data = (await res.json()) as AuthApiResponse;
 
         if (res.ok && data && data.user) {
           return {
@@ -64,7 +91,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             apiToken: data.token,
             schoolId: data.user.school_id,
             nevoId: data.user.nevo_id || data.user.student_id,
-          } as any;
+          };
         }
 
         return null;
@@ -73,22 +100,30 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   ],
   callbacks: {
     async jwt({ token, user }) {
+      const nextToken = token as SessionToken;
+      const nextUser = user as { id?: string; role?: string; apiToken?: string; schoolId?: string | null; nevoId?: string | null } | undefined;
+
       if (user) {
-        token.userId = (user as any).id;
-        token.role = (user as any).role;
-        token.apiToken = (user as any).apiToken;
-        token.schoolId = (user as any).schoolId;
-        token.nevoId = (user as any).nevoId;
+        nextToken.userId = nextUser?.id;
+        nextToken.role = nextUser?.role;
+        nextToken.apiToken = nextUser?.apiToken;
+        nextToken.apiTokenExpiresAt = getApiTokenExpiryMs(nextUser?.apiToken);
+        nextToken.schoolId = nextUser?.schoolId ?? null;
+        nextToken.nevoId = nextUser?.nevoId ?? null;
       }
-      return token;
+      return nextToken;
     },
     async session({ session, token }) {
+      const nextToken = token as SessionToken;
       if (session.user) {
-        (session.user as any).id = (token as any).userId || token.sub;
-        (session.user as any).role = token.role;
-        (session.user as any).apiToken = token.apiToken;
-        (session.user as any).schoolId = token.schoolId;
-        (session.user as any).nevoId = token.nevoId;
+        Object.assign(session.user, {
+          id: nextToken.userId || nextToken.sub,
+          role: nextToken.role,
+          apiToken: nextToken.apiToken,
+          apiTokenExpiresAt: nextToken.apiTokenExpiresAt,
+          schoolId: nextToken.schoolId,
+          nevoId: nextToken.nevoId,
+        });
       }
       return session;
     },
