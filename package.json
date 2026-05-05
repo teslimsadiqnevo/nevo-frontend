@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "prepare:assessment-audio": "node scripts/pregenerate-assessment-audio.mjs",
+    "dev": "node scripts/pregenerate-assessment-audio.mjs && next dev",
+    "build": "node scripts/pregenerate-assessment-audio.mjs && next build",
     "start": "next start",
     "lint": "eslint"
   },

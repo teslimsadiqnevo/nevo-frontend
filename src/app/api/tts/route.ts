@@ -1,40 +1,11 @@
-import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { auth } from '@/features/Auth/api/auth';
 
 type TtsRequestBody = {
     text?: string;
 };
 
-type SessionWithToken = {
-    user?: {
-        apiToken?: string;
-    };
-};
-
-async function authHeader() {
-    const session = (await auth()) as SessionWithToken | null;
-    const tokenFromSession = session?.user?.apiToken;
-    if (typeof tokenFromSession === 'string' && tokenFromSession.length > 0) {
-        return { Authorization: `Bearer ${tokenFromSession}` };
-    }
-
-    const cookieStore = await cookies();
-    const tokenFromCookie = cookieStore.get('access_token')?.value;
-    if (tokenFromCookie) {
-        return { Authorization: `Bearer ${tokenFromCookie}` };
-    }
-
-    return null;
-}
-
 export async function POST(req: Request) {
     try {
-        const headers = await authHeader();
-        if (!headers) {
-            return NextResponse.json({ detail: 'Unauthorized' }, { status: 401 });
-        }
-
         const apiKey = process.env.YARNGPT_API_KEY;
         if (!apiKey) {
             return NextResponse.json(

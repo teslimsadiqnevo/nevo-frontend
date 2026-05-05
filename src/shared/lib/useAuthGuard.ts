@@ -51,7 +51,11 @@ export function useAuthGuard(role: AuthRole) {
                 durationMs: 5000,
             });
 
-            void signOut({ callbackUrl: LOGIN_PATH[role] });
+            void signOut({ redirect: false }).finally(() => {
+                if (typeof window !== 'undefined') {
+                    window.location.replace(LOGIN_PATH[role]);
+                }
+            });
             return true;
         },
         [role, showToast],

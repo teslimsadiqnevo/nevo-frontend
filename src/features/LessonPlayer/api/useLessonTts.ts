@@ -25,7 +25,7 @@ function buildErrorMessage(payload: TtsResponseBody | null, fallback: string) {
     return fallback;
 }
 
-export function useLessonTts(text: string): LessonTtsState {
+export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): LessonTtsState {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const objectUrlRef = useRef<string | null>(null);
     const preparedTextRef = useRef<string>('');
@@ -67,6 +67,21 @@ export function useLessonTts(text: string): LessonTtsState {
 
         if (!audio || !cleanedText) {
             return null;
+        }
+
+        if (prefetchedAudioUrl && preparedTextRef.current === cleanedText && audio.src === prefetchedAudioUrl) {
+            return prefetchedAudioUrl;
+        }
+
+        if (prefetchedAudioUrl) {
+            if (objectUrlRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+                objectUrlRef.current = null;
+            }
+
+            preparedTextRef.current = cleanedText;
+            audio.src = prefetchedAudioUrl;
+            return prefetchedAudioUrl;
         }
 
         if (objectUrlRef.current && preparedTextRef.current === cleanedText) {
@@ -112,7 +127,7 @@ export function useLessonTts(text: string): LessonTtsState {
         } finally {
             setIsLoading(false);
         }
-    }, [text]);
+    }, [prefetchedAudioUrl, text]);
 
     const play = useCallback(async () => {
         const audio = audioRef.current;
@@ -186,7 +201,7 @@ export function useLessonTts(text: string): LessonTtsState {
                 objectUrlRef.current = null;
             }
         };
-    }, [releaseAudio, text]);
+    }, [prefetchedAudioUrl, releaseAudio, text]);
 
     return {
         isLoading,

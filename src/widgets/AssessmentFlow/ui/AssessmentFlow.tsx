@@ -1,103 +1,156 @@
 'use client'
 
-import { useState, useEffect } from "react";
-import { Onboarding, Connect, DynamicQuestion, getQuestions, AssessmentQuestion, CreatePIN, AdaptationSettings } from "@/features/RegistrationAssessment";
-import { MiniFooter } from "@/widgets/MiniFooter";
-import { useRouter } from "next/navigation";
-import { SplashScreen } from "@/shared/ui/SplashScreen";
+import { useEffect, useMemo, useState } from "react";
+import {
+    Onboarding,
+    Connect,
+    DynamicQuestion,
+    getQuestions,
+    AssessmentQuestion,
+    CreatePIN,
+    AdaptationSettings,
+} from "@/features/RegistrationAssessment";
+import { useLessonTts } from "@/features/LessonPlayer/api/useLessonTts";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import { SplashScreen } from "@/shared/ui/SplashScreen";
+import { MiniFooter } from "@/widgets/MiniFooter";
 
-const FOOTER_TEXTS = [
-    "",
-    "Tap one option — Nevo will adapt lessons to you.",
-    "There’s no wrong answer — this helps Nevo adjust pacing.",
-    "Nevo uses this to support you when learning feels difficult.",
-    "This helps Nevo match your learning rhythm.",
-    "Nevo uses this to support you when learning feels difficult.",
-    "Nevo uses this to support you without pressure.",
-    "Nevo will use this to create a calmer learning experience.",
-    "Nevo doesn't label you. It simply adapts to support you better.",
-    "If you ever forget your PIN, your teacher can help you reset it."
-];
+type AssessmentAudioManifestEntry = {
+    url: string;
+    hash: string;
+    text: string;
+};
+
+type AssessmentAudioManifest = Record<string, AssessmentAudioManifestEntry>;
 
 export function AssessmentFlow() {
     const [step, setStep] = useState(1);
     const [questions, setQuestions] = useState<AssessmentQuestion[]>([]);
+    const [audioManifest, setAudioManifest] = useState<AssessmentAudioManifest>({});
     const [isLoading, setIsLoading] = useState(true);
-    const { assessmentAnswers, setAssessmentAnswer } = useRegistrationStore();
-    const router = useRouter();
+    const { setAssessmentAnswer } = useRegistrationStore();
 
     useEffect(() => {
         async function fetchQuestionsData() {
             setIsLoading(true);
-            const data = await getQuestions();
-            setQuestions(data);
+            const [questionData, manifestResponse] = await Promise.all([
+                getQuestions(),
+                fetch('/assessment-audio/manifest.json', { cache: 'no-store' }).catch(() => null),
+            ]);
+
+            setQuestions(questionData);
+
+            if (manifestResponse?.ok) {
+                const manifestData = (await manifestResponse.json().catch(() => ({}))) as AssessmentAudioManifest;
+                setAudioManifest(manifestData);
+            } else {
+                setAudioManifest({});
+            }
+
             setIsLoading(false);
         }
+
         fetchQuestionsData();
     }, []);
 
-    const totalQuestions = questions.length || 7; 
+    const activeQuestion = step <= questions.length ? questions[step - 1] ?? null : null;
+    const activeQuestionId = activeQuestion?.id ?? null;
+    const narrationText = useMemo(() => {
+        if (!activeQuestion) return "";
+
+        const optionsText = activeQuestion.options
+            .map((option, index) => `Option ${index + 1}. ${option}.`)
+            .join(" ");
+
+        return `${activeQuestion.text} ${optionsText}`.trim();
+    }, [activeQuestion]);
+    const prefetchedAudioUrl =
+        activeQuestionId !== null ? audioManifest[String(activeQuestionId)]?.url ?? null : null;
+
+    const {
+        isLoading: isNarrationLoading,
+        isPlaying: isNarrationPlaying,
+        togglePlayback: toggleNarration,
+        replay: replayNarration,
+        stop: stopNarration,
+    } = useLessonTts(narrationText, prefetchedAudioUrl);
+
+    useEffect(() => {
+        if (!activeQuestionId || !narrationText.trim()) {
+            stopNarration();
+            return;
+        }
+
+        void replayNarration();
+
+        return () => {
+            stopNarration();
+        };
+    }, [activeQuestionId, narrationText, replayNarration, stopNarration]);
+
+    const totalQuestions = questions.length || 7;
 
     const handleNextQuestion = (answerIdx: number) => {
         if (!questions[step - 1]) return;
-        const currentQId = questions[step - 1].id;
-        const answerText = questions[step - 1].options[answerIdx];
-        
-        setAssessmentAnswer(currentQId.toString(), answerText);
-        
+
+        stopNarration();
+        const currentQuestion = questions[step - 1];
+        const answerText = currentQuestion.options[answerIdx];
+
+        setAssessmentAnswer(currentQuestion.id.toString(), answerText);
+
         if (step === totalQuestions) {
             setIsLoading(true);
             setTimeout(() => {
                 setIsLoading(false);
-                setStep(s => s + 1);
+                setStep((currentStep) => currentStep + 1);
             }, 1000);
         } else {
-            setStep(s => s + 1);
+            setStep((currentStep) => currentStep + 1);
         }
     };
 
-    const handleNext = () => setStep(s => s + 1);
-    const handleFinish = () => router.push("/");
+    const handleNext = () => setStep((currentStep) => currentStep + 1);
 
     const isQuestionStep = step <= totalQuestions;
     const isPin = step === totalQuestions + 1;
     const isAdaptation = step === totalQuestions + 2;
     const isOnboarding = step === totalQuestions + 3;
     const isConnect = step === totalQuestions + 4;
-    // Answers are now stored globally inside useRegistrationStore
 
     return (
-        <div className="flex flex-col min-h-screen">
-            <MiniFooter speaker={!isConnect} />
-            <div className="flex-1 pb-6 w-full flex flex-col justify-between items-center">
+        <div className="flex min-h-screen flex-col">
+            <MiniFooter
+                speaker={!isConnect}
+                onSpeakerClick={() => {
+                    void toggleNarration();
+                }}
+                speakerActive={isNarrationPlaying}
+                speakerLoading={isNarrationLoading}
+            />
+            <div className="flex w-full flex-1 flex-col items-center justify-between pb-6">
                 <div className="w-full">
                     {isLoading ? (
                         <SplashScreen />
                     ) : (
                         <>
-                            {isQuestionStep && questions[step - 1] && (
-                                <DynamicQuestion 
+                            {isQuestionStep && questions[step - 1] ? (
+                                <DynamicQuestion
                                     key={questions[step - 1].id}
-                                    question={questions[step - 1]} 
+                                    question={questions[step - 1]}
                                     number={step}
                                     totalQuestions={totalQuestions}
-                                    onNext={handleNextQuestion} 
+                                    onNext={handleNextQuestion}
                                 />
-                            )}
-                            {isPin && <CreatePIN onNext={handleNext} onBack={() => setStep(step - 1)} />}
-                            {isAdaptation && <AdaptationSettings onNext={handleNext} />}
-                            {isOnboarding && <Onboarding onNext={handleNext} />}
-                            {isConnect && <Connect />}
+                            ) : null}
+                            {isPin ? <CreatePIN onNext={handleNext} onBack={() => setStep(step - 1)} /> : null}
+                            {isAdaptation ? <AdaptationSettings onNext={handleNext} /> : null}
+                            {isOnboarding ? <Onboarding onNext={handleNext} /> : null}
+                            {isConnect ? <Connect /> : null}
                         </>
                     )}
                 </div>
-                {/* {step < FOOTER_TEXTS.length && !isLoading && (
-                    <p className="font-medium text-sm text-graphite-60 mt-auto pt-6 text-center">
-                        {FOOTER_TEXTS[step] || ""}
-                    </p>
-                )} */}
             </div>
         </div>
-    )
+    );
 }

@@ -17,6 +17,7 @@ export function Connect() {
     const [error, setError] = useState<string | null>(null);
     const [teacherName, setTeacherName] = useState<string | null>(null);
     const { token } = useRegistrationStore();
+    const studentDashboardUrl = "/dashboard?view=home";
 
     useEffect(() => {
         return () => {
@@ -190,7 +191,7 @@ export function Connect() {
                 <div className="flex flex-col items-center w-full">
                     <p className="text-[13px] font-bold text-[#7DBF83] mb-6">Connected to {teacherName || "your teacher"}</p>
                     <button
-                        onClick={() => router.push("/dashboard")}
+                        onClick={() => router.push(studentDashboardUrl)}
                         className="w-[480px] py-[18px] bg-indigo text-white rounded-[14px] text-[15px] font-bold hover:opacity-90 transition-all cursor-pointer"
                     >
                         Go to my dashboard
@@ -198,7 +199,7 @@ export function Connect() {
                 </div>
             ) : (
                 <button
-                    onClick={() => router.push("/dashboard")}
+                    onClick={() => router.push(studentDashboardUrl)}
                     className="text-[13px] text-[#A29ECA] font-semibold underline underline-offset-4 hover:text-indigo transition-colors mt-2"
                 >
                     Skip for now

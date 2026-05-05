@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { signIn } from "next-auth/react";
 import { registerStudent } from "@/features/StudentRegistration/api/registerStudent";
 import { submitAnswers } from "@/features/RegistrationAssessment";
 import { Icon } from "@/shared/ui";
+import { SplashScreen } from "@/shared/ui/SplashScreen";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 
 export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () => void; }) {
@@ -14,6 +16,60 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
     const [status, setStatus] = useState<"idle" | "error" | "success">("idle");
     const [errorMsg, setErrorMsg] = useState("");
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const finishBackgroundSetup = async (finalPin: string, token: string, resolvedNevoId: string) => {
+        try {
+            if (Object.keys(assessmentAnswers).length > 0) {
+                const formattedAnswers = Object.entries(assessmentAnswers).map(
+                    ([questionId, value]) => ({
+                        question_id: Number(questionId),
+                        value,
+                    })
+                );
+
+                const assessResult = await submitAnswers({
+                    answers: formattedAnswers,
+                    token,
+                });
+
+                if (assessResult.error) {
+                    console.warn("Assessment submission failed (non-blocking):", assessResult.error);
+                }
+            }
+
+            const adaptationRes = await fetch(
+                `/api/students/me/adaptation?enabled=${encodeURIComponent(String(isAutoAdapt))}`,
+                {
+                    method: "PUT",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                },
+            ).catch(() => null);
+
+            if (adaptationRes && !adaptationRes.ok) {
+                console.warn("Adaptation preference save failed during onboarding.");
+            }
+
+            const signInResult = await signIn("credentials", {
+                firstName: firstName.trim(),
+                nevoId: resolvedNevoId,
+                pin: finalPin,
+                redirect: false,
+                callbackUrl: "/dashboard?view=home",
+            });
+
+            if (signInResult?.error) {
+                console.warn("Automatic sign-in failed after onboarding.");
+            }
+        } catch (backgroundError) {
+            console.warn("Background onboarding tasks failed:", backgroundError);
+        }
+    };
+
+    if (isSubmitting) {
+        return <SplashScreen />;
+    }
 
     const handleKeyPress = (key: string) => {
         if (isSubmitting || status === "success") return;
@@ -82,8 +138,6 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                 classId: classId || "",
             });
 
-            console.log("regResult", regResult);
-
             if (regResult.error) {
                 setErrorMsg(regResult.error);
                 setStatus("idle");
@@ -95,40 +149,18 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
             const { setToken, setNevoId } = useRegistrationStore.getState();
             if (regResult.token) setToken(regResult.token);
             if (regResult.nevoId) setNevoId(regResult.nevoId);
+            const resolvedNevoId = regResult.nevoId;
 
-            if (regResult.token && Object.keys(assessmentAnswers).length > 0) {
-                const formattedAnswers = Object.entries(assessmentAnswers).map(
-                    ([questionId, value]) => ({
-                        question_id: Number(questionId),
-                        value,
-                    })
-                );
-
-                const assessResult = await submitAnswers({
-                    answers: formattedAnswers,
-                    token: regResult.token,
-                });
-
-                if (assessResult.error) {
-                    console.warn("Assessment submission failed (non-blocking):", assessResult.error);
-                    // Don't block the flow — assessment can be retried later
-                }
+            if (!resolvedNevoId) {
+                setErrorMsg("Your account was created, but we couldn't complete sign-in automatically.");
+                setStatus("idle");
+                setConfirmPin("");
+                setIsSubmitting(false);
+                return;
             }
 
             if (regResult.token) {
-                const adaptationRes = await fetch(
-                    `/api/students/me/adaptation?enabled=${encodeURIComponent(String(isAutoAdapt))}`,
-                    {
-                        method: "PUT",
-                        headers: {
-                            Authorization: `Bearer ${regResult.token}`,
-                        },
-                    },
-                ).catch(() => null);
-
-                if (adaptationRes && !adaptationRes.ok) {
-                    console.warn("Adaptation preference save failed during onboarding.");
-                }
+                void finishBackgroundSetup(finalPin, regResult.token, resolvedNevoId);
             }
 
             setIsSubmitting(false);
@@ -197,10 +229,8 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                 <p className="text-graphite-60 text-sm font-medium mb-10">You&apos;ll use this to log in. Keep it safe.</p>
 
                 <div className="flex flex-col items-center gap-6 min-h-[160px] mb-12">
-                     {/* Initial pin dots */}
                      {renderDots(pin, mode === "enter", status === "success" ? "success" : "idle")}
                      
-                     {/* Confirm pin dots */}
                      {mode === "confirm" && (
                          <>
                             <p className="text-[13px] font-medium text-graphite-60">Enter it again to confirm</p>
@@ -221,7 +251,6 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                      {errorMsg && mode === "enter" && status !== "error" && <p className="text-[#E57661] text-sm font-medium mt-2">{errorMsg}</p>}
                 </div>
 
-                {/* Keypad */}
                 <div className="grid grid-cols-3 gap-x-3 gap-y-3">
                     {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(num => (
                         <button
@@ -232,7 +261,7 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                             {num}
                         </button>
                     ))}
-                    <div /> {/* Empty space */}
+                    <div />
                     <button
                         onClick={() => handleKeyPress("0")}
                         className="w-[72px] h-[64px] flex items-center justify-center text-xl font-bold border border-[#E0D9CE] rounded-xl bg-transparent active:bg-[#EBE7DF] transition-colors text-indigo"
