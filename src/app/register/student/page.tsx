@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense, useMemo } from "react";
+import { useState, Suspense } from "react";
 import { Step1, Step2, Step3 } from "@/features/StudentRegistration";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { SplashScreen } from "@/shared/ui/SplashScreen";
@@ -13,15 +13,9 @@ function StudentRegistrationFlow() {
     // Read step from URL, default to 1
     const step = Number(searchParams.get('step')) || 1;
 
-    const [pendingStep, setPendingStep] = useState<number | null>(null);
-    const isNavigating = pendingStep !== null;
-    const visibleStep = useMemo(
-        () => (pendingStep === null ? step : pendingStep),
-        [pendingStep, step],
-    );
+    const [isCompleting, setIsCompleting] = useState(false);
 
     const setStep = (newStep: number) => {
-        setPendingStep(newStep);
         const params = new URLSearchParams(searchParams.toString());
         params.set('step', newStep.toString());
         router.push(`${pathname}?${params.toString()}`);
@@ -29,25 +23,25 @@ function StudentRegistrationFlow() {
     
     // Also trigger loading on completion push
     const handleComplete = () => {
-        setPendingStep(step + 1);
+        setIsCompleting(true);
         router.push('/register/assessment');
     }
 
-    if (isNavigating) {
+    if (isCompleting) {
         return <SplashScreen />;
     }
 
     return (
         <div className="flex flex-col min-h-screen">
-            <div className={visibleStep === 1 ? 'block' : 'hidden'}>
+            <div className={step === 1 ? 'block' : 'hidden'}>
                 <Step1 onNext={() => setStep(2)} />
             </div>
             
-            <div className={visibleStep === 2 ? 'block' : 'hidden'}>
+            <div className={step === 2 ? 'block' : 'hidden'}>
                 <Step2 onNext={() => { setStep(3); }} onBack={() => setStep(1)} />
             </div>
             
-            <div className={visibleStep === 3 ? 'block' : 'hidden'}>
+            <div className={step === 3 ? 'block' : 'hidden'}>
                 <Step3 onNext={handleComplete} onBack={() => setStep(2)} />
             </div>
         </div>

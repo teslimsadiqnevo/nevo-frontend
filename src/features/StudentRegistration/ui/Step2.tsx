@@ -50,121 +50,140 @@ export function Step2({ onNext, onBack }: { onNext: () => void, onBack?: () => v
     }, [searchQuery, selectedSchool]);
 
     return (
-        <div className="flex flex-col justify-center items-center">
-            {onBack ? (
-                <button type="button" onClick={onBack} className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start bg-transparent outline-none border-none">
-                    <Icon type="back" width={24} height={24} />
-                </button>
-            ) : (
-                <Link href="/register" className="icon p-2.5 pl-6 cursor-pointer mt-10 flex w-full justify-start">
-                    <Icon type="back" width={24} height={24} />
-                </Link>
-            )}
+        <div className="flex min-h-screen w-full justify-center bg-parchment">
+            <div className="flex min-h-screen w-full max-w-[1024px] flex-col px-6 pt-[50px]">
+                {onBack ? (
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        className="flex h-11 w-11 items-center justify-center bg-transparent outline-none border-none"
+                    >
+                        <Icon type="back" width={24} height={24} />
+                    </button>
+                ) : (
+                    <Link href="/register" className="flex h-11 w-11 items-center justify-center">
+                        <Icon type="back" width={24} height={24} />
+                    </Link>
+                )}
 
-            <main className="px-6 w-full flex flex-col items-center">
-                <header className="pt-8 flex w-full flex-col gap-2 items-center justify-center pb-10">
-                    <p className="font-semibold text-sm text-lavender">Step 2 of 6</p>
-                    <h1 className="font-extrabold text-[22px] text-indigo mt-7">Find your school</h1>
-                    <h2 className="text-sm">Type your school name and select it from the list.</h2>
-                </header>
+                <main className="mx-auto flex w-full max-w-[976px] flex-col items-center">
+                    <div className="flex w-full justify-center pt-6">
+                        <p className="text-[13px] font-normal leading-5 text-lavender">Step 2 of 6</p>
+                    </div>
 
-                <div className="w-full flex flex-col items-center">
-                    <div className="w-full  relative">
-                        <div className="flex items-center w-full border border-indigo rounded-xl px-4 py-4 bg-transparent outline-none focus-within:border-2 transition-colors">
-                            <input 
-                                type="text"
-                                placeholder="Search for your school..."
-                                value={selectedSchool ? selectedSchool.name : searchQuery}
-                                onChange={(e) => {
-                                    if (!selectedSchool) {
-                                        setSearchQuery(e.target.value);
-                                    }
-                                }}
-                                disabled={selectedSchool !== null}
-                                className="w-full bg-transparent outline-none text-indigo font-medium disabled:text-indigo"
-                            />
-                            {selectedSchool ? (
-                                <Icon type="tick" className="shrink-0 ml-3" width={20} height={20} />
-                            ) : (
-                                <div className="shrink-0 ml-3 p-1">
+                    <header className="flex w-full flex-col items-center gap-2 pb-6 pt-8 text-center">
+                        <h1 className="text-[22px] font-bold leading-[33px] text-indigo">Find your school</h1>
+                        <h2 className="text-sm leading-[21px] text-graphite/60">
+                            Type your school name and select it from the list.
+                        </h2>
+                    </header>
+
+                    <div className="flex w-full flex-col items-center">
+                        <div className="relative w-full">
+                            <div className="flex h-14 w-full items-center rounded-xl border-2 border-indigo bg-transparent px-4 transition-colors focus-within:border-2">
+                                <div className="mr-3 shrink-0">
                                     <Icon type="search-II" width={20} height={20} />
+                                </div>
+                                <input
+                                    type="text"
+                                    placeholder="Search for your school..."
+                                    value={selectedSchool ? selectedSchool.name : searchQuery}
+                                    onChange={(e) => {
+                                        if (!selectedSchool) {
+                                            setSearchQuery(e.target.value);
+                                        }
+                                    }}
+                                    disabled={selectedSchool !== null}
+                                    className="w-full bg-transparent text-base font-medium text-indigo outline-none placeholder:text-graphite disabled:text-indigo"
+                                />
+                                {selectedSchool ? (
+                                    <Icon type="tick" className="ml-3 shrink-0" width={20} height={20} />
+                                ) : null}
+                            </div>
+
+                            {!selectedSchool && searchQuery && (
+                                <div className="w-full overflow-hidden rounded-b-xl bg-white shadow-[0px_4px_6px_-1px_rgba(0,0,0,0.1),0px_2px_4px_-2px_rgba(0,0,0,0.1)]">
+                                    {isLoading ? (
+                                        <div className="flex min-h-[140px] flex-col items-center justify-center px-6 py-8 text-center">
+                                            <p className="text-sm leading-[21px] text-graphite/55">Searching...</p>
+                                            <p className="mt-1 text-[13px] leading-5 text-graphite/45">
+                                                Looking for matching schools on Nevo.
+                                            </p>
+                                        </div>
+                                    ) : error ? (
+                                        <div className="flex min-h-[140px] flex-col items-center justify-center px-6 py-8 text-center">
+                                            <p className="text-sm text-[#E57661]">{error}</p>
+                                            <p className="mt-1 text-[13px] text-graphite">Please try again in a moment.</p>
+                                        </div>
+                                    ) : schools.length > 0 ? (
+                                        <div className="flex flex-col bg-[#FAF9F6]">
+                                            {schools.map((school, index) => (
+                                                <div
+                                                    key={school.id}
+                                                    onClick={() => setSelectedSchool(school)}
+                                                    className={`flex min-h-14 items-center justify-between px-4 py-4 transition-colors hover:bg-slate-50 ${
+                                                        index !== schools.length - 1 ? "border-b border-graphite/10" : ""
+                                                    } cursor-pointer`}
+                                                >
+                                                    <span className="text-[15px] font-medium leading-[22px] text-indigo">
+                                                        {school.name}
+                                                    </span>
+                                                    <span className="text-[13px] leading-5 text-graphite/50">{school.location}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="flex min-h-[140px] flex-col items-center justify-center px-6 py-8 text-center">
+                                            <p className="text-sm leading-[21px] text-graphite/55">
+                                                No schools found matching &apos;{searchQuery}&apos;.
+                                            </p>
+                                            <p className="mt-1 text-[13px] leading-5 text-graphite/45">
+                                                Your school may not be registered on Nevo yet.
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {selectedSchool && (
+                                <div className="mt-4 flex h-[60px] w-full items-center justify-between rounded-xl bg-white/40 px-4">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-sm font-semibold leading-[21px] text-indigo">{selectedSchool.name}</span>
+                                        <span className="text-[13px] leading-5 text-graphite/55">{selectedSchool.location}</span>
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedSchool(null);
+                                            setSchools([]);
+                                            setError(null);
+                                        }}
+                                        className="text-[13px] leading-5 text-lavender transition-opacity hover:opacity-100"
+                                    >
+                                        Not your school? Clear
+                                    </button>
                                 </div>
                             )}
                         </div>
 
-                        {!selectedSchool && searchQuery && (
-                            <div className="mt-2 w-full bg-white border border-indigo-10 rounded-xl overflow-hidden shadow-sm">
-                                {isLoading ? (
-                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
-                                        <p className="text-sm text-graphite">Searching...</p>
-                                    </div>
-                                ) : error ? (
-                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
-                                        <p className="text-sm text-[#E57661]">{error}</p>
-                                        <p className="text-[13px] text-graphite mt-1">Please try again in a moment.</p>
-                                    </div>
-                                ) : schools.length > 0 ? (
-                                    <div className="flex flex-col">
-                                        {schools.map((school, index) => (
-                                            <div 
-                                                key={school.id}
-                                                onClick={() => setSelectedSchool(school)}
-                                                className={`flex items-center justify-between p-4 bg-white hover:bg-slate-50 cursor-pointer ${index !== schools.length - 1 ? 'border-b border-indigo-10' : ''}`}
-                                            >
-                                                <span className="font-medium text-sm text-indigo">{school.name}</span>
-                                                <span className="text-xs">{school.location}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center p-8 text-center bg-white">
-                                        <p className="text-sm text-graphite">No schools found matching &apos;{searchQuery}&apos;.</p>
-                                        <p className="text-[13px] text-graphite mt-1">Your school may not be registered on Nevo yet.</p>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* Selected School Banner */}
-                        {selectedSchool && (
-                            <div className="mt-2 w-full bg-white border border-transparent rounded-xl p-4 flex justify-between items-start">
-                                <div className="flex flex-col gap-1">
-                                    <span className="font-bold text-sm text-indigo">{selectedSchool.name}</span>
-                                    <span className="text-xs font-medium text-graphite-50">{selectedSchool.location}</span>
-                                </div>
-                                <button 
-                                    onClick={() => {
-                                        setSelectedSchool(null);
-                                        setSchools([]);
-                                        setError(null);
-                                    }}
-                                    className="text-xs text-lavender hover:opacity-100 transition-opacity"
-                                >
-                                    Not your school? Clear
-                                </button>
-                            </div>
-                        )}
-                        
+                        <button
+                            type="button"
+                            onClick={() => {
+                                if (selectedSchool) {
+                                    console.log("Step 2 complete - School selected:", selectedSchool);
+                                    setSchoolId(selectedSchool.id);
+                                    onNext();
+                                }
+                            }}
+                            disabled={!selectedSchool}
+                            className={`mt-10 h-[52px] w-full rounded-xl px-6 text-base font-semibold text-white outline-none transition-opacity ${
+                                selectedSchool ? "bg-indigo hover:opacity-90 cursor-pointer" : "bg-indigo opacity-40 cursor-not-allowed"
+                            }`}
+                        >
+                            Continue
+                        </button>
                     </div>
-
-                    <button 
-                        type="button" 
-                        onClick={() => {
-                            if (selectedSchool) {
-                                console.log("Step 2 complete - School selected:", selectedSchool);
-                                setSchoolId(selectedSchool.id);
-                                onNext();
-                            }
-                        }}
-                        disabled={!selectedSchool}
-                        className={`w-full text-white font-semibold rounded-xl mt-10 px-6 py-4 outline-none transition-opacity ${
-                            selectedSchool ? "bg-indigo hover:opacity-90 cursor-pointer" : "bg-indigo opacity-50 cursor-not-allowed"
-                        }`}
-                    >
-                        Continue
-                    </button>
-                </div>
-            </main>
+                </main>
+            </div>
         </div>
     )
 }
