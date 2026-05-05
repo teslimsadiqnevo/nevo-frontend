@@ -1,18 +1,17 @@
 'use client'
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
-import { Icon } from "@/shared/ui";
 
 export function StudentLoginForm() {
-    const router = useRouter();
     const [firstName, setFirstName] = useState("");
-    const [nevoID, setNevoID] = useState("");
+    const [nevoIDSuffix, setNevoIDSuffix] = useState("");
     const [pin, setPin] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const normalizedNevoId = nevoIDSuffix ? `NEVO-${nevoIDSuffix}` : "";
 
     const handleKeyPress = (key: string) => {
         if (pin.length < 4 && !isLoading) {
@@ -30,7 +29,7 @@ export function StudentLoginForm() {
 
     const handleSubmit = async (e?: React.FormEvent) => {
         if (e) e.preventDefault();
-        if (!firstName || !nevoID || pin.length < 4 || isLoading) {
+        if (!firstName.trim() || !normalizedNevoId || pin.length < 4 || isLoading) {
             return;
         }
 
@@ -39,133 +38,150 @@ export function StudentLoginForm() {
 
         try {
             const result = await signIn("credentials", {
-                firstName,
-                nevoId: nevoID,
+                firstName: firstName.trim(),
+                nevoId: normalizedNevoId,
                 pin,
                 redirect: false,
                 callbackUrl: "/dashboard",
             });
 
             if (result?.error) {
-                setError("Invalid credentials. Please try again.");
+                setError("We couldn't find that account. Check your ID and try again.");
                 setIsLoading(false);
                 setPin("");
                 return;
             }
 
-            router.replace(result?.url || "/dashboard");
-            router.refresh();
+            window.location.assign(result?.url || "/dashboard");
         } catch {
-            setError("Something went wrong. Please try again.");
+            setError("We couldn't find that account. Check your ID and try again.");
             setIsLoading(false);
         }
     };
 
+    const handleNevoIdChange = (value: string) => {
+        const cleaned = value
+            .toUpperCase()
+            .replace(/^NEVO-?/, "")
+            .replace(/[^A-Z0-9]/g, "")
+            .slice(0, 10);
+
+        setNevoIDSuffix(cleaned);
+        setError(null);
+    };
+
+    const hasError = error !== null;
+    const canSubmit = Boolean(firstName.trim() && normalizedNevoId && pin.length === 4 && !isLoading);
+
     return (
-        <form className="flex flex-col items-center justify-center w-[360px]" onSubmit={handleSubmit}>
-             <div className="w-full flex flex-col gap-4 mb-4">
-                 <input
-                     type="text"
-                     placeholder="Your first name"
-                     value={firstName}
-                     onChange={(e) => { setFirstName(e.target.value); setError(null); }}
-                     className={`w-full bg-transparent border rounded-[8px] px-4 py-3 outline-none transition-colors text-[13px] font-medium placeholder:text-[#3B3F6E]/40 text-[#3B3F6E] ${error ? 'border-[#E57661]' : 'border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50'}`}
-                 />
-                 <input
-                     type="text"
-                     placeholder="Your Nevo ID (e.g. NEVO-7K3P2)"
-                     value={nevoID}
-                     onChange={(e) => { setNevoID(e.target.value.toUpperCase()); setError(null); }}
-                     autoCapitalize="characters"
-                     className={`w-full bg-transparent border rounded-[8px] px-4 py-3 outline-none transition-colors text-[13px] font-medium placeholder:text-[#3B3F6E]/40 text-[#3B3F6E] ${error ? 'border-[#E57661]' : 'border-[#3B3F6E]/20 focus:border-[#3B3F6E]/50'}`}
-                 />
-             </div>
+        <form className="flex w-[456px] flex-col items-center" onSubmit={handleSubmit}>
+            <div className="flex w-full flex-col gap-4">
+                <input
+                    type="text"
+                    placeholder="Your first name"
+                    value={firstName}
+                    onChange={(e) => {
+                        setFirstName(e.target.value);
+                        setError(null);
+                    }}
+                    className={`h-14 w-full rounded-[12px] border bg-transparent px-4 text-[16px] text-[#2B2B2F] outline-none transition-all placeholder:text-[#2B2B2F]/55 focus:border-2 focus:border-[#3B3F6E] ${
+                        hasError ? 'border-[#C0392B]' : 'border-[#3B3F6E]/40'
+                    }`}
+                />
 
-             <div className="w-full flex flex-col items-start gap-1.5 mb-1 relative min-h-[70px]">
-                 <label className="text-[10px] font-bold text-[#3B3F6E]/80 uppercase tracking-wider">PIN</label>
+                <div className={`flex h-14 w-full items-center rounded-[12px] border bg-transparent px-4 transition-all focus-within:border-2 focus-within:border-[#3B3F6E] ${
+                    hasError ? 'border-[#C0392B]' : 'border-[#3B3F6E]/40'
+                }`}>
+                    <span className="mr-1 text-[16px] font-semibold text-[#2B2B2F]">NEVO-</span>
+                    <input
+                        type="text"
+                        placeholder="(e.g. 7K3P2)"
+                        value={nevoIDSuffix}
+                        onChange={(e) => handleNevoIdChange(e.target.value)}
+                        autoCapitalize="characters"
+                        spellCheck={false}
+                        className="h-full w-full bg-transparent text-[16px] text-[#2B2B2F] outline-none placeholder:text-[#2B2B2F]/55"
+                    />
+                </div>
+            </div>
 
-                 <div className="flex gap-[18px] self-center">
-                     {[0, 1, 2, 3].map(i => {
-                         const isFilled = i < pin.length;
-                         const isError = error !== null;
-                         const outerBorder = isError ? "border-[#E57661]" : "border-[#3B3F6E]/30";
-                         const innerFill = "bg-[#3B3F6E]";
+            <div className="mt-4 flex w-full flex-col items-start">
+                <label className="mb-[11px] text-[14px] font-semibold leading-[21px] text-[#3B3F6E]/70">PIN</label>
+                <div className="flex w-full justify-center gap-4">
+                    {[0, 1, 2, 3].map((i) => {
+                        const isFilled = i < pin.length;
+                        return (
+                            <div
+                                key={i}
+                                className={`flex h-[44px] w-[44px] items-center justify-center rounded-full border bg-transparent ${
+                                    hasError ? 'border-[#C0392B]' : 'border-[#3B3F6E]/40'
+                                }`}
+                            >
+                                {isFilled ? <div className="h-4 w-4 rounded-full bg-[#3B3F6E]" /> : null}
+                            </div>
+                        );
+                    })}
+                </div>
+                {error ? (
+                    <p className="mt-3 w-full text-left text-[13px] leading-5 text-[#C0392B]">
+                        {error}
+                    </p>
+                ) : null}
+            </div>
 
-                         return (
-                             <div key={i} className={`w-[32px] h-[32px] rounded-full border flex items-center justify-center transition-all ${outerBorder}`}>
-                                 {isFilled && (
-                                     <div className={`w-[12px] h-[12px] rounded-full transition-all shadow-sm ${innerFill}`} />
-                                 )}
-                             </div>
-                         )
-                     })}
-                 </div>
+            <div className="mt-5 grid w-full grid-cols-3 gap-x-4 gap-y-4">
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((num) => (
+                    <button
+                        key={num}
+                        type="button"
+                        onClick={() => handleKeyPress(num)}
+                        className="flex h-16 items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-transparent text-[20px] font-semibold text-[#3B3F6E] transition-colors active:bg-[#3B3F6E]/5 cursor-pointer"
+                    >
+                        {num}
+                    </button>
+                ))}
+                <div />
+                <button
+                    type="button"
+                    onClick={() => handleKeyPress("0")}
+                    className="flex h-16 items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-transparent text-[20px] font-semibold text-[#3B3F6E] transition-colors active:bg-[#3B3F6E]/5 cursor-pointer"
+                >
+                    0
+                </button>
+                <button
+                    type="button"
+                    onClick={handleBackspace}
+                    className="flex h-16 items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-transparent text-[#3B3F6E] transition-colors active:bg-[#3B3F6E]/5 cursor-pointer"
+                >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M21 4H10.5C9.7 4 9 4.4 8.5 5.1L3.9 11.3C3.5 11.8 3.5 12.5 3.9 13L8.5 19.3C9 19.9 9.7 20.4 10.5 20.4H21C22.1 20.4 23 19.5 23 18.4V6C23 4.9 22.1 4 21 4ZM18.7 15.3C19.1 15.7 19.1 16.3 18.7 16.7C18.3 17.1 17.7 17.1 17.3 16.7L14.5 13.9L11.7 16.7C11.3 17.1 10.7 17.1 10.3 16.7C9.9 16.3 9.9 15.7 10.3 15.3L13.1 12.5L10.3 9.7C9.9 9.3 9.9 8.7 10.3 8.3C10.7 7.9 11.3 7.9 11.7 8.3L14.5 11.1L17.3 8.3C17.7 7.9 18.3 7.9 18.7 8.3C19.1 8.7 19.1 9.3 18.7 9.7L15.9 12.5L18.7 15.3Z" fill="currentColor"/>
+                    </svg>
+                </button>
+            </div>
 
-                 <div className="h-[20px] w-full mt-2">
-                     {error && (
-                         <p className="text-[#E57661] text-[10.5px] font-medium text-center w-full">{error}</p>
-                     )}
-                 </div>
-             </div>
+            <button
+                type="submit"
+                disabled={!canSubmit}
+                className={`mt-6 h-[52px] w-full rounded-[20px] text-[16px] font-semibold text-[#F7F1E6] transition-all ${
+                    canSubmit ? 'bg-[#3B3F6E] hover:opacity-95 cursor-pointer' : 'bg-[#3B3F6E]/40 cursor-not-allowed'
+                }`}
+            >
+                {isLoading ? 'Logging in...' : 'Log in'}
+            </button>
 
-             <div className="grid grid-cols-3 gap-x-2.5 gap-y-2.5 mb-6 w-[320px]">
-                 {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(num => (
-                     <button
-                         key={num}
-                         type="button"
-                         onClick={() => handleKeyPress(num)}
-                         className="h-[48px] flex items-center justify-center text-[15px] font-bold border border-[#3B3F6E]/10 rounded-[10px] bg-transparent active:bg-[#3B3F6E]/5 transition-colors text-[#3B3F6E] cursor-pointer"
-                     >
-                         {num}
-                     </button>
-                 ))}
-                 <div />
-                 <button
-                     type="button"
-                     onClick={() => handleKeyPress("0")}
-                     className="h-[48px] flex items-center justify-center text-[15px] font-bold border border-[#3B3F6E]/10 rounded-[10px] bg-transparent active:bg-[#3B3F6E]/5 transition-colors text-[#3B3F6E] cursor-pointer"
-                 >
-                     0
-                 </button>
-                 <button
-                     type="button"
-                     onClick={handleBackspace}
-                     className="h-[48px] flex items-center justify-center border border-[#3B3F6E]/10 rounded-[10px] bg-transparent active:bg-[#3B3F6E]/5 transition-colors text-[#3B3F6E] cursor-pointer"
-                 >
-                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                         <path d="M21 4H10.5C9.7 4 9 4.4 8.5 5.1L3.9 11.3C3.5 11.8 3.5 12.5 3.9 13L8.5 19.3C9 19.9 9.7 20.4 10.5 20.4H21C22.1 20.4 23 19.5 23 18.4V6C23 4.9 22.1 4 21 4ZM18.7 15.3C19.1 15.7 19.1 16.3 18.7 16.7C18.3 17.1 17.7 17.1 17.3 16.7L14.5 13.9L11.7 16.7C11.3 17.1 10.7 17.1 10.3 16.7C9.9 16.3 9.9 15.7 10.3 15.3L13.1 12.5L10.3 9.7C9.9 9.3 9.9 8.7 10.3 8.3C10.7 7.9 11.3 7.9 11.7 8.3L14.5 11.1L17.3 8.3C17.7 7.9 18.3 7.9 18.7 8.3C19.1 8.7 19.1 9.3 18.7 9.7L15.9 12.5L18.7 15.3Z" fill="currentColor"/>
-                     </svg>
-                 </button>
-             </div>
+            <Link
+                href="/login/student/forgot-pin"
+                className="mt-3 text-center text-[13px] leading-5 text-[#3B3F6E]/65 transition-colors hover:text-[#3B3F6E]"
+            >
+                Forgot your PIN?
+            </Link>
 
-             <button
-                 type="submit"
-                 disabled={isLoading || !firstName || !nevoID || pin.length < 4}
-                 className={`w-[320px] text-white font-bold rounded-2xl py-[14px] text-[14px] outline-none transition-all ${
-                     !firstName || !nevoID || pin.length < 4
-                         ? 'bg-[#8F90A6] cursor-not-allowed opacity-90'
-                         : 'bg-[#3B3F6E] hover:opacity-90 active:scale-95 cursor-pointer'
-                 }`}
-             >
-                 {isLoading ? 'Wait...' : 'Log in'}
-             </button>
-
-             <Link href="/login/student/forgot-pin" className="mt-4 text-[10px] text-[#A29ECA] font-medium cursor-pointer transition-colors hover:text-[#3B3F6E]">
-                 Forgot your PIN?
-             </Link>
-
-             <Link href="/login/student/forgot-id" className="mt-3 text-[10px] text-[#A29ECA] font-medium cursor-pointer transition-colors hover:text-[#3B3F6E]">
-                 Lost your ID?
-             </Link>
-
-             <Link href="/register/student" className="mt-6 text-[10px] text-[#A29ECA] font-medium cursor-pointer transition-colors hover:text-[#3B3F6E]">
-                 Don&apos;t have an account? Sign up
-             </Link>
-
-             <button type="button" onClick={() => router.back()} className="mt-4 text-[#A29ECA] cursor-pointer transition-opacity hover:opacity-100 p-2">
-                 <Icon type="back" width={16} height={16} />
-             </button>
-
+            <Link
+                href="/login/student/forgot-id"
+                className="mt-2 text-center text-[13px] leading-5 text-[#3B3F6E]/65 transition-colors hover:text-[#3B3F6E]"
+            >
+                Lost your ID?
+            </Link>
         </form>
     )
 }
