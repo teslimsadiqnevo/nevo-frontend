@@ -22,9 +22,20 @@ import {
 } from "../api/student";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
-import { StudentProgressPanel } from "./StudentProgressPanel";
 import { useAuthGuard } from "@/shared/lib";
 import dynamic from "next/dynamic";
+
+const StudentProgressPanel = dynamic(
+  () =>
+    import("./StudentProgressPanel").then((mod) => mod.StudentProgressPanel),
+  {
+    loading: () => (
+      <div className="flex min-h-[30vh] items-center justify-center text-[14px] text-graphite-60">
+        Loading progress...
+      </div>
+    ),
+  },
+);
 
 const QRInner = dynamic(
   () =>
@@ -192,6 +203,9 @@ export function StudentDashboard({
   );
   const userIdentity =
     user?.id || user?.nevoId || user?.email || user?.name || null;
+  const needsLessonData = view === "home" || view === "lessons";
+  const needsProfileData = view === "connect" || view === "profile";
+  const needsProgressData = view === "progress";
 
   const resetStudentState = () => {
     setSelectedLesson(null);
@@ -217,38 +231,61 @@ export function StudentDashboard({
 
     async function loadData() {
       setLoading(true);
-      resetStudentState();
       try {
-        // Fetch from real backend
-        const [dashRes, lessRes, profRes, progRes, connRes] = await Promise.all(
-          [
-            getStudentDashboard(),
-            getStudentLessons(),
-            getStudentProfile(),
-            getStudentProgressOverview(),
-            getStudentConnections(),
-          ],
-        );
+        const requests: Promise<any>[] = [];
+        const requestKeys: Array<"dashboard" | "lessons" | "profile" | "progress"> = [];
 
-        if (
-          guardAuth([
-            dashRes as any,
-            lessRes as any,
-            profRes as any,
-            progRes as any,
-            connRes as any,
-          ])
-        ) {
+        if (needsLessonData) {
+          requests.push(getStudentDashboard());
+          requestKeys.push("dashboard");
+          requests.push(getStudentLessons());
+          requestKeys.push("lessons");
+        }
+
+        if (needsProfileData) {
+          requests.push(getStudentProfile());
+          requestKeys.push("profile");
+        }
+
+        if (needsProgressData) {
+          requests.push(getStudentProgressOverview());
+          requestKeys.push("progress");
+        }
+
+        if (requests.length === 0) {
+          setLoading(false);
           return;
         }
 
-        if (profRes.data) setProfile(profRes.data);
-        if (progRes.data) setProgressData(progRes.data);
-        if (connRes.data) {
-          setProfile((prev: any) => ({
-            ...(prev || {}),
-            connections: connRes.data,
-          }));
+        const responses = await Promise.all(requests);
+
+        if (guardAuth(responses as any)) {
+          return;
+        }
+
+        const responseMap = requestKeys.reduce<Record<string, any>>((acc, key, index) => {
+          acc[key] = responses[index];
+          return acc;
+        }, {});
+
+        const dashRes = responseMap.dashboard;
+        const lessRes = responseMap.lessons;
+        const profRes = responseMap.profile;
+        const progRes = responseMap.progress;
+
+        if (profRes?.data) {
+          setProfile(profRes.data);
+        } else if (!needsProfileData && view !== "home") {
+          setProfile((prev: any) => prev);
+        }
+
+        if (progRes?.data) {
+          setProgressData(progRes.data);
+        }
+
+        if (!needsLessonData) {
+          setLoading(false);
+          return;
         }
 
         const rawDashboard = dashRes.data || {};
@@ -342,7 +379,15 @@ export function StudentDashboard({
     }
 
     loadData();
-  }, [userIdentity, clearRegistration]);
+  }, [
+    userIdentity,
+    clearRegistration,
+    guardAuth,
+    needsLessonData,
+    needsProfileData,
+    needsProgressData,
+    view,
+  ]);
 
   const handleStudentLogout = async () => {
     clearRegistration();

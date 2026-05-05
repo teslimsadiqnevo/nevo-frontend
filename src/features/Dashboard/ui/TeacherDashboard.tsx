@@ -1,18 +1,18 @@
 'use client';
 
+import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
-import { getTeacherDashboardHome, getTeacherProfile } from "../api/teacher";
+import { getTeacherDashboardHome, getTeacherProfile, getTeacherStudents } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
 import { useAuthGuard } from "@/shared/lib";
+import logo from "@/shared/ui/icon/assets/default-logo.svg";
 
 const DashboardViewLoader = () => (
-    <div className="flex min-h-[40vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
-        Loading...
-    </div>
+    <DashboardSplashState message="Preparing your dashboard..." />
 );
 
 const LessonsView = dynamic(() => import("./LessonsView").then((mod) => mod.LessonsView), {
@@ -45,6 +45,17 @@ type TeacherRecentActivityItem = {
     text: string;
     time: string;
     kind: 'person' | 'lesson' | 'question';
+    avatarUrl?: string;
+    studentName?: string;
+};
+
+type TeacherClassCard = {
+    id: string;
+    title: string;
+    studentCount: number;
+    subjectLabel: string;
+    levelLabel: string;
+    isPlaceholder?: boolean;
 };
 
 type UnknownRecord = Record<string, unknown>;
@@ -184,6 +195,99 @@ function ActivityIcon({ kind }: { kind: TeacherRecentActivityItem['kind'] }) {
     );
 }
 
+function DashboardSplashState({ message = "Loading..." }: { message?: string }) {
+    return (
+        <div className="flex min-h-[70vh] w-full items-center justify-center bg-[#F7F1E6]">
+            <div className="relative flex flex-col items-center justify-center">
+                <div className="absolute h-[180px] w-[180px] rounded-full bg-[#9A9CCB]/15 animate-ping" />
+                <div className="relative z-10 flex flex-col items-center">
+                    <Image src={logo} alt="Nevo Logo" width={120} height={40} className="h-auto w-28" priority />
+                    <span className="mt-2 text-sm italic text-[#2B2B2F]/55">learning, your way</span>
+                    <span className="mt-4 text-sm font-medium text-[#3B3F6E]/80">{message}</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+function toCount(value: unknown) {
+    const count = Number(value);
+    return Number.isFinite(count) ? count : 0;
+}
+
+function normalizeClassLevel(className: string) {
+    const trimmed = className.trim();
+    const match = trimmed.match(/\b(grade\s*\d+|jss\s*\d+|sss\s*\d+|year\s*\d+|primary\s*\d+|secondary\s*\d+)\b/i);
+    return match ? match[1].toUpperCase().replace(/\s+/g, ' ') : 'No level';
+}
+
+function normalizeClassSubject(subject: unknown) {
+    if (typeof subject !== 'string' || !subject.trim()) return 'No subject';
+    const trimmed = subject.trim();
+    return trimmed.length > 18 ? `${trimmed.slice(0, 17)}…` : trimmed;
+}
+
+function buildTeacherClassCards(students: unknown[]): TeacherClassCard[] {
+    const grouped = new Map<
+        string,
+        { id: string; title: string; studentCount: number; subjects: Map<string, number> }
+    >();
+
+    students.forEach((entry, index) => {
+        const student = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null;
+        if (!student) return;
+
+        const rawClassName = student.class_name ?? student.class ?? student.group_name ?? 'Unassigned class';
+        const title =
+            typeof rawClassName === 'string' && rawClassName.trim() ? rawClassName.trim() : 'Unassigned class';
+        const key = title.toLowerCase();
+        const subject = normalizeClassSubject(student.subject);
+        const existing = grouped.get(key);
+
+        if (existing) {
+            existing.studentCount += 1;
+            existing.subjects.set(subject, (existing.subjects.get(subject) ?? 0) + 1);
+            return;
+        }
+
+        grouped.set(key, {
+            id: String(student.class_id ?? student.id ?? `class-${index}`),
+            title,
+            studentCount: 1,
+            subjects: new Map([[subject, 1]]),
+        });
+    });
+
+    const cards: TeacherClassCard[] = Array.from(grouped.values())
+        .sort((a, b) => a.title.localeCompare(b.title))
+        .slice(0, 3)
+        .map((group) => {
+            const topSubject =
+                Array.from(group.subjects.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'No subject';
+
+            return {
+                id: group.id,
+                title: group.title,
+                studentCount: group.studentCount,
+                subjectLabel: topSubject,
+                levelLabel: normalizeClassLevel(group.title),
+            };
+        });
+
+    while (cards.length < 3) {
+        cards.push({
+            id: `placeholder-${cards.length}`,
+            title: 'No class yet',
+            studentCount: 0,
+            subjectLabel: 'No subject',
+            levelLabel: 'No level',
+            isPlaceholder: true,
+        });
+    }
+
+    return cards;
+}
+
 function buildActivityText(item: Record<string, unknown>) {
     const directText =
         item.text ||
@@ -254,6 +358,14 @@ function normalizeRecentActivity(data: UnknownRecord | null | undefined): Teache
                     item.date,
             ),
             kind: getActivityKind(item),
+            avatarUrl:
+                typeof item.student_avatar_url === 'string' && item.student_avatar_url.trim()
+                    ? item.student_avatar_url
+                    : undefined,
+            studentName:
+                typeof item.student_name === 'string' && item.student_name.trim()
+                    ? item.student_name
+                    : undefined,
         };
     });
 }
@@ -381,20 +493,32 @@ function TeacherHomeView({
 }) {
     const router = useRouter();
     const [data, setData] = useState<UnknownRecord | null>(null);
+    const [students, setStudents] = useState<unknown[]>([]);
     const [loading, setLoading] = useState(true);
     const guardAuth = useAuthGuard('teacher');
 
     useEffect(() => {
         let mounted = true;
         (async () => {
-            const res = await getTeacherDashboardHome();
-            if (guardAuth(res)) return;
             if (!mounted) return;
-            if ('data' in res) {
-                setData(res.data || null);
-            } else {
-                setData(null);
-            }
+
+            const [homeRes, studentsRes] = await Promise.all([
+                getTeacherDashboardHome(),
+                getTeacherStudents(),
+            ]);
+
+            if (guardAuth(homeRes) || guardAuth(studentsRes) || !mounted) return;
+
+            setData('data' in homeRes ? (homeRes.data as UnknownRecord | null) : null);
+
+            const studentPayload = 'data' in studentsRes ? studentsRes.data : null;
+            setStudents(
+                Array.isArray(studentPayload)
+                    ? studentPayload
+                    : Array.isArray((studentPayload as { students?: unknown[] } | null | undefined)?.students)
+                      ? ((studentPayload as { students?: unknown[] }).students ?? [])
+                      : [],
+            );
             setLoading(false);
         })();
         return () => {
@@ -408,80 +532,142 @@ function TeacherHomeView({
         weekStatsSource && typeof weekStatsSource === 'object'
             ? (weekStatsSource as UnknownRecord)
             : null;
-    const studentsNeedSupport = Number(
+    const studentsNeedSupport = toCount(
         weekStats?.students_needing_support ?? weekStats?.students_need_support ?? 0,
     );
-    const lessonsWithConfusion = Number(
+    const lessonsWithConfusion = toCount(
         weekStats?.lessons_with_confusion_signals ?? weekStats?.lessons_with_confusion ?? 0,
     );
-    const topicsBuildingWell = Number(weekStats?.topics_building_well ?? 0);
-    const isAllCaughtUp = !loading && studentsNeedSupport === 0 && lessonsWithConfusion === 0;
+    const topicsBuildingWell = toCount(weekStats?.topics_building_well ?? 0);
     const activity = normalizeRecentActivity(data);
+    const classCards = useMemo(() => buildTeacherClassCards(students), [students]);
+
+    if (loading) {
+        return <DashboardSplashState message="Populating your teacher dashboard..." />;
+    }
 
     return (
-        <div className="max-w-[900px]">
-            <h1 className="text-2xl font-semibold text-indigo leading-tight">Good afternoon, {firstName}</h1>
-            <p className="text-graphite-60 text-sm mt-2 mb-8">Here&apos;s what&apos;s happening with your students today</p>
-
-            <section className="mb-8">
-                <h2 className="text-[15px] font-semibold text-indigo mb-4">This week</h2>
-
-                {isAllCaughtUp ? (
-                    <div className="py-12 flex flex-col items-center justify-center">
-                        <div className="w-12 h-12 rounded-full border-2 border-[#C7C7C7] flex items-center justify-center mb-4">
-                            <svg width="22" height="22" viewBox="0 0 22 22" fill="none" stroke="#C7C7C7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                <path d="M5 11L9 15L17 7" />
-                            </svg>
-                        </div>
-                        <p className="text-sm text-graphite-40 text-center max-w-[430px]">You&apos;re all caught up. No signals to review right now.</p>
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="rounded-2xl px-6 py-5 border border-[#D9D6CE] bg-transparent">
-                            <div className="text-28px font-bold text-[#3B3F6E]">{loading ? '...' : studentsNeedSupport}</div>
-                            <div className="text-xs text-black">Students who may need support</div>
-                        </div>
-                        <div className="rounded-2xl px-6 py-5 border border-[#D9D6CE] bg-transparent">
-                            <div className="text-28px font-bold text-[#3B3F6E]">{loading ? '...' : lessonsWithConfusion}</div>
-                            <div className="text-xs text-black">Lessons with confusion signals</div>
-                        </div>
-                        <div className="rounded-2xl px-6 py-5 border border-[#D9D6CE] bg-transparent">
-                            <div className="text-28px font-bold text-[#3B3F6E]">{loading ? '...' : topicsBuildingWell}</div>
-                            <div className="text-xs text-black">Topics building well</div>
-                        </div>
-                    </div>
-                )}
+        <div className="w-full max-w-[740px]">
+            <section className="mb-8 flex flex-col gap-2">
+                <h1 className="text-[24px] font-semibold leading-8 text-[#3B3F6E]">
+                    Good afternoon, {firstName}
+                </h1>
+                <p className="text-[14px] leading-[21px] text-black/60">
+                    Here&apos;s what&apos;s happening with your students today
+                </p>
             </section>
 
-            <section className="mb-8">
-                <h2 className="text-[15px] font-semibold text-indigo mb-4">Quick actions</h2>
-                <div className="flex gap-4">
+            <section className="mb-8 flex flex-col gap-5">
+                <div className="flex items-center justify-between">
+                    <h2 className="text-[14px] font-semibold uppercase tracking-[0.04em] text-[#3B3F6E]/70">
+                        My classes
+                    </h2>
+                    <button
+                        onClick={() => router.push('/dashboard?view=students')}
+                        className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#3B3F6E]/50 cursor-pointer"
+                    >
+                        Manage
+                    </button>
+                </div>
+                <div className="grid grid-cols-3 gap-[22px]">
+                    {classCards.map((classItem) => (
+                        <div
+                            key={classItem.id}
+                            className="flex min-h-[150px] flex-col justify-between rounded-[10px] border border-[#E0D9CE] bg-[#F7F1E6] p-[10px]"
+                        >
+                            <div className="flex flex-col gap-5">
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-3">
+                                        <h3 className="text-[15px] font-bold leading-4 text-[#3B3F6E]/80">
+                                            {classItem.title}
+                                        </h3>
+                                        <p className="text-[12px] font-medium leading-4 text-[#3B3F6E]/70">
+                                            {classItem.studentCount} {classItem.studentCount === 1 ? 'student' : 'students'}
+                                        </p>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        <span className="rounded-[5px] bg-[#9A9CCB]/20 px-2 py-1 text-[12px] font-medium leading-4 text-[#3B3F6E]">
+                                            {classItem.subjectLabel}
+                                        </span>
+                                        <span className="rounded-[5px] bg-[#9A9CCB]/20 px-2 py-1 text-[12px] font-medium leading-4 text-[#3B3F6E]">
+                                            {classItem.levelLabel}
+                                        </span>
+                                    </div>
+                                </div>
+                                <p className="text-[12px] font-medium leading-4 text-[#3B3F6E]/70">
+                                    {classItem.isPlaceholder ? 'Waiting for class data' : 'Class overview'}
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => router.push('/dashboard?view=students')}
+                                className="mt-4 text-left text-[12px] font-medium leading-4 text-[#3B3F6E]/55 cursor-pointer"
+                            >
+                                View class
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            <section className="mb-8 flex flex-col gap-4">
+                <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">This week</h2>
+                <div className="grid grid-cols-3 gap-[22px]">
+                    <div className="rounded-[12px] border border-[#E0D9CE] border-l-4 bg-[#F7F1E6] px-5 py-[17px]">
+                        <div className="text-[28px] font-bold leading-[42px] text-[#3B3F6E]">{studentsNeedSupport}</div>
+                        <div className="text-[12px] leading-4 text-black/70">Students who may need support</div>
+                    </div>
+                    <div className="rounded-[12px] border border-[#E0D9CE] border-l-4 bg-[#F7F1E6] px-5 py-[17px]">
+                        <div className="text-[28px] font-bold leading-[42px] text-[#3B3F6E]">{lessonsWithConfusion}</div>
+                        <div className="text-[12px] leading-4 text-black/70">Lessons with confusion signals</div>
+                    </div>
+                    <div className="rounded-[12px] border border-[#E0D9CE] border-l-4 bg-[#F7F1E6] px-5 py-[17px]">
+                        <div className="text-[28px] font-bold leading-[42px] text-[#3B3F6E]">{topicsBuildingWell}</div>
+                        <div className="text-[12px] leading-4 text-black/70">Topics building well</div>
+                    </div>
+                </div>
+            </section>
+
+            <section className="mb-8 flex flex-col gap-8">
+                <div className="flex flex-col gap-4">
+                    <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Quick actions</h2>
+                </div>
+                <div className="grid grid-cols-3 gap-[22px]">
                     <button
                         onClick={() => onAction('upload')}
-                        className="flex-1 py-3 px-5 text-center border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-sm font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all duration-200 cursor-pointer"
+                        className="h-10 rounded-full border border-[#3B3F6E] text-center text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#3B3F6E] hover:text-[#F7F1E6] cursor-pointer"
                     >
                         Upload lesson
                     </button>
                     <button
                         onClick={() => onAction('assign')}
-                        className="flex-1 py-3 px-5 text-center border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-sm font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all duration-200 cursor-pointer"
+                        className="h-10 rounded-full border border-[#3B3F6E] text-center text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#3B3F6E] hover:text-[#F7F1E6] cursor-pointer"
                     >
                         Assign lesson
                     </button>
                     <button
                         onClick={() => router.push('/dashboard?view=students')}
-                        className="flex-1 py-3 px-5 text-center border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-sm font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all duration-200 cursor-pointer"
+                        className="h-10 rounded-full border border-[#3B3F6E] text-center text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#3B3F6E] hover:text-[#F7F1E6] cursor-pointer"
                     >
                         View students
                     </button>
                 </div>
             </section>
 
-            <section>
-                <h2 className="text-[15px] font-semibold text-indigo mb-4">Recent activity</h2>
-                <div className="rounded-xl border border-[#E0D9CE] bg-[#FAF9F6] p-[1px] overflow-hidden">
-                    {!loading && activity.length === 0 && (
-                        <p className="px-6 py-5 text-sm text-graphite-40">No recent activity yet.</p>
+            <section className="flex flex-col gap-4">
+                <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Recent activity</h2>
+                <div className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#FAF9F6] p-[1px]">
+                    {activity.length === 0 && (
+                        <div className="bg-[#FAF9F6] px-4 py-5">
+                            <div className="flex items-center gap-4">
+                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#E9E0D6] text-[12px] font-semibold text-[#3B3F6E]">
+                                    0
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-[14px] leading-5 text-black">No recent activity yet</p>
+                                </div>
+                                <span className="text-[12px] leading-4 text-black/50">Now</span>
+                            </div>
+                        </div>
                     )}
                     {activity.map((item, idx: number) => (
                         <div
@@ -490,9 +676,17 @@ function TeacherHomeView({
                                 idx < activity.length - 1 ? 'border-b border-[#E0D9CE]' : ''
                             }`}
                         >
-                            <ActivityIcon kind={item.kind} />
+                            {item.avatarUrl ? (
+                                <img
+                                    src={item.avatarUrl}
+                                    alt={item.studentName || 'Student avatar'}
+                                    className="h-8 w-8 shrink-0 rounded-full object-cover"
+                                />
+                            ) : (
+                                <ActivityIcon kind={item.kind} />
+                            )}
                             <div className="min-w-0 flex-1">
-                                <p className="truncate text-[14px] font-normal leading-5 text-black">
+                                <p className="truncate text-[14px] leading-5 text-black">
                                     {item.text}
                                 </p>
                             </div>
