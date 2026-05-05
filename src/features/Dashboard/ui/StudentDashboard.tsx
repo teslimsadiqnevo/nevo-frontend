@@ -469,9 +469,9 @@ export function StudentDashboard({
 
   return (
     <>
-      <div className="flex min-h-screen w-full flex-col bg-[#F7F1E6] font-sans">
+      <div className="flex min-h-screen w-full bg-[#F7F1E6] font-sans">
         <StudentSidebar />
-        <main className="relative flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:ml-[220px] lg:min-h-screen lg:px-[44px] lg:py-[32px]">
+        <main className="relative ml-[220px] min-h-screen flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-[44px] lg:py-[32px]">
           {selectedLesson ? (
             <LessonDetailView
               lesson={selectedLesson}
