@@ -334,6 +334,93 @@ export function ConnectView() {
         );
     }, [guardAuth]);
 
+    const refreshConnections = useCallback(async () => {
+        const [reqRes, studentsRes] = await Promise.all([
+            getTeacherConnectionRequests(),
+            getTeacherStudents(),
+        ]);
+
+        if (guardAuth([reqRes as GuardableResponse, studentsRes as GuardableResponse])) {
+            return;
+        }
+
+        const reqPayload = ("data" in reqRes ? reqRes.data : null) as
+            | TeacherRequestPayload
+            | Record<string, unknown>[]
+            | null;
+        const studentsPayload = ("data" in studentsRes ? studentsRes.data : null) as
+            | TeacherStudentsPayload
+            | Record<string, unknown>[]
+            | null;
+
+        const reqList: Record<string, unknown>[] = Array.isArray(reqPayload)
+            ? reqPayload
+            : Array.isArray(reqPayload?.requests)
+              ? reqPayload.requests
+              : [];
+
+        const studentRows: Record<string, unknown>[] = Array.isArray(studentsPayload)
+            ? studentsPayload
+            : Array.isArray(studentsPayload?.students)
+              ? studentsPayload.students
+              : [];
+
+        const reqError = "error" in reqRes ? reqRes.error : null;
+        const studentError = "error" in studentsRes ? studentsRes.error : null;
+
+        if (reqError || studentError) {
+            setFetchError(reqError || studentError || null);
+            return;
+        }
+
+        setRequests(
+            reqList.map((r, i: number) => {
+                const name: string =
+                    getText(r.student_name) ||
+                    getText(r.name) ||
+                    `Student ${i + 1}`;
+                return {
+                    id: String(r.connection_id ?? r.id ?? `req-${i}`),
+                    name,
+                    initials: getInitials(name),
+                    classInfo:
+                        getText(r.class_name) ||
+                        getText(r.class) ||
+                        "Class not specified",
+                    status:
+                        r.status === "accepted" || r.status === "rejected"
+                            ? r.status
+                            : "pending",
+                } as ConnectionRequestItem;
+            }),
+        );
+        setStudents(
+            studentRows
+                .map((student, index: number) => {
+                    const studentId = String(
+                        student?.student_uuid || student?.student_id || student?.uuid || student?.id || "",
+                    );
+                    if (!studentId) return null;
+                    const name =
+                        student?.name ||
+                        `${student?.first_name || ""} ${student?.last_name || ""}`.trim() ||
+                        `Student ${index + 1}`;
+
+                    return {
+                        id: studentId,
+                        type: "student" as const,
+                        name,
+                        subtitle:
+                            student?.class_name ||
+                            student?.class ||
+                            student?.group_name ||
+                            "Connected student",
+                    };
+                })
+                .filter(Boolean) as MessageRecipient[],
+        );
+    }, [guardAuth]);
+
     const loadThreadMessages = async (threadId: string) => {
         setThreadLoading(true);
         const res = await fetchClientJson<MessageListPayload>(
@@ -365,13 +452,31 @@ export function ConnectView() {
     }, [refresh]);
 
     const handleRequestAction = async (id: string, action: 'accept' | 'reject') => {
+        const previousRequests = requests;
         setActingId(id);
+        setNotice(null);
+        setRequests((current) =>
+            current.map((request) =>
+                request.id === id
+                    ? {
+                          ...request,
+                          status: action === "accept" ? "accepted" : "rejected",
+                      }
+                    : request,
+            ),
+        );
+
         const result = await updateTeacherConnectionRequest(id, action);
-        if (!guardAuth(result as GuardableResponse) && 'error' in result && result.error) {
+        if (!guardAuth(result as GuardableResponse) && "error" in result && result.error) {
+            setRequests(previousRequests);
             setNotice(result.error);
+            setActingId(null);
+            return;
         }
-        await refresh();
+
+        setNotice(action === "accept" ? "Request accepted." : "Request declined.");
         setActingId(null);
+        void refreshConnections();
     };
 
     const handleOpenThread = async (threadId: string) => {

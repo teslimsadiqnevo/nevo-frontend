@@ -9,6 +9,7 @@ import {
     AssessmentQuestion,
     CreatePIN,
     AdaptationSettings,
+    StudentPermissions,
 } from "@/features/RegistrationAssessment";
 import { useLessonTts } from "@/features/LessonPlayer/api/useLessonTts";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
@@ -115,8 +116,9 @@ export function AssessmentFlow() {
     const isQuestionStep = step <= totalQuestions;
     const isPin = step === totalQuestions + 1;
     const isAdaptation = step === totalQuestions + 2;
-    const isOnboarding = step === totalQuestions + 3;
-    const isConnect = step === totalQuestions + 4;
+    const isPermissions = step === totalQuestions + 3;
+    const isOnboarding = step === totalQuestions + 4;
+    const isConnect = step === totalQuestions + 5;
 
     return (
         <div className="flex min-h-screen flex-col">
@@ -145,6 +147,7 @@ export function AssessmentFlow() {
                             ) : null}
                             {isPin ? <CreatePIN onNext={handleNext} onBack={() => setStep(step - 1)} /> : null}
                             {isAdaptation ? <AdaptationSettings onNext={handleNext} /> : null}
+                            {isPermissions ? <StudentPermissions onNext={handleNext} /> : null}
                             {isOnboarding ? <Onboarding onNext={handleNext} /> : null}
                             {isConnect ? <Connect /> : null}
                         </>

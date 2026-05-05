@@ -1290,43 +1290,68 @@ function SuccessScreen({
   onBackToLibrary: () => void;
 }) {
   return (
-    <div className="relative -mt-16 flex flex-1 flex-col items-center justify-center">
-      <div className="absolute left-1/2 top-0 -translate-x-1/2 rounded-lg bg-[#3B3F6E] px-6 py-3 text-[13px] font-medium text-white shadow-sm">
+    <div className="flex min-h-[calc(100vh-96px)] w-full flex-col items-center px-4 pt-4 pb-10 md:px-8">
+      <div className="mb-8 rounded-lg bg-[#3B3F6E] px-5 py-3 text-center text-[13px] font-normal text-[#F7F1E6] shadow-sm">
         Lesson added to your library
       </div>
 
-      <div className="mb-6 flex h-[88px] w-[88px] items-center justify-center rounded-full bg-[#E8F5E9]">
-        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#4CAF50" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 6L9 17l-5-5" />
-        </svg>
+      <div className="flex flex-1 w-full items-center justify-center">
+        <div className="flex w-full max-w-[379px] flex-col items-center text-center">
+          <div className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-[rgba(122,184,122,0.2)]">
+            <svg
+              width="40"
+              height="40"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#7AB87A"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 6L9 17l-5-5" />
+            </svg>
+          </div>
+
+          <h2 className="mb-3 text-[24px] font-bold leading-8 text-[#3B3F6E]">
+            Lesson published.
+          </h2>
+
+          <p className="mb-3 text-[16px] font-semibold leading-6 text-[#9A9CCB]">
+            {title || "New lesson"}
+          </p>
+
+          <p className="mb-8 max-w-[380px] px-2 text-[15px] leading-[22px] text-[#2B2B2F]/65">
+            Your lesson is ready to assign to students.
+          </p>
+
+          <div className="flex w-full flex-col gap-3">
+            <button
+              type="button"
+              onClick={onAssign}
+              className="h-[52px] w-full cursor-pointer rounded-xl bg-[#3B3F6E] px-6 text-[15px] font-semibold text-[#F7F1E6] transition-all hover:bg-[#2E3259]"
+            >
+              Assign now
+            </button>
+
+            <button
+              type="button"
+              onClick={onViewLesson}
+              className="h-12 w-full cursor-pointer rounded-xl border border-[#3B3F6E] bg-transparent px-6 text-[15px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#ECE8DE]"
+            >
+              View lesson
+            </button>
+
+            <button
+              type="button"
+              onClick={onBackToLibrary}
+              className="pt-1 text-center text-[14px] font-normal text-[#3B3F6E]/65 transition-colors hover:text-[#3B3F6E]"
+            >
+              Back to library
+            </button>
+          </div>
+        </div>
       </div>
-
-      <h2 className="mb-3 text-[24px] font-bold text-[#2B2B2F]">Lesson published.</h2>
-      <p className="mb-6 text-[15px] font-medium tracking-tight text-[#6E74AA]">{title || 'New lesson'}</p>
-      <p className="mb-8 text-[14px] text-graphite-60">Your lesson is ready to assign to students.</p>
-
-      <button
-        type="button"
-        onClick={onAssign}
-        className="mb-3 w-full max-w-[340px] cursor-pointer rounded-xl bg-[#3B3F6E] py-4 text-[14px] font-semibold text-white transition-all hover:bg-[#2E3259]"
-      >
-        Assign now
-      </button>
-      <button
-        type="button"
-        onClick={onViewLesson}
-        className="mb-6 w-full max-w-[340px] cursor-pointer rounded-xl border border-[#3B3F6E] bg-[#F7F1E6] py-4 text-[14px] font-semibold text-[#3B3F6E] transition-colors hover:bg-[#E8E6F5]"
-      >
-        View lesson
-      </button>
-
-      <button
-        type="button"
-        onClick={onBackToLibrary}
-        className="cursor-pointer text-[13px] font-medium text-graphite-60 transition-colors hover:text-graphite"
-      >
-        Back to library
-      </button>
     </div>
   );
 }

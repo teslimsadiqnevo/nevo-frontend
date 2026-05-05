@@ -7,3 +7,4 @@ export { Onboarding } from "./ui/Onboarding";
 export { Connect } from "./ui/Connect";
 export { CreatePIN } from "./ui/CreatePIN";
 export { AdaptationSettings } from "./ui/AdaptationSettings";
+export { StudentPermissions } from "./ui/StudentPermissions";
