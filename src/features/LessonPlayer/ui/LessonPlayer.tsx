@@ -131,6 +131,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         stage: currentStage,
         progress,
         onBack: goToPrevStage,
+        canGoBack: stageIndex > 0,
         askContext,
         toolbarState,
         onToolbarChange,
@@ -138,6 +139,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         paceDensity,
         continueLabel,
         onContinue: goToNextStage,
+        canGoForward: true,
     };
 
     const applyPaceSelection = () => {

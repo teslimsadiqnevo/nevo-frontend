@@ -12,6 +12,7 @@ type StageShellProps = {
     meta?: ReactNode;
     progress: number;
     onBack: () => void;
+    canGoBack?: boolean;
     askContext?: string | null;
     toolbarState: ToolbarState;
     onToolbarChange: (state: ToolbarState) => void;
@@ -19,6 +20,7 @@ type StageShellProps = {
     bodyWidthClassName?: string;
     continueLabel?: string;
     onContinue?: () => void;
+    canGoForward?: boolean;
 };
 
 const TOOLBAR_BUTTONS: Array<{ label: string; state: ToolbarState }> = [
@@ -35,6 +37,7 @@ export function StageShell({
     meta,
     progress,
     onBack,
+    canGoBack = true,
     askContext,
     toolbarState,
     onToolbarChange,
@@ -42,7 +45,10 @@ export function StageShell({
     bodyWidthClassName = 'max-w-[700px]',
     continueLabel,
     onContinue,
+    canGoForward = true,
 }: StageShellProps) {
+    const showStageNavigation = Boolean(continueLabel && onContinue);
+
     return (
         <div className="mx-auto flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
             <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-12">
@@ -96,37 +102,78 @@ export function StageShell({
 
             <div className="w-full min-h-[78px] border-t border-[#E0D9CE] bg-parchment px-4 py-4 sm:px-6 lg:px-10">
                 <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-                    <div className="flex items-center justify-center lg:justify-start">
-                        {onContinue && continueLabel ? (
-                            <button
-                                type="button"
-                                onClick={onContinue}
-                                className="flex min-h-11 w-full items-center justify-center rounded-full border-none bg-indigo px-6 py-3 text-center text-[14px] font-semibold text-parchment shadow-[0_12px_24px_rgba(59,63,110,0.18)] cursor-pointer sm:w-auto"
-                            >
-                                {continueLabel}
-                            </button>
-                        ) : null}
+                    <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5 lg:justify-start">
+                        {TOOLBAR_BUTTONS.map((button) => {
+                            const isActive = toolbarState === button.state;
+                            return (
+                                <button
+                                    key={button.state}
+                                    type="button"
+                                    onClick={() => onToolbarChange(button.state)}
+                                    className={[
+                                        'flex h-8 items-center justify-center rounded-full border px-4 text-[13px] font-normal leading-5 cursor-pointer transition-colors',
+                                        isActive
+                                            ? 'bg-indigo border-indigo text-parchment'
+                                            : 'bg-transparent border-indigo text-indigo',
+                                    ].join(' ')}
+                                >
+                                    {button.label}
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5">
-                    {TOOLBAR_BUTTONS.map((button) => {
-                        const isActive = toolbarState === button.state;
-                        return (
-                            <button
-                                key={button.state}
-                                type="button"
-                                onClick={() => onToolbarChange(button.state)}
-                                className={[
-                                    'flex justify-center items-center px-4 h-8 rounded-full border text-[13px] font-normal leading-5 cursor-pointer transition-colors',
-                                    isActive
-                                        ? 'bg-indigo border-indigo text-parchment'
-                                        : 'bg-transparent border-indigo text-indigo',
-                                ].join(' ')}
+                    <div className="flex items-center justify-center gap-3">
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            disabled={!canGoBack}
+                            aria-label="Previous step"
+                            className={[
+                                'flex h-[34px] w-[34px] items-center justify-center rounded-full border-none bg-transparent transition-opacity',
+                                canGoBack ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-60',
+                            ].join(' ')}
+                        >
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                <path
+                                    d="M15 5L8 12L15 19"
+                                    stroke={canGoBack ? '#3B3F6E' : 'rgba(59, 63, 110, 0.6)'}
+                                    strokeWidth="2.25"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            </svg>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={onContinue}
+                            disabled={!showStageNavigation || !canGoForward}
+                            aria-label={continueLabel ?? 'Next step'}
+                            className={[
+                                'flex h-[34px] w-[34px] items-center justify-center rounded-full border-none bg-transparent transition-opacity',
+                                showStageNavigation && canGoForward
+                                    ? 'cursor-pointer opacity-100'
+                                    : 'cursor-not-allowed opacity-60',
+                            ].join(' ')}
+                        >
+                            <svg
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                aria-hidden="true"
+                                className="rotate-180"
                             >
-                                {button.label}
-                            </button>
-                        );
-                    })}
+                                <path
+                                    d="M15 5L8 12L15 19"
+                                    stroke={showStageNavigation && canGoForward ? '#3B3F6E' : 'rgba(59, 63, 110, 0.6)'}
+                                    strokeWidth="2.25"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                />
+                            </svg>
+                        </button>
                     </div>
 
                     <div className="flex justify-center lg:justify-end">
