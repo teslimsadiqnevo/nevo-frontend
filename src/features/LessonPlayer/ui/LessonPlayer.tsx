@@ -184,8 +184,8 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
     return (
         <>
-            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
-                <div className="relative w-full">
+            <div className="flex min-h-screen justify-center bg-parchment px-0 py-0">
+                <div className="relative w-full bg-parchment">
                     {activeMode === 'visual' ? <VisualMode {...shellProps} /> : null}
                     {activeMode === 'audio' ? <AudioMode {...shellProps} /> : null}
                     {activeMode === 'action' ? <ActionMode {...shellProps} /> : null}

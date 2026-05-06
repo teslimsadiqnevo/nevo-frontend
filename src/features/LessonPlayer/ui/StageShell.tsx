@@ -48,10 +48,12 @@ export function StageShell({
     canGoForward = true,
 }: StageShellProps) {
     const showStageNavigation = Boolean(continueLabel && onContinue);
+    const backIsDisabled = !canGoBack;
+    const forwardIsDisabled = !showStageNavigation || !canGoForward;
 
     return (
-        <div className="mx-auto flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
-            <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6 lg:px-12">
+        <div className="mx-auto flex min-h-[900px] w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+            <div className="flex min-h-16 items-center justify-between gap-3 px-6 py-2 lg:px-12">
                 <button
                     type="button"
                     onClick={onBack}
@@ -77,7 +79,7 @@ export function StageShell({
                 </div>
             </div>
 
-            <div className="flex flex-1 flex-col px-4 pb-6 pt-6 sm:px-6 sm:pt-8 lg:px-12">
+            <div className="flex flex-1 flex-col px-6 pb-9 pt-6 lg:px-12 lg:pt-8">
                 <h2 className="text-[13px] font-semibold leading-5 tracking-[0.325px] uppercase text-lavender">
                     {label}
                 </h2>
@@ -90,7 +92,7 @@ export function StageShell({
                     {body}
                 </div>
 
-                <div className="mt-auto pt-8 sm:pt-12">
+                <div className="mt-auto pt-9">
                     <div className="relative w-full h-1 rounded-full bg-[#E0D9CE]">
                         <div
                             className="absolute left-0 top-0 bottom-0 bg-indigo rounded-full"
@@ -100,9 +102,9 @@ export function StageShell({
                 </div>
             </div>
 
-            <div className="w-full min-h-[78px] border-t border-[#E0D9CE] bg-parchment px-4 py-4 sm:px-6 lg:px-10">
-                <div className="flex flex-col gap-4 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:items-center">
-                    <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5 lg:justify-start">
+            <div className="w-full border-t border-[#E0D9CE] bg-parchment px-6 py-[15px] lg:px-12">
+                <div className="flex min-h-[31px] items-center justify-between gap-6">
+                    <div className="flex min-w-0 items-center gap-5">
                         {TOOLBAR_BUTTONS.map((button) => {
                             const isActive = toolbarState === button.state;
                             return (
@@ -111,7 +113,7 @@ export function StageShell({
                                     type="button"
                                     onClick={() => onToolbarChange(button.state)}
                                     className={[
-                                        'flex h-8 items-center justify-center rounded-full border px-4 text-[13px] font-normal leading-5 cursor-pointer transition-colors',
+                                        'flex h-8 shrink-0 items-center justify-center rounded-full border px-4 text-[13px] font-normal leading-5 cursor-pointer transition-colors',
                                         isActive
                                             ? 'bg-indigo border-indigo text-parchment'
                                             : 'bg-transparent border-indigo text-indigo',
@@ -123,21 +125,21 @@ export function StageShell({
                         })}
                     </div>
 
-                    <div className="flex items-center justify-center gap-3">
+                    <div className="flex shrink-0 items-center justify-center gap-3">
                         <button
                             type="button"
                             onClick={onBack}
-                            disabled={!canGoBack}
+                            disabled={backIsDisabled}
                             aria-label="Previous step"
                             className={[
-                                'flex h-[34px] w-[34px] items-center justify-center rounded-full border-none bg-transparent transition-opacity',
-                                canGoBack ? 'cursor-pointer opacity-100' : 'cursor-not-allowed opacity-60',
+                                'flex h-9 w-9 items-center justify-center rounded-full border-none bg-transparent transition-opacity',
+                                backIsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100',
                             ].join(' ')}
                         >
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                                 <path
                                     d="M15 5L8 12L15 19"
-                                    stroke={canGoBack ? '#3B3F6E' : 'rgba(59, 63, 110, 0.6)'}
+                                    stroke={backIsDisabled ? '#3B3F6E' : '#3B3F6E'}
                                     strokeWidth="2.25"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -148,13 +150,11 @@ export function StageShell({
                         <button
                             type="button"
                             onClick={onContinue}
-                            disabled={!showStageNavigation || !canGoForward}
+                            disabled={forwardIsDisabled}
                             aria-label={continueLabel ?? 'Next step'}
                             className={[
-                                'flex h-[34px] w-[34px] items-center justify-center rounded-full border-none bg-transparent transition-opacity',
-                                showStageNavigation && canGoForward
-                                    ? 'cursor-pointer opacity-100'
-                                    : 'cursor-not-allowed opacity-60',
+                                'flex h-9 w-9 items-center justify-center rounded-full border-none bg-transparent transition-opacity',
+                                forwardIsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100',
                             ].join(' ')}
                         >
                             <svg
@@ -167,7 +167,7 @@ export function StageShell({
                             >
                                 <path
                                     d="M15 5L8 12L15 19"
-                                    stroke={showStageNavigation && canGoForward ? '#3B3F6E' : 'rgba(59, 63, 110, 0.6)'}
+                                    stroke="#3B3F6E"
                                     strokeWidth="2.25"
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
@@ -176,7 +176,7 @@ export function StageShell({
                         </button>
                     </div>
 
-                    <div className="flex justify-center lg:justify-end">
+                    <div className="flex shrink-0 justify-end">
                         <AskNevoButton context={askContext} />
                     </div>
                 </div>
