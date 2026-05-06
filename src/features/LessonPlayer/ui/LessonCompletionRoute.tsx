@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { updateLessonProgress } from '@/features/Dashboard/api/student';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import { useApiTokenExpiryRedirect } from '@/shared/lib';
@@ -13,34 +13,94 @@ type LessonCompletionRouteProps = {
     showNextLesson: boolean;
 };
 
+function getLessonProgressIdCandidates(...values: Array<string | undefined>) {
+    return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+async function syncLessonCompletion(
+    ids: string[],
+    payload: Omit<Parameters<typeof updateLessonProgress>[0], 'lesson_id'>,
+) {
+    let lastError: string | undefined;
+
+    for (const id of ids) {
+        const result = await updateLessonProgress({
+            lesson_id: id,
+            ...payload,
+        });
+
+        if (!result?.error) {
+            return result;
+        }
+
+        lastError = result.error;
+    }
+
+    return { error: lastError || 'Failed to save lesson completion.' };
+}
+
 export function LessonCompletionRoute({ lessonId, showNextLesson }: LessonCompletionRouteProps) {
     useApiTokenExpiryRedirect('student');
     const { data, loading, error } = useLessonPlayer(lessonId);
     const completionSavedRef = useRef(false);
+    const [isSavingCompletion, setIsSavingCompletion] = useState(true);
+    const [completionSaveError, setCompletionSaveError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!data || completionSavedRef.current) return;
-        completionSavedRef.current = true;
+        if (!data) return;
+        if (completionSavedRef.current) {
+            setIsSavingCompletion(false);
+            return;
+        }
 
-        updateLessonProgress({
-            lesson_id: data.originalLessonId || lessonId,
+        completionSavedRef.current = true;
+        setIsSavingCompletion(true);
+        setCompletionSaveError(null);
+
+        const progressIdCandidates = getLessonProgressIdCandidates(
+            lessonId,
+            data.id,
+            data.originalLessonId,
+            data.adaptedLessonId,
+        );
+
+        syncLessonCompletion(progressIdCandidates, {
             blocks_completed: STAGE_ORDER.length,
             time_spent_seconds: 1,
             is_completed: true,
-        }).catch(() => {
-            completionSavedRef.current = false;
-        });
+        })
+            .then((result) => {
+                if (result?.error) {
+                    completionSavedRef.current = false;
+                    setCompletionSaveError(result.error);
+                    setIsSavingCompletion(false);
+                    return;
+                }
+
+                setIsSavingCompletion(false);
+            })
+            .catch(() => {
+                completionSavedRef.current = false;
+                setCompletionSaveError('Failed to save lesson completion.');
+                setIsSavingCompletion(false);
+            });
     }, [data, lessonId]);
 
-    if (loading) {
-        return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
+    if (loading || isSavingCompletion) {
+        return (
+            <LessonPlayerSkeleton
+                pillWidthClassName="w-24"
+                statusLabel={isSavingCompletion ? 'Saving lesson progress...' : undefined}
+            />
+        );
     }
 
-    if (error || !data) {
+    if (error || completionSaveError || !data) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-parchment">
-                <span className="text-[14px] text-graphite-60">{error ?? 'Lesson not found'}</span>
-            </div>
+            <LessonPlayerSkeleton
+                pillWidthClassName="w-24"
+                statusLabel={completionSaveError || error ? 'Retrying lesson sync...' : 'Preparing completion...'}
+            />
         );
     }
 

@@ -2,10 +2,12 @@
 
 type LessonPlayerSkeletonProps = {
     pillWidthClassName?: string;
+    statusLabel?: string;
 };
 
 export function LessonPlayerSkeleton({
     pillWidthClassName = 'w-20',
+    statusLabel,
 }: LessonPlayerSkeletonProps) {
     return (
         <div className="flex min-h-screen justify-center bg-parchment px-0 py-0">
@@ -25,6 +27,13 @@ export function LessonPlayerSkeleton({
                         <div className="h-6 w-full rounded-lg bg-[#EDE5D8]" />
                         <div className="h-6 w-[82%] rounded-lg bg-[#EDE5D8]" />
                     </div>
+
+                    {statusLabel ? (
+                        <div className="mt-6 inline-flex w-fit items-center gap-2 rounded-full bg-[#F1EBDD] px-4 py-2 text-[12px] font-medium text-[#3B3F6E]/75">
+                            <span className="h-2 w-2 animate-pulse rounded-full bg-[#9A9CCB]" />
+                            {statusLabel}
+                        </div>
+                    ) : null}
 
                     <div className="mt-auto pt-9">
                         <div className="relative h-1 w-full rounded-full bg-[#E0D9CE]">

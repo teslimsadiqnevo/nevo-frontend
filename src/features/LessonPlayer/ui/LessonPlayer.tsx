@@ -25,6 +25,32 @@ type LessonPlayerProps = {
     stage: StageKey;
 };
 
+function getLessonProgressIdCandidates(...values: Array<string | undefined>) {
+    return Array.from(new Set(values.map((value) => String(value || '').trim()).filter(Boolean)));
+}
+
+async function syncLessonProgress(
+    ids: string[],
+    payload: Omit<Parameters<typeof updateLessonProgress>[0], 'lesson_id'>,
+) {
+    let lastError: string | undefined;
+
+    for (const id of ids) {
+        const result = await updateLessonProgress({
+            lesson_id: id,
+            ...payload,
+        });
+
+        if (!result?.error) {
+            return result;
+        }
+
+        lastError = result.error;
+    }
+
+    throw new Error(lastError || 'Failed to update lesson progress');
+}
+
 export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     useApiTokenExpiryRedirect('student');
     const router = useRouter();
@@ -53,11 +79,17 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     });
     const stageIndex = STAGE_ORDER.indexOf(stage);
     const persistedLessonId = data?.originalLessonId || lessonId;
+    const progressIdCandidates = getLessonProgressIdCandidates(
+        lessonId,
+        data?.id,
+        data?.originalLessonId,
+        data?.adaptedLessonId,
+    );
 
     useEffect(() => {
         if (!data || stageIndex < 0) return;
 
-        const progressKey = `${persistedLessonId}:${stageIndex + 1}`;
+        const progressKey = `${progressIdCandidates.join('|')}:${stageIndex + 1}`;
         if (lastProgressKey.current === progressKey) return;
         lastProgressKey.current = progressKey;
 
@@ -66,15 +98,14 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             Math.round((Date.now() - progressSessionStartedAt.current) / 1000),
         );
 
-        updateLessonProgress({
-            lesson_id: persistedLessonId,
+        syncLessonProgress(progressIdCandidates, {
             blocks_completed: stageIndex + 1,
             time_spent_seconds: elapsedSeconds,
             is_completed: false,
         }).catch(() => {
             lastProgressKey.current = null;
         });
-    }, [data, persistedLessonId, stageIndex]);
+    }, [data, progressIdCandidates, stageIndex]);
 
     if (loading) {
         return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
@@ -82,17 +113,19 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
     if (error || !data) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-parchment">
-                <span className="text-[14px] text-graphite-60">{error ?? 'Lesson not found'}</span>
-            </div>
+            <LessonPlayerSkeleton
+                pillWidthClassName="w-24"
+                statusLabel={error ? 'Reloading lesson...' : 'Preparing lesson...'}
+            />
         );
     }
 
     if (stageIndex === -1) {
         return (
-            <div className="flex items-center justify-center min-h-screen bg-parchment">
-                <span className="text-[14px] text-graphite-60">Unknown stage</span>
-            </div>
+            <LessonPlayerSkeleton
+                pillWidthClassName="w-24"
+                statusLabel="Preparing lesson stage..."
+            />
         );
     }
 

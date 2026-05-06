@@ -67,9 +67,9 @@ export function VisualMode({
         stage.label,
         STAGE_VISUAL_INTENT[stage.key],
         stage.modes.reading.keyTerm,
-        body,
+        content.body,
     ].filter(Boolean).join(' ');
-    const visualScopeKey = `${stage.key}:${content.conceptId}:${visualContext}:${content.imageUrl}:${content.imageFetchStatus}`;
+    const visualScopeKey = `${stage.key}:${content.conceptId}:${content.imageUrl}:${content.imageFetchStatus}`;
     const [imageState, setImageState] = useState({
         scopeKey: visualScopeKey,
         imageUrl: content.imageUrl,

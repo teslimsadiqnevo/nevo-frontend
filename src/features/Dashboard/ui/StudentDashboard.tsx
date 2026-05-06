@@ -212,13 +212,21 @@ function normalizeProgress(lesson: Lesson | null) {
     };
   }
 
+  const totalSteps = Math.max(1, stepProgress.totalSteps || 5);
+  const currentStep = Math.max(1, stepProgress.currentStep || 1);
+  const rawPercentage =
+    stepProgress.progressPercentage != null
+      ? Number(stepProgress.progressPercentage || 0)
+      : Math.round((currentStep / totalSteps) * 100);
+  const progressPercentage =
+    totalSteps > 0 && currentStep >= totalSteps
+      ? 100
+      : Math.max(0, Math.min(100, rawPercentage));
+
   return {
-    currentStep: Math.max(1, stepProgress.currentStep || 1),
-    totalSteps: Math.max(1, stepProgress.totalSteps || 5),
-    progressPercentage: Math.max(
-      0,
-      Math.min(100, stepProgress.progressPercentage || 0),
-    ),
+    currentStep,
+    totalSteps,
+    progressPercentage,
   };
 }
 
@@ -393,9 +401,11 @@ export function StudentDashboard({
           const progressPercentage = Number(
             item?.progress_percentage ?? item?.progressPercentage ?? 0,
           );
+          const hasReachedFinalStep =
+            totalSteps > 0 && currentStep >= totalSteps;
           const inferredStatus =
             item?.status ||
-            (progressPercentage >= 100
+            (hasReachedFinalStep || progressPercentage >= 100
               ? "completed"
               : currentStep > 0 || progressPercentage > 0
                 ? "in_progress"
@@ -457,19 +467,17 @@ export function StudentDashboard({
           ...toLessonCard(item),
           status: "completed" as const,
         }));
+        const reconciledLessons = applyBackendCompletedLessonOverrides(
+          currentLessonSource ? toLessonCard(currentLessonSource) : null,
+          mappedAssigned,
+          mappedCompleted,
+        );
 
         setStudentName(rawDashboard.student_name || user?.name || "Student");
-        setCurrentLesson(
-          currentLessonSource
-            ? {
-                ...toLessonCard(currentLessonSource),
-                status: "in_progress",
-              }
-            : null,
-        );
-        setAssignedLessons(mappedAssigned);
-        setTeacherLessons(mappedAssigned);
-        setCompletedLessons(mappedCompleted);
+        setCurrentLesson(reconciledLessons.currentLesson);
+        setAssignedLessons(reconciledLessons.assignedLessons);
+        setTeacherLessons(reconciledLessons.assignedLessons);
+        setCompletedLessons(reconciledLessons.completedLessons);
         setRecommendedLessons(mappedRecommended);
       } catch (err) {
         console.error("Failed to fetch dashboard data", err);
@@ -580,7 +588,9 @@ function StudentHomeView({
 }) {
   const firstName =
     (studentName || user?.name || "Student").split(" ")[0] || "Student";
-  const featuredLesson = currentLesson || assignedLessons[0] || null;
+  const featuredLesson = isLessonEffectivelyCompleted(currentLesson)
+    ? assignedLessons[0] || null
+    : currentLesson || assignedLessons[0] || null;
   const progress = normalizeProgress(featuredLesson);
   const assignedCards = featuredLesson
     ? assignedLessons.filter((lesson) => lesson.id !== featuredLesson.id)
@@ -789,6 +799,75 @@ function getUniqueLessonIdCandidates(...values: Array<unknown>) {
         .filter(Boolean),
     ),
   );
+}
+
+function applyBackendCompletedLessonOverrides(
+  currentLesson: Lesson | null,
+  assignedLessons: Lesson[],
+  completedLessons: Lesson[],
+) {
+  const completedIds = new Set(
+    completedLessons.flatMap((lesson) =>
+      getUniqueLessonIdCandidates(lesson.id, lesson.lessonId),
+    ),
+  );
+
+  const completedCurrentLesson =
+    currentLesson && isLessonEffectivelyCompleted(currentLesson)
+      ? ({ ...currentLesson, status: "completed" } as Lesson)
+      : null;
+
+  if (completedCurrentLesson) {
+    getUniqueLessonIdCandidates(
+      completedCurrentLesson.id,
+      completedCurrentLesson.lessonId,
+    ).forEach((id) => completedIds.add(id));
+  }
+
+  const visibleCompletedLessons = [...completedLessons];
+  if (completedCurrentLesson) {
+    const alreadyPresent = visibleCompletedLessons.some((lesson) =>
+      getUniqueLessonIdCandidates(lesson.id, lesson.lessonId).some((id) =>
+        completedIds.has(id) &&
+        getUniqueLessonIdCandidates(
+          completedCurrentLesson.id,
+          completedCurrentLesson.lessonId,
+        ).includes(id),
+      ),
+    );
+    if (!alreadyPresent) {
+      visibleCompletedLessons.unshift(completedCurrentLesson);
+    }
+  }
+
+  const visibleAssignedLessons = assignedLessons.filter(
+    (lesson) =>
+      !getUniqueLessonIdCandidates(lesson.id, lesson.lessonId).some((id) =>
+        completedIds.has(id),
+      ),
+  );
+
+  const visibleCurrentLesson =
+    currentLesson &&
+    !getUniqueLessonIdCandidates(currentLesson.id, currentLesson.lessonId).some(
+      (id) => completedIds.has(id),
+    )
+      ? currentLesson
+      : null;
+
+  return {
+    currentLesson: visibleCurrentLesson,
+    assignedLessons: visibleAssignedLessons,
+    completedLessons: visibleCompletedLessons,
+  };
+}
+
+function isLessonEffectivelyCompleted(lesson: Lesson | null | undefined) {
+  if (!lesson) return false;
+  if (lesson.status === "completed") return true;
+
+  const progress = normalizeProgress(lesson);
+  return progress.totalSteps > 0 && progress.currentStep >= progress.totalSteps;
 }
 
 function StudentHomeSkeleton() {
@@ -1022,10 +1101,22 @@ function StudentLessonsView({
   loading: boolean;
 }) {
   const [completedOpen, setCompletedOpen] = useState(false);
-  const featuredLesson = currentLesson ?? teacherLessons[0] ?? null;
+  const featuredLesson = isLessonEffectivelyCompleted(currentLesson)
+    ? teacherLessons[0] ?? null
+    : currentLesson ?? teacherLessons[0] ?? null;
   const teacherLessonList = featuredLesson
     ? teacherLessons.filter((lesson) => lesson.id !== featuredLesson.id)
     : teacherLessons;
+  const synthesizedCompletedCurrentLesson =
+    currentLesson && isLessonEffectivelyCompleted(currentLesson)
+      ? ({ ...currentLesson, status: "completed" } as Lesson)
+      : null;
+  const visibleCompletedLessons =
+    synthesizedCompletedCurrentLesson
+      ? completedLessons.some((lesson) => lesson.id === synthesizedCompletedCurrentLesson.id)
+        ? completedLessons
+        : [synthesizedCompletedCurrentLesson, ...completedLessons]
+      : completedLessons;
   const featuredProgress = normalizeProgress(featuredLesson);
   const featuredActionLabel = getLessonActionLabel(featuredLesson);
 
@@ -1086,7 +1177,7 @@ function StudentLessonsView({
               <div className="relative h-[220px] w-full overflow-hidden rounded-2xl bg-[#F7F1E6] lg:h-[180px] lg:w-[280px]">
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(59,63,110,0.1)_0%,rgba(0,0,0,0)_100%)]" />
                 <img
-                  src={getLessonImageUrl(featuredLesson)}
+                  src={getLessonVisualUrl(featuredLesson)}
                   alt={featuredLesson.title}
                   className="h-full w-full object-cover opacity-90"
                 />
@@ -1198,8 +1289,8 @@ function StudentLessonsView({
 
         {completedOpen && (
           <div className="mt-4 flex flex-col gap-3 animate-fade-in">
-            {completedLessons.length > 0 ? (
-              completedLessons.map((lesson) => (
+          {visibleCompletedLessons.length > 0 ? (
+            visibleCompletedLessons.map((lesson) => (
                 <CompletedLessonRow
                   key={lesson.id}
                   lesson={lesson}
@@ -1312,7 +1403,7 @@ function TeacherLessonCard({
   lesson: Lesson;
   onClick: () => void;
 }) {
-  const imageUrl = getLessonImageUrl(lesson);
+  const imageUrl = getLessonVisualUrl(lesson);
 
   return (
     <div
@@ -1397,40 +1488,6 @@ function CompletedLessonRow({
         {dateMap[lesson.id as number] || ""}
       </span>
     </div>
-  );
-}
-
-function getLessonImageUrl(lesson: Lesson) {
-  const keywords = [
-    lesson.subject,
-    lesson.topic,
-    lesson.title,
-    "education",
-    "learning",
-  ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
-    .flatMap((value) =>
-      value
-        .toLowerCase()
-        .replace(/[^a-z0-9\s]/g, " ")
-        .split(/\s+/)
-        .filter(Boolean),
-    )
-    .slice(0, 4);
-
-  return (
-    lesson.image_url ||
-    lesson.media_url ||
-    lesson.imageUrl ||
-    lesson.thumbnail_url ||
-    lesson.thumbnailUrl ||
-    lesson.cover_image ||
-    lesson.coverImage ||
-    lesson.banner_image_url ||
-    lesson.bannerImageUrl ||
-    `https://loremflickr.com/800/600/${encodeURIComponent(
-      keywords.join(",") || "education,lesson",
-    )}`
   );
 }
 
@@ -2358,42 +2415,85 @@ function StudentConnectView({
     }
   };
 
+  const getConnectionPayload = (value: any) => {
+    if (value?.data && typeof value.data === "object") {
+      return value.data;
+    }
+    return value && typeof value === "object" ? value : {};
+  };
+
+  const getConnectionList = (...values: unknown[]) => {
+    for (const value of values) {
+      if (Array.isArray(value)) {
+        return value;
+      }
+    }
+    return [];
+  };
+
+  const getConnectionId = (connection: any) =>
+    String(
+      connection?.connection_id ??
+        connection?.connectionId ??
+        connection?.id ??
+        connection?.teacher_id ??
+        connection?.teacherId ??
+        connection?.teacher?.id ??
+        getTeacherDisplayName(connection),
+    );
+
+  const getTeacherDisplayName = (connection: any) =>
+    connection?.teacher_name ||
+    connection?.teacherName ||
+    connection?.teacher?.full_name ||
+    connection?.teacher?.fullName ||
+    connection?.teacher?.name ||
+    connection?.full_name ||
+    connection?.fullName ||
+    connection?.name ||
+    "Teacher";
+
+  const getConnectionSubject = (connection: any) =>
+    connection?.subject ||
+    connection?.teacher_subject ||
+    connection?.teacherSubject ||
+    connection?.teacher?.subject ||
+    connection?.class_name ||
+    connection?.className ||
+    "Teacher";
+
   const fetchConnections = async () => {
     setLoadingConnections(true);
     setConnectError(null);
     try {
-      const res = await fetch("/api/students/connections");
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setConnectError(
-          data?.detail || data?.error || "Failed to load connections",
-        );
+      const result = await getStudentConnections();
+      if (result?.error) {
+        setConnectError(result.error || "Failed to load connections");
         setConnectionsData([]);
-      } else {
-        // Accept either array or object with data/connections
-        if (Array.isArray(data)) setConnectionsData(data);
-        else if (Array.isArray(data?.connections))
-          setConnectionsData(data.connections);
-        else if (Array.isArray(data?.data)) setConnectionsData(data.data);
-        else setConnectionsData([]);
-        // derive pending requests if present
-        const conns = Array.isArray(data)
-          ? data
-          : Array.isArray(data?.connections)
-            ? data.connections
-            : Array.isArray(data?.data)
-              ? data.data
-              : [];
-        setPendingRequests(
-          conns.filter(
-            (c: any) =>
-              (c.request_status || c.status || "").toLowerCase() === "pending",
-          ),
-        );
+        setPendingRequests([]);
+        return;
       }
+
+      const data = getConnectionPayload(result?.data ?? result);
+      const connected = getConnectionList(
+        data?.connected,
+        data?.accepted,
+        data?.connections,
+        data?.teachers,
+      );
+      const pending = getConnectionList(
+        data?.pending,
+        data?.pending_requests,
+        data?.pendingRequests,
+        data?.requests,
+      );
+
+      setConnectionsData(connected);
+      setPendingRequests(pending);
     } catch (err: any) {
       setConnectError(err?.message || "Failed to load connections");
       setConnectionsData([]);
+      setPendingRequests([]);
     } finally {
       setLoadingConnections(false);
     }
@@ -2403,24 +2503,7 @@ function StudentConnectView({
     void fetchConnections();
   }, []);
 
-  useEffect(() => {
-    // keep pendingRequests in sync if profile initial data provided
-    setPendingRequests(
-      Array.isArray(connectionsData)
-        ? connectionsData.filter(
-            (c: any) =>
-              (c.request_status || c.status || "").toLowerCase() === "pending",
-          )
-        : [],
-    );
-  }, [connectionsData]);
-
-  const acceptedConnections = Array.isArray(connectionsData)
-    ? connectionsData.filter((c: any) => {
-        const status = (c.request_status || c.status || "").toLowerCase();
-        return status !== "pending" && status !== "rejected";
-      })
-    : [];
+  const acceptedConnections = connectionsData;
 
   if (loading && !profile) {
     return <StudentConnectSkeleton />;
@@ -2911,29 +2994,32 @@ function StudentConnectView({
             </div>
           ) : (
             <div className="space-y-3">
-              {pendingRequests.map((req) => (
-                <div
-                  key={req.id}
-                  className="bg-white rounded-2xl border border-[#E9E7E2] px-4 py-3 flex items-center justify-between"
-                >
-                  <div>
-                    <p className="text-[14px] font-semibold text-[#2B2B2F]">
-                      {req.teacher_name || "Teacher"}
-                    </p>
-                    <p className="text-[12px] text-graphite-40">
-                      {req.subject || ""}
-                    </p>
+              {pendingRequests.map((req) => {
+                const reqId = getConnectionId(req);
+                return (
+                  <div
+                    key={reqId}
+                    className="bg-white rounded-2xl border border-[#E9E7E2] px-4 py-3 flex items-center justify-between"
+                  >
+                    <div>
+                      <p className="text-[14px] font-semibold text-[#2B2B2F]">
+                        {getTeacherDisplayName(req)}
+                      </p>
+                      <p className="text-[12px] text-graphite-40">
+                        {getConnectionSubject(req)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleCancelRequest(reqId)}
+                        className="px-3 py-2 text-[13px] border border-[#E9E7E2] rounded-full text-[#C0392B]"
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleCancelRequest(String(req.id))}
-                      className="px-3 py-2 text-[13px] border border-[#E9E7E2] rounded-full text-[#C0392B]"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -2953,26 +3039,27 @@ function StudentConnectView({
             </div>
           ) : acceptedConnections.length > 0 ? (
             <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden">
-              {acceptedConnections.map((conn: any) => (
-                <div
-                  key={conn.id ?? conn.connection_id ?? conn.teacher_id}
-                  className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EDE7] last:border-b-0"
-                >
-                  <div className="w-10 h-10 rounded-full bg-[#E8D5C4] flex items-center justify-center text-[12px] font-bold text-[#5C4A32] shrink-0">
-                    {conn.teacher_name
-                      ? conn.teacher_name.substring(0, 2).toUpperCase()
-                      : "T"}
+              {acceptedConnections.map((conn: any) => {
+                const teacherName = getTeacherDisplayName(conn);
+                return (
+                  <div
+                    key={getConnectionId(conn)}
+                    className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EDE7] last:border-b-0"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-[#E8D5C4] flex items-center justify-center text-[12px] font-bold text-[#5C4A32] shrink-0">
+                      {teacherName.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div>
+                      <p className="text-[13.5px] font-semibold text-[#2B2B2F]">
+                        {teacherName}
+                      </p>
+                      <p className="text-[11.5px] text-graphite-40">
+                        {getConnectionSubject(conn)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[13.5px] font-semibold text-[#2B2B2F]">
-                      {conn.teacher_name || "Teacher"}
-                    </p>
-                    <p className="text-[11.5px] text-graphite-40">
-                      {conn.subject || "Subject"}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">
