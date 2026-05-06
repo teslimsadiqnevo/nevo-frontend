@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from '@vercel/analytics/next';
-import { Toaster } from "@/shared/ui";
+import { PwaInstallPrompt, PwaLaunchSplash, PwaRegistration, Toaster } from "@/shared/ui";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,8 +17,13 @@ export const metadata: Metadata = {
       { url: "/apple-touch-icon.png" }
     ],
   },
-  manifest: "/site.webmanifest",
+  manifest: "/manifest.webmanifest",
   applicationName: "Nevo",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Nevo",
+  },
   authors: [{ name: "Nevo Learning", url: "https://nevolearning.com" }],
   generator: "Nevo",
   keywords: [
@@ -76,7 +81,10 @@ export const metadata: Metadata = {
     telephone: true,
     email: true,
     address: true,
-  }
+  },
+  alternates: {
+    canonical: "https://nevolearning.com",
+  },
 };
 
 export default function RootLayout({
@@ -87,7 +95,10 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="bg-parchment text-graphite antialiased">
+        <PwaRegistration />
+        <PwaLaunchSplash />
         {children}
+        <PwaInstallPrompt />
         <Toaster />
         <Analytics />
       </body>

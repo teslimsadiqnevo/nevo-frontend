@@ -625,7 +625,7 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
 }
 
 export async function getLessonPlayer(lessonId: string): Promise<LessonPlayerData> {
-    const offlinePackage = getStoredOfflineLessonPackage(lessonId);
+    const offlinePackage = await getStoredOfflineLessonPackage(lessonId);
 
     if (typeof navigator !== 'undefined' && navigator.onLine === false && offlinePackage) {
         return adaptOfflineLessonPayload(offlinePackage);

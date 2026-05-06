@@ -23,6 +23,7 @@ import {
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
 import { getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import { toast } from "@/shared/ui";
 import { getLessonArtwork } from "../lib/lessonArtwork";
 import {
   getStoredOfflineLessonPackage,
@@ -1498,11 +1499,35 @@ function LessonDetailView({
   };
   const lessonId = String(lesson.lessonId || lesson.id);
 
+  const showOfflineStorageError = (
+    error: unknown,
+    action: "download" | "remove",
+  ) => {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : action === "download"
+            ? "This device could not save the lesson for offline use."
+            : "This device could not remove the offline lesson.";
+
+    toast({
+      title:
+        action === "download"
+          ? "Offline download unavailable"
+          : "Offline update failed",
+      message,
+      variant: "error",
+      durationMs: 5200,
+    });
+  };
+
   useEffect(() => {
     let cancelled = false;
 
     async function loadDownloadState() {
-      const cachedPackage = getStoredOfflineLessonPackage(lessonId);
+      const cachedPackage = await getStoredOfflineLessonPackage(lessonId);
       if (cachedPackage && !cancelled) {
         setDownloadOffline(true);
       }
@@ -1582,7 +1607,7 @@ function LessonDetailView({
         const preparedPackage = await prepareOfflineLessonPackage(
           packagePayload as OfflineLessonPackage,
         );
-        saveOfflineLessonPackage(preparedPackage);
+        await saveOfflineLessonPackage(preparedPackage);
 
         const recordCandidates = getUniqueLessonIdCandidates(
           manifestLessonId,
@@ -1611,13 +1636,13 @@ function LessonDetailView({
         }
         setDownloadOffline(true);
       } else {
-        const cachedPackage = getStoredOfflineLessonPackage(lessonId);
+        const cachedPackage = await getStoredOfflineLessonPackage(lessonId);
         const removeCandidates = getUniqueLessonIdCandidates(
           (cachedPackage as any)?.original_lesson_id,
           lessonId,
           (cachedPackage as any)?.lesson_id,
         );
-        removeOfflineLessonPackage(lessonId);
+        await removeOfflineLessonPackage(lessonId);
         if (typeof navigator === "undefined" || navigator.onLine !== false) {
           let removalSynced = false;
           let lastRemoveError: string | undefined;
@@ -1637,6 +1662,7 @@ function LessonDetailView({
       }
     } catch (err) {
       console.error("Failed to update offline lesson state", err);
+      showOfflineStorageError(err, downloadOffline ? "remove" : "download");
     } finally {
       setDownloadBusy(false);
     }
@@ -1890,14 +1916,13 @@ function mapOfflinePackageToDownloadedLesson(
 }
 
 function getStoredDownloadsSnapshot() {
-  const packages = listStoredOfflineLessonPackages();
-  return {
+  return listStoredOfflineLessonPackages().then((packages) => ({
     lessons: packages.map(mapOfflinePackageToDownloadedLesson),
     totalSizeBytes: packages.reduce(
       (total, pkg) => total + Number(pkg.estimated_size_bytes || 0),
       0,
     ),
-  };
+  }));
 }
 
 function StudentDownloadsView() {
@@ -1933,7 +1958,7 @@ function StudentDownloadsView() {
 
     async function loadDownloads() {
       setLoading(true);
-      const storedSnapshot = getStoredDownloadsSnapshot();
+      const storedSnapshot = await getStoredDownloadsSnapshot();
       if (!cancelled && storedSnapshot.lessons.length > 0) {
         setLessons(storedSnapshot.lessons);
         setTotalSizeBytes(storedSnapshot.totalSizeBytes);
@@ -1979,7 +2004,7 @@ function StudentDownloadsView() {
     setRemoving(true);
     try {
       if (removeTarget.source === "local") {
-        removeOfflineLessonPackage(removeTarget.id);
+        await removeOfflineLessonPackage(removeTarget.id);
       }
       if (typeof navigator === "undefined" || navigator.onLine !== false) {
         const res = await removeStudentDownload(removeTarget.id);
@@ -1991,13 +2016,22 @@ function StudentDownloadsView() {
       setRemoveTarget(null);
       setMenuOpenId(null);
       if (removeTarget.source === "local") {
-        const storedSnapshot = getStoredDownloadsSnapshot();
+        const storedSnapshot = await getStoredDownloadsSnapshot();
         setTotalSizeBytes(storedSnapshot.totalSizeBytes);
       } else {
         setTotalSizeBytes((prev) => Math.max(0, prev - removeTarget.sizeBytes));
       }
     } catch (err) {
       console.error("Failed to remove download", err);
+      toast({
+        title: "Offline update failed",
+        message:
+          err instanceof Error
+            ? err.message
+            : "This device could not remove the offline lesson.",
+        variant: "error",
+        durationMs: 5200,
+      });
     } finally {
       setRemoving(false);
     }
