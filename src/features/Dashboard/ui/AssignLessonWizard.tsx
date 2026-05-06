@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
+import { DetailViewSkeleton } from './DashboardSkeletons';
 
 type LessonStatus = 'Published' | 'Draft';
 
@@ -315,13 +316,7 @@ export function AssignLessonWizard({
         );
     }
 
-    if (loading) {
-        return (
-            <div className="flex h-full w-full max-w-[900px] items-center justify-center">
-                <span className="text-[14px] text-[#6E74AA]">Loading assignment options...</span>
-            </div>
-        );
-    }
+    if (loading) return <DetailViewSkeleton backLabel="Assignments" />;
 
     if (loadError) {
         return (

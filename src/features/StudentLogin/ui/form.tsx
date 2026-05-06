@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
+import { getDashboardPath } from "@/shared/lib";
 
 export function StudentLoginForm() {
     const [firstName, setFirstName] = useState("");
@@ -42,7 +43,7 @@ export function StudentLoginForm() {
                 nevoId: normalizedNevoId,
                 pin,
                 redirect: false,
-                callbackUrl: "/dashboard",
+                callbackUrl: getDashboardPath("student", "home"),
             });
 
             if (result?.error) {
@@ -52,7 +53,7 @@ export function StudentLoginForm() {
                 return;
             }
 
-            window.location.assign(result?.url || "/dashboard");
+            window.location.assign(result?.url || getDashboardPath("student", "home"));
         } catch {
             setError("We couldn't find that account. Check your ID and try again.");
             setIsLoading(false);

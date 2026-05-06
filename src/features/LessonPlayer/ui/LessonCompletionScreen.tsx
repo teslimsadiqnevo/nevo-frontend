@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { getDashboardPath } from '@/shared/lib';
 import type {
     LessonCompletionData,
     LessonCompletionMetric,
@@ -75,7 +76,7 @@ export function LessonCompletionScreen({
                 <div className="flex h-14 items-center px-4">
                     <button
                         type="button"
-                        onClick={() => router.push('/dashboard?view=lessons')}
+                        onClick={() => router.push(getDashboardPath('student', 'lessons'))}
                         className="flex h-5 w-5 items-center justify-center border-none bg-transparent cursor-pointer"
                         aria-label="Back to lessons"
                     >
@@ -151,7 +152,7 @@ export function LessonCompletionScreen({
 
                     <button
                         type="button"
-                        onClick={() => router.push('/dashboard?view=lessons')}
+                        onClick={() => router.push(getDashboardPath('student', 'lessons'))}
                         className="mt-2 flex h-12 w-full items-center justify-center rounded-xl border-2 border-indigo bg-white text-[14px] font-semibold leading-5 text-indigo cursor-pointer"
                     >
                         {completion.browseCtaLabel}

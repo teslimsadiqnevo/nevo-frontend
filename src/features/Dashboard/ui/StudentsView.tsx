@@ -178,9 +178,9 @@ export function StudentsView() {
     return (
         <>
             <div className="mx-auto flex w-full max-w-[1120px] flex-col gap-6">
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-col gap-4 pt-1 lg:flex-row lg:items-center lg:justify-between">
                     <h1 className="text-[22px] font-bold leading-[33px] text-[#3B3F6E]">Students</h1>
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                         <div className="relative">
                             <button
                                 type="button"
@@ -246,6 +246,8 @@ export function StudentsView() {
 
                 {!loading && !error && students.length > 0 ? (
                     <div className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                        <div className="overflow-x-auto">
+                        <div className="min-w-[860px]">
                         <div className="grid grid-cols-[2.1fr_0.9fr_1.15fr_1fr_0.9fr] items-center border-b border-[#E0D9CE] px-5 py-4 text-[13px] font-semibold uppercase tracking-[0.05em] text-[#3B3F6E]/60">
                             <span>Name</span>
                             <span>Class</span>
@@ -352,6 +354,8 @@ export function StudentsView() {
                                     </button>
                                 ) : null}
                             </div>
+                        </div>
+                        </div>
                         </div>
                     </div>
                 ) : null}
@@ -569,7 +573,7 @@ function EnrollStudentModal({
                     </div>
                 ) : (
                     <>
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between gap-3">
                             <h2 className="text-[20px] font-bold leading-[30px] text-[#3B3F6E]">Enroll a student</h2>
                             <button type="button" onClick={onClose} className="p-2 text-[#3B3F6E]/60" aria-label="Close">
                                 <CloseIcon />
@@ -632,6 +636,8 @@ function EnrollStudentModal({
 function StudentsTableSkeleton() {
     return (
         <div className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#FCFCFC] shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+            <div className="overflow-x-auto">
+            <div className="min-w-[860px]">
             <div className="grid grid-cols-[2.1fr_0.9fr_1.15fr_1fr_0.9fr] items-center border-b border-[#E0D9CE] px-5 py-4">
                 {Array.from({ length: 5 }).map((_, index) => (
                     <div key={index} className="h-4 w-20 animate-pulse rounded bg-[#E7E1D7]" />
@@ -652,6 +658,8 @@ function StudentsTableSkeleton() {
                     <div className="ml-auto h-4 w-24 animate-pulse rounded bg-[#E7E1D7]" />
                 </div>
             ))}
+            </div>
+            </div>
         </div>
     );
 }

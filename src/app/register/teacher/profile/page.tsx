@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "@/shared/ui";
 import { completeTeacherProfileSetup, getTeacherUploadUrl } from "@/features/Dashboard/api/teacher";
+import { getDashboardPath } from "@/shared/lib";
 
 const SUBJECTS = [
     "Mathematics", "English", "Science", "History", 
@@ -85,7 +86,7 @@ export default function ProfileSetupPage() {
             setError(result.error);
             return;
         }
-        router.push("/dashboard");
+        router.push(getDashboardPath("teacher", "home"));
     };
 
     return (

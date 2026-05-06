@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
@@ -8,11 +7,11 @@ import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
 import { getTeacherDashboardHome, getTeacherProfile, getTeacherStudents } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
-import { useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
-import logo from "@/shared/ui/icon/assets/default-logo.svg";
+import { getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import { DashboardViewSkeleton, TeacherDashboardOverviewSkeleton } from './DashboardSkeletons';
 
 const DashboardViewLoader = () => (
-    <DashboardSplashState message="Preparing your dashboard..." />
+    <DashboardViewSkeleton titleWidth="w-40" cardCount={2} rowCount={5} />
 );
 
 const LessonsView = dynamic(() => import("./LessonsView").then((mod) => mod.LessonsView), {
@@ -198,21 +197,6 @@ function ActivityIcon({ kind }: { kind: TeacherRecentActivityItem['kind'] }) {
                 <circle cx="9" cy="6.4" r="2.5" fill="#B86573" />
                 <path d="M4.5 13.8C5.2 11.7 6.84 10.6 9 10.6C11.16 10.6 12.8 11.7 13.5 13.8" stroke="#B86573" strokeWidth="1.4" strokeLinecap="round" />
             </svg>
-        </div>
-    );
-}
-
-function DashboardSplashState({ message = "Loading..." }: { message?: string }) {
-    return (
-        <div className="flex min-h-[70vh] w-full items-center justify-center bg-[#F7F1E6]">
-            <div className="relative flex flex-col items-center justify-center">
-                <div className="absolute h-[180px] w-[180px] rounded-full bg-[#9A9CCB]/15 animate-ping" />
-                <div className="relative z-10 flex flex-col items-center">
-                    <Image src={logo} alt="Nevo Logo" width={120} height={40} className="h-auto w-28" priority />
-                    <span className="mt-2 text-sm italic text-[#2B2B2F]/55">learning, your way</span>
-                    <span className="mt-4 text-sm font-medium text-[#3B3F6E]/80">{message}</span>
-                </div>
-            </div>
         </div>
     );
 }
@@ -495,7 +479,7 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
         if (view === 'profile') {
             return (
                 <ProfileView
-                    onBack={() => router.push('/dashboard')}
+                    onBack={() => router.push(getDashboardPath('teacher', 'home'))}
                     onProfileSaved={handleProfileSaved}
                 />
             );
@@ -505,7 +489,7 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
 
     return (
         <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
-            <TeacherSidebar user={effectiveUser} />
+            <TeacherSidebar user={effectiveUser} currentView={view} />
             <main className="flex-1 px-[48px] py-[48px] overflow-y-auto">
                 {sessionIsStale ? (
                     <StaleSessionBanner
@@ -643,9 +627,7 @@ function TeacherHomeView({
     const activity = normalizeRecentActivity(data);
     const classCards = useMemo(() => buildTeacherClassCards(classes, students), [classes, students]);
 
-    if (loading) {
-        return <DashboardSplashState message="Populating your teacher dashboard..." />;
-    }
+    if (loading) return <TeacherDashboardOverviewSkeleton />;
 
     return (
         <div className="w-full max-w-[740px]">
@@ -664,7 +646,7 @@ function TeacherHomeView({
                         My classes
                     </h2>
                     <button
-                        onClick={() => router.push('/dashboard?view=students')}
+                                        onClick={() => router.push(getDashboardPath('teacher', 'students'))}
                         className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#3B3F6E]/50 cursor-pointer"
                     >
                         Manage
@@ -701,7 +683,7 @@ function TeacherHomeView({
                                     </p>
                                 </div>
                                 <button
-                                    onClick={() => router.push('/dashboard?view=students')}
+                                        onClick={() => router.push(getDashboardPath('teacher', 'students'))}
                                     className="mt-4 text-left text-[12px] font-medium leading-4 text-[#3B3F6E]/55 cursor-pointer"
                                 >
                                     View class
@@ -752,7 +734,7 @@ function TeacherHomeView({
                         Assign lesson
                     </button>
                     <button
-                        onClick={() => router.push('/dashboard?view=students')}
+                                        onClick={() => router.push(getDashboardPath('teacher', 'students'))}
                         className="h-10 rounded-full border border-[#3B3F6E] text-center text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#3B3F6E] hover:text-[#F7F1E6] cursor-pointer"
                     >
                         View students

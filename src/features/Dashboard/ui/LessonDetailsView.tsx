@@ -2,6 +2,7 @@
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
+import { DetailViewSkeleton } from './DashboardSkeletons';
 
 interface LessonDetailResponse {
   id: string;
@@ -202,13 +203,7 @@ export function LessonDetailsView({
     await loadLesson();
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[calc(100vh-100px)] w-full max-w-[900px] items-center justify-center rounded-3xl border border-[#E9E7E2] bg-[#FDFBF9]">
-        <span className="text-[14px] text-[#6E74AA]">Loading lesson...</span>
-      </div>
-    );
-  }
+  if (loading) return <DetailViewSkeleton backLabel="Lessons" />;
 
   if (error || !lesson || !review || !summary) {
     return (

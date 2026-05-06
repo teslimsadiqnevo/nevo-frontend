@@ -2,9 +2,8 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
 import { getSchoolSettings } from "@/features/Dashboard/api/school";
-import { getInitials } from "@/shared/lib";
+import { getDashboardPath, getInitials, type SchoolDashboardView } from "@/shared/lib";
 import { NevoLogo } from "@/shared/ui";
 
 const navItems = [
@@ -18,12 +17,28 @@ const navItems = [
 
 export function SchoolAdminSidebar({
     user,
+    currentView = 'home',
 }: {
-    user?: { name?: string | null; full_name?: string | null; email?: string | null } | null;
+    user?: {
+        name?: string | null;
+        full_name?: string | null;
+        email?: string | null;
+        schoolName?: string | null;
+        school_name?: string | null;
+        schoolId?: string | null;
+        school_id?: string | null;
+    } | null;
+    currentView?: string | null;
 }) {
-    const searchParams = useSearchParams();
-    const currentView = searchParams?.get('view') || null;
-    const [schoolName, setSchoolName] = useState('Lagos International Academy');
+    const [schoolName, setSchoolName] = useState(() => getInitialSchoolName(user));
+
+    useEffect(() => {
+        const nextSchoolName = getSchoolNameFromUser(user);
+        if (!nextSchoolName) return;
+
+        setSchoolName((current) => (current === nextSchoolName ? current : nextSchoolName));
+        persistSchoolName(user, nextSchoolName);
+    }, [user]);
 
     useEffect(() => {
         let mounted = true;
@@ -35,6 +50,7 @@ export function SchoolAdminSidebar({
             const data = 'data' in res ? res.data : null;
             if (data?.school_name) {
                 setSchoolName(data.school_name);
+                persistSchoolName(user, data.school_name);
             }
         })();
 
@@ -47,16 +63,7 @@ export function SchoolAdminSidebar({
         return user?.name || user?.full_name || user?.email || 'School Admin';
     }, [user]);
 
-    const buildHref = (view: string | null) => {
-        const params = new URLSearchParams();
-        const role = searchParams?.get('role');
-
-        if (role) params.set('role', role);
-        if (view) params.set('view', view);
-
-        const query = params.toString();
-        return query ? `/dashboard?${query}` : '/dashboard';
-    };
+    const buildHref = (view: SchoolDashboardView | null) => getDashboardPath('school', view || 'home');
 
     return (
         <aside className="w-[240px] min-w-[240px] h-full bg-[#FCFCFC] border-r border-[#E0D9CE] flex flex-col">
@@ -70,7 +77,7 @@ export function SchoolAdminSidebar({
             <nav className="flex-1 px-0">
                 <div className="flex flex-col gap-1">
                     {navItems.map((item) => {
-                        const isActive = item.view === currentView || (!item.view && !currentView);
+                        const isActive = (item.view || 'home') === (currentView || 'home');
 
                         return (
                             <Link
@@ -106,6 +113,72 @@ export function SchoolAdminSidebar({
             </div>
         </aside>
     );
+}
+
+function getSchoolNameFromUser(
+    user?:
+        | {
+              schoolName?: string | null;
+              school_name?: string | null;
+          }
+        | null,
+) {
+    const candidates = [user?.schoolName, user?.school_name];
+    for (const candidate of candidates) {
+        if (typeof candidate === 'string' && candidate.trim()) {
+            return candidate.trim();
+        }
+    }
+    return null;
+}
+
+function getSchoolStorageKey(
+    user?:
+        | {
+              schoolId?: string | null;
+              school_id?: string | null;
+          }
+        | null,
+) {
+    const schoolId = user?.schoolId || user?.school_id;
+    return `nevo-school-sidebar-name:${schoolId || 'default'}`;
+}
+
+function getInitialSchoolName(
+    user?:
+        | {
+              schoolName?: string | null;
+              school_name?: string | null;
+              schoolId?: string | null;
+              school_id?: string | null;
+          }
+        | null,
+) {
+    const fromUser = getSchoolNameFromUser(user);
+    if (fromUser) return fromUser;
+
+    if (typeof window !== 'undefined') {
+        const cached = window.sessionStorage.getItem(getSchoolStorageKey(user));
+        if (cached?.trim()) return cached.trim();
+    }
+
+    return 'Your school';
+}
+
+function persistSchoolName(
+    user:
+        | {
+              schoolId?: string | null;
+              school_id?: string | null;
+          }
+        | null
+        | undefined,
+    schoolName: string,
+) {
+    if (typeof window === 'undefined') return;
+    if (!schoolName.trim()) return;
+
+    window.sessionStorage.setItem(getSchoolStorageKey(user), schoolName.trim());
 }
 
 function SidebarIcon({ name, active, small = false }: { name: string; active: boolean; small?: boolean }) {

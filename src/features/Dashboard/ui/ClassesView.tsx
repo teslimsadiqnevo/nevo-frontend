@@ -11,6 +11,7 @@ import {
     getSchoolClassesOverview,
     updateSchoolClass,
 } from '../api/school';
+import { DashboardViewSkeleton, DetailViewSkeleton, ModalFormSkeleton } from './DashboardSkeletons';
 
 export function ClassesView() {
     const guardAuth = useAuthGuard('school');
@@ -118,7 +119,7 @@ export function ClassesView() {
     return (
         <>
             <div className="mx-auto flex w-full max-w-[1136px] flex-col gap-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-[22px] font-bold leading-[33px] text-[#3B3F6E]">Classes</h1>
                     <button
                         onClick={() => setShowCreateModal(true)}
@@ -130,7 +131,7 @@ export function ClassesView() {
                 </div>
 
                 {loading ? (
-                    <div className="text-[14px] text-[#2B2B2F]/60">Loading classes...</div>
+                    <DashboardViewSkeleton titleWidth="w-32" cardCount={3} rowCount={4} />
                 ) : error ? (
                     <div className="text-[14px] text-[#D4534A]">{error}</div>
                 ) : overview?.show_empty_state ? (
@@ -141,7 +142,7 @@ export function ClassesView() {
                         onCreateClick={() => setShowCreateModal(true)}
                     />
                 ) : (
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                         {(overview?.classes || []).map((classItem: any) => (
                             <ClassCard
                                 key={classItem.class_id}
@@ -318,9 +319,7 @@ function ClassDetailView({
     onEdit: () => void;
     onArchive: () => void;
 }) {
-    if (loading) {
-        return <div className="text-[14px] text-[#2B2B2F]/60">Loading class details...</div>;
-    }
+    if (loading) return <DetailViewSkeleton backLabel="Classes" />;
 
     if (error) {
         return <div className="text-[14px] text-[#D4534A]">{error}</div>;
@@ -368,7 +367,7 @@ function ClassDetailView({
                 </div>
             </div>
 
-            <div className="grid grid-cols-[1fr_280px] gap-6">
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_280px]">
                 <div className="min-w-0">
                     <SectionCard title={`Students (${detail.students?.length || 0})`}>
                         {(detail.students || []).length > 0 ? (
@@ -533,7 +532,7 @@ function CreateClassModal({ onClose, onCreated }: { onClose: () => void; onCreat
     return (
         <ClassFormShell title="Create a class" onClose={onClose}>
             {loading ? (
-                <p className="text-[13px] text-[#2B2B2F]/55">Loading class options...</p>
+                <ModalFormSkeleton />
             ) : (
                 <div className="flex flex-col gap-5">
                     <TextInput
@@ -675,7 +674,7 @@ function EditClassModal({ classId, onClose, onSaved }: { classId: string; onClos
     return (
         <ClassFormShell title="Edit class" onClose={onClose}>
             {loading ? (
-                <p className="text-[13px] text-[#2B2B2F]/55">Loading class...</p>
+                <ModalFormSkeleton />
             ) : (
                 <div className="flex flex-col gap-5">
                     <TextInput value={form.name} onChange={(value) => setForm({ ...form, name: value })} placeholder="" />

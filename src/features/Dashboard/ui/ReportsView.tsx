@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 import { getSchoolBoardSharePreview, getSchoolTermSummary } from '../api/school';
+import { DashboardViewSkeleton } from './DashboardSkeletons';
 
 type ReportState = {
     loading: boolean;
@@ -106,13 +107,7 @@ export function ReportsView() {
         [state.termSummary, state.boardPreview],
     );
 
-    if (state.loading) {
-        return (
-            <div className="flex min-h-[70vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
-                Loading reports...
-            </div>
-        );
-    }
+    if (state.loading) return <DashboardViewSkeleton titleWidth="w-36" cardCount={4} rowCount={4} />;
 
     if (state.error) {
         return (
@@ -125,9 +120,9 @@ export function ReportsView() {
 
     return (
         <div className="mx-auto flex w-full max-w-[1136px] flex-col gap-6">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <h1 className="text-[22px] font-bold leading-[33px] text-[#3B3F6E]">Reports</h1>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                     <button className="flex h-[40px] items-center gap-2 rounded-[12px] border border-[#3B3F6E] bg-white px-4 text-[14px] font-medium text-[#3B3F6E]">
                         <CalendarIcon />
                         <span>This month</span>
@@ -149,7 +144,7 @@ export function ReportsView() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
                 <ReportCard title="Student engagement">
                     {engagementSeries.length > 0 ? (
                         <>
@@ -165,7 +160,10 @@ export function ReportsView() {
                     {completionRows.length > 0 ? (
                         <div className="mt-2 flex flex-col gap-4">
                             {completionRows.map((row) => (
-                                <div key={row.label} className="grid grid-cols-[60px_minmax(0,1fr)_175px] items-center gap-4">
+                                <div
+                                    key={row.label}
+                                    className="grid grid-cols-1 gap-2 md:grid-cols-[60px_minmax(0,1fr)_175px] md:items-center md:gap-4"
+                                >
                                     <span className="text-[13px] font-medium leading-5 text-[#2B2B2F]">{row.label}</span>
                                     <div className="h-[8px] overflow-hidden rounded-full bg-[#F7F1E6]">
                                         <div
@@ -186,7 +184,8 @@ export function ReportsView() {
 
                 <ReportCard title="Teacher activity">
                     {teacherRows.length > 0 ? (
-                        <div className="mt-2">
+                        <div className="mt-2 overflow-x-auto">
+                            <div className="min-w-[520px]">
                             <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] border-b border-[#E0D9CE] pb-3 text-[12px] font-medium uppercase tracking-[0.03em] text-[#2B2B2F]/65">
                                 <span>Teacher</span>
                                 <span>Uploaded</span>
@@ -206,6 +205,7 @@ export function ReportsView() {
                                     </div>
                                 ))}
                             </div>
+                            </div>
                         </div>
                     ) : (
                         <CardEmptyState />
@@ -216,7 +216,10 @@ export function ReportsView() {
                     {coverageRows.length > 0 ? (
                         <div className="mt-2 flex flex-col gap-4">
                             {coverageRows.map((row) => (
-                                <div key={row.label} className="grid grid-cols-[120px_minmax(0,1fr)_auto] items-center gap-4">
+                                <div
+                                    key={row.label}
+                                    className="grid grid-cols-1 gap-2 md:grid-cols-[120px_minmax(0,1fr)_auto] md:items-center md:gap-4"
+                                >
                                     <span className="text-[13px] font-medium leading-5 text-[#2B2B2F]">{row.label}</span>
                                     <div className="h-[8px] overflow-hidden rounded-full bg-[#F7F1E6]">
                                         <div
@@ -289,7 +292,7 @@ function EngagementChart({
 
     return (
         <div className="rounded-[10px] bg-[#F7F1E6] px-2 py-3">
-            <svg viewBox={`0 0 ${width} ${height}`} className="h-[200px] w-full">
+            <svg viewBox={`0 0 ${width} ${height}`} className="h-[160px] w-full sm:h-[180px] lg:h-[200px]">
                 <defs>
                     <linearGradient id="engagement-fill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="rgba(154, 156, 203, 0.24)" />

@@ -2,15 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useSearchParams } from 'next/navigation';
 import { useApiTokenExpiryRedirect, useAuthGuard } from '@/shared/lib';
 import { SchoolAdminSidebar } from "@/widgets";
 import { getSchoolDashboardOverview, getSchoolDashboardSummary, getSchoolSettings } from '../api/school';
+import { DashboardViewSkeleton, SchoolDashboardOverviewSkeleton } from './DashboardSkeletons';
 
 const DashboardViewLoader = () => (
-    <div className="flex min-h-[40vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
-        Loading...
-    </div>
+    <DashboardViewSkeleton titleWidth="w-36" cardCount={2} rowCount={5} />
 );
 
 const ClassesView = dynamic(() => import('./ClassesView').then((mod) => mod.ClassesView), {
@@ -66,10 +64,15 @@ type InsightItem = {
     supporting_metric?: string;
 };
 
-export function SchoolAdminDashboard({ user }: { user?: DashboardUser }) {
+export function SchoolAdminDashboard({
+    user,
+    view = 'home',
+}: {
+    user?: DashboardUser;
+    view?: string;
+}) {
     useApiTokenExpiryRedirect('school');
-    const searchParams = useSearchParams();
-    const currentView = searchParams?.get('view') || null;
+    const currentView = view || 'home';
 
     const renderView = () => {
         switch (currentView) {
@@ -90,7 +93,7 @@ export function SchoolAdminDashboard({ user }: { user?: DashboardUser }) {
 
     return (
         <div className="flex h-screen w-full overflow-hidden bg-[#F7F1E6] font-sans">
-            <SchoolAdminSidebar user={user} />
+            <SchoolAdminSidebar user={user} currentView={currentView} />
             <main className="relative flex-1 overflow-y-auto bg-[#F7F1E6] px-8 py-8">
                 {renderView()}
             </main>
@@ -147,13 +150,7 @@ function AdminDashboardOverview({ user }: { user?: DashboardUser }) {
         };
     }, [guardAuth]);
 
-    if (state.loading) {
-        return (
-            <div className="flex min-h-[70vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
-                Loading school overview...
-            </div>
-        );
-    }
+    if (state.loading) return <SchoolDashboardOverviewSkeleton />;
 
     if (state.error) {
         return (

@@ -7,6 +7,7 @@ import { submitAnswers } from "@/features/RegistrationAssessment";
 import { Icon } from "@/shared/ui";
 import { SplashScreen } from "@/shared/ui/SplashScreen";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import { getDashboardPath } from "@/shared/lib";
 
 export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () => void; }) {
     const { setPin: setGlobalPin, firstName, surname, age, schoolId, classId, assessmentAnswers, isAutoAdapt } = useRegistrationStore();
@@ -56,7 +57,7 @@ export function CreatePIN({ onNext, onBack }: { onNext: () => void; onBack?: () 
                 nevoId: resolvedNevoId,
                 pin: finalPin,
                 redirect: false,
-                callbackUrl: "/dashboard?view=home&role=student",
+                callbackUrl: getDashboardPath("student", "home"),
             });
 
             if (signInResult?.error) {

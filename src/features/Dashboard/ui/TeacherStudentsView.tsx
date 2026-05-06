@@ -2,7 +2,7 @@
 
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthGuard } from '@/shared/lib';
+import { getDashboardPath, useAuthGuard } from '@/shared/lib';
 import {
   getTeacherStudentProfile,
   getTeacherStudentProgress,
@@ -149,7 +149,7 @@ export function TeacherStudentsView() {
       ) : error ? (
         <TeacherStudentsErrorState error={error} />
       ) : filtered.length === 0 ? (
-        <TeacherStudentsEmptyState onShareCode={() => router.push('/dashboard?view=connect')} />
+        <TeacherStudentsEmptyState onShareCode={() => router.push(getDashboardPath('teacher', 'connect'))} />
       ) : (
         <div className="flex-1 overflow-y-auto px-6 pb-6">
           {filtered.map((student, index) => (

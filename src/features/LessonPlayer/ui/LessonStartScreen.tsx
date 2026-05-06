@@ -2,6 +2,7 @@
 
 import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getDashboardPath } from '@/shared/lib';
 import type { LessonPlayerData, LessonModeCard } from '../api/types';
 import { STAGE_ORDER } from '../api/types';
 import { LeaveLessonDialog } from './LeaveLessonDialog';
@@ -80,7 +81,7 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
 
     const leaveLesson = () => {
         setShowLeaveDialog(false);
-        router.push('/dashboard?view=lessons');
+        router.push(getDashboardPath('student', 'lessons'));
     };
 
     return (

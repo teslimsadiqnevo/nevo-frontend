@@ -22,7 +22,7 @@ import {
 } from "../api/student";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
-import { useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import { getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
 import { getLessonArtwork } from "../lib/lessonArtwork";
 import {
   getStoredOfflineLessonPackage,
@@ -109,6 +109,7 @@ const ScannerInner = dynamic(
 // ─── Types ─────────────────────────────────────────────────────────────────────
 export type Lesson = {
   id: number | string;
+  lessonId: string;
   title: string;
   subject: string;
   topic: string;
@@ -248,6 +249,7 @@ export function StudentDashboard({
   view?: string;
   user?: any;
 }) {
+  const router = useRouter();
   useApiTokenExpiryRedirect("student");
   const guardAuth = useAuthGuard("student");
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
@@ -363,12 +365,15 @@ export function StudentDashboard({
               item?.durationMinutes ??
               30,
           );
-          return {
-            id:
-              item?.lesson_id ||
-              item?.id ||
+          const canonicalLessonId = String(
+            item?.lesson_id ||
               item?.lessonId ||
+              item?.id ||
               `${item?.title || "lesson"}-${estimatedMinutes}`,
+          );
+          return {
+            id: canonicalLessonId,
+            lessonId: canonicalLessonId,
             title: item?.title || "Lesson",
             subject: item?.subject || "Subject",
             topic: item?.topic || "Topic",
@@ -470,7 +475,7 @@ export function StudentDashboard({
   return (
     <>
       <div className="flex min-h-screen w-full bg-[#F7F1E6] font-sans">
-        <StudentSidebar />
+        <StudentSidebar currentView={view} />
         <main className="relative ml-[220px] min-h-screen flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-[44px] lg:py-[32px]">
           {selectedLesson ? (
             <LessonDetailView
@@ -698,6 +703,63 @@ function StudentHomeView({
         )}
       </section>
     </div>
+  );
+}
+
+function computeOfflineVersionHash(contentBlocks: unknown[]) {
+  const raw = JSON.stringify(contentBlocks ?? []);
+  let hash = 0;
+  for (let index = 0; index < raw.length; index += 1) {
+    hash = (hash * 31 + raw.charCodeAt(index)) >>> 0;
+  }
+  return `local-${hash.toString(16)}`;
+}
+
+function extractOfflineMediaUrls(value: unknown): string[] {
+  const urls = new Set<string>();
+
+  function visit(entry: unknown) {
+    if (!entry) return;
+
+    if (typeof entry === "string") {
+      if (/^https?:\/\//i.test(entry) || entry.startsWith("data:")) {
+        urls.add(entry);
+      }
+      return;
+    }
+
+    if (Array.isArray(entry)) {
+      entry.forEach(visit);
+      return;
+    }
+
+    if (typeof entry === "object") {
+      const record = entry as Record<string, unknown>;
+      ["image_url", "media_url", "url", "ai_generated_url"].forEach((key) => {
+        const candidate = record[key];
+        if (typeof candidate === "string" && candidate) {
+          urls.add(candidate);
+        }
+      });
+      Object.values(record).forEach(visit);
+    }
+  }
+
+  visit(value);
+  return Array.from(urls);
+}
+
+function getUniqueLessonIdCandidates(...values: Array<unknown>) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) =>
+          typeof value === "string" || typeof value === "number"
+            ? String(value).trim()
+            : "",
+        )
+        .filter(Boolean),
+    ),
   );
 }
 
@@ -1434,7 +1496,7 @@ function LessonDetailView({
     text: "#3B3F6E",
     banner: "#C0BDD4",
   };
-  const lessonId = String(lesson.id);
+  const lessonId = String(lesson.lessonId || lesson.id);
 
   useEffect(() => {
     let cancelled = false;
@@ -1469,29 +1531,106 @@ function LessonDetailView({
     setDownloadBusy(true);
     try {
       if (!downloadOffline) {
+        let packagePayload: OfflineLessonPackage | null = null;
+        let manifestLessonId = lessonId;
+
         const packageRes = await getLessonDownloadPackage(lessonId);
-        if (packageRes?.error || !packageRes?.data) {
+        if (!packageRes?.error && packageRes?.data) {
+          packagePayload = packageRes.data as OfflineLessonPackage;
+          manifestLessonId = String(packagePayload.lesson_id || lessonId);
+        } else if (
+          typeof packageRes?.error === "string" &&
+          packageRes.error.includes("Not Found")
+        ) {
+          const playRes = await fetch(
+            `/api/lessons/${encodeURIComponent(lessonId)}/play`,
+          );
+          const playData = await playRes.json().catch(() => null);
+
+          if (!playRes.ok || !playData) {
+            throw new Error(
+              packageRes?.error || "Failed to fetch lesson package",
+            );
+          }
+
+          const contentBlocks = Array.isArray(playData?.concepts)
+            ? playData.concepts
+            : [];
+          const estimatedSize = new TextEncoder().encode(
+            JSON.stringify(contentBlocks),
+          ).length;
+          const originalLessonId = String(
+            playData?.original_lesson_id || lessonId,
+          );
+
+          packagePayload = {
+            lesson_id: lessonId,
+            original_lesson_id: originalLessonId,
+            title: playData?.lesson_title || lesson.title || "Lesson",
+            subject: lesson.subject || null,
+            topic: lesson.topic || null,
+            version_hash: computeOfflineVersionHash(contentBlocks),
+            estimated_size_bytes: estimatedSize,
+            content_blocks: contentBlocks,
+            media_urls: extractOfflineMediaUrls(contentBlocks),
+          };
+          manifestLessonId = originalLessonId;
+        } else {
           throw new Error(packageRes?.error || "Failed to fetch lesson package");
         }
+
         const preparedPackage = await prepareOfflineLessonPackage(
-          packageRes.data as OfflineLessonPackage,
+          packagePayload as OfflineLessonPackage,
         );
         saveOfflineLessonPackage(preparedPackage);
-        const recordRes = await recordStudentDownload({
-          lesson_id: preparedPackage.lesson_id || lessonId,
-          version_hash: preparedPackage.version_hash,
-          size_bytes: Number(preparedPackage.estimated_size_bytes || 0),
-        });
-        if (recordRes?.error) {
-          console.error("Failed to sync download manifest", recordRes.error);
+
+        const recordCandidates = getUniqueLessonIdCandidates(
+          manifestLessonId,
+          lessonId,
+          (packagePayload as OfflineLessonPackage)?.original_lesson_id,
+          (packagePayload as OfflineLessonPackage)?.lesson_id,
+        );
+
+        let manifestSynced = false;
+        let lastRecordError: string | undefined;
+        for (const candidateId of recordCandidates) {
+          const recordRes = await recordStudentDownload({
+            lesson_id: candidateId,
+            version_hash: preparedPackage.version_hash,
+            size_bytes: Number(preparedPackage.estimated_size_bytes || 0),
+          });
+          if (!recordRes?.error) {
+            manifestSynced = true;
+            break;
+          }
+          lastRecordError = recordRes.error;
+        }
+
+        if (!manifestSynced && lastRecordError) {
+          console.warn("Skipped download manifest sync", lastRecordError);
         }
         setDownloadOffline(true);
       } else {
+        const cachedPackage = getStoredOfflineLessonPackage(lessonId);
+        const removeCandidates = getUniqueLessonIdCandidates(
+          (cachedPackage as any)?.original_lesson_id,
+          lessonId,
+          (cachedPackage as any)?.lesson_id,
+        );
         removeOfflineLessonPackage(lessonId);
         if (typeof navigator === "undefined" || navigator.onLine !== false) {
-          const removeRes = await removeStudentDownload(lessonId);
-          if (removeRes?.error) {
-            console.error("Failed to sync download removal", removeRes.error);
+          let removalSynced = false;
+          let lastRemoveError: string | undefined;
+          for (const candidateId of removeCandidates) {
+            const removeRes = await removeStudentDownload(candidateId);
+            if (!removeRes?.error) {
+              removalSynced = true;
+              break;
+            }
+            lastRemoveError = removeRes.error;
+          }
+          if (!removalSynced && lastRemoveError) {
+            console.warn("Skipped download manifest removal sync", lastRemoveError);
           }
         }
         setDownloadOffline(false);
@@ -1687,7 +1826,7 @@ function LessonDetailView({
 // ─── Lesson Action Bar ─────────────────────────────────────────────────────────
 function LessonActionBar({ lesson }: { lesson: Lesson }) {
   const router = useRouter();
-  const lessonPath = `/lesson/${lesson.id}`;
+  const lessonPath = `/lesson/${lesson.lessonId || lesson.id}`;
 
   switch (lesson.status) {
     case "not_started":
@@ -1926,7 +2065,7 @@ function StudentDownloadsView() {
         </p>
 
         <button
-          onClick={() => router.push("/dashboard?view=lessons")}
+          onClick={() => router.push(getDashboardPath("student", "lessons"))}
           className="px-7 py-[11px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-full text-[14px] font-semibold transition-colors cursor-pointer"
         >
           Browse lessons
@@ -2180,21 +2319,21 @@ function StudentConnectView({
     void fetchConnections();
   }, []);
 
+  useEffect(() => {
+    // keep pendingRequests in sync if profile initial data provided
+    setPendingRequests(
+      Array.isArray(connectionsData)
+        ? connectionsData.filter(
+            (c: any) =>
+              (c.request_status || c.status || "").toLowerCase() === "pending",
+          )
+        : [],
+    );
+  }, [connectionsData]);
+
   if (loading && !profile) {
     return <StudentConnectSkeleton />;
   }
-
-  useEffect(() => {
-    // keep pendingRequests in sync if profile initial data provided
-    if (connectionsData && connectionsData.length > 0) {
-      setPendingRequests(
-        connectionsData.filter(
-          (c: any) =>
-            (c.request_status || c.status || "").toLowerCase() === "pending",
-        ),
-      );
-    }
-  }, [connectionsData]);
 
   const handleConnectClass = async () => {
     setConnectError(null);

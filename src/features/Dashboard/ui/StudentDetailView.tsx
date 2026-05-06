@@ -177,7 +177,7 @@ export function StudentDetailView({
                     <BackIcon />
                     Students
                 </button>
-                <div className="grid grid-cols-[1fr_380px] gap-6">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="space-y-6">
                         <div className="h-[110px] rounded-[18px] bg-white/70" />
                         <div className="h-[220px] rounded-[18px] bg-white/70" />
@@ -229,7 +229,7 @@ export function StudentDetailView({
                     Students
                 </button>
 
-                <div className="grid grid-cols-[1fr_380px] gap-6">
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
                     <div className="min-w-0">
                         <div className="rounded-[18px] border border-[#E0D9CE] bg-white px-6 py-6">
                             <div className="flex items-start gap-4">
@@ -280,7 +280,10 @@ export function StudentDetailView({
                                 <div className="rounded-[16px] border border-[#E0D9CE] bg-white px-5 py-3">
                                     <div className="flex flex-col gap-4">
                                         {lessonActivity.map((lesson) => (
-                                            <div key={`${lesson.lesson_id}-${lesson.time_label}`} className="grid grid-cols-[1fr_auto_auto] items-center gap-4">
+                                            <div
+                                                key={`${lesson.lesson_id}-${lesson.time_label}`}
+                                                className="grid grid-cols-1 gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center md:gap-4"
+                                            >
                                                 <p className="text-[15px] font-medium text-[#2B2B2F]">{lesson.title}</p>
                                                 <span className={`rounded-full px-3 py-1 text-[14px] ${statusBadgeClass(lesson.status)}`}>
                                                     {lesson.status_label}
@@ -464,7 +467,7 @@ function MoveStudentModal({
                         <button
                             type="button"
                             disabled
-                            className="grid grid-cols-[1fr_auto_auto] items-center rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]/35 px-4 py-3 text-left opacity-55"
+                            className="grid grid-cols-1 gap-2 rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]/35 px-4 py-3 text-left opacity-55 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center"
                         >
                             <div>
                                 <p className="text-[15px] font-medium text-[#3B3F6E]">{currentClassName}</p>
@@ -483,7 +486,7 @@ function MoveStudentModal({
                                         key={classItem.id}
                                         type="button"
                                         onClick={() => setSelectedClassId(classItem.id)}
-                                        className={`grid grid-cols-[1fr_auto_auto] items-center rounded-[12px] border px-4 py-3 text-left ${
+                                        className={`grid grid-cols-1 gap-2 rounded-[12px] border px-4 py-3 text-left md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center ${
                                             selected
                                                 ? 'border-[#3B3F6E] bg-white shadow-[inset_0_0_0_1px_#3B3F6E]'
                                                 : 'border-[#E0D9CE] bg-[#F7F1E6] hover:border-[#CFC6BA]'
@@ -679,8 +682,10 @@ function RemoveStudentModal({
 
 function ModalShell({ children, onClose }: { children: ReactNode; onClose: () => void }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-6" onClick={onClose}>
-            <div onClick={(event) => event.stopPropagation()}>{children}</div>
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/40 px-4 py-6 sm:px-6" onClick={onClose}>
+            <div className="flex min-h-full items-center justify-center" onClick={(event) => event.stopPropagation()}>
+                {children}
+            </div>
         </div>
     );
 }
@@ -697,12 +702,12 @@ function InfoRow({
     isBadge?: boolean;
 }) {
     return (
-        <div className="grid grid-cols-[88px_1fr_auto] items-center gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[88px_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
             <span className="text-[15px] text-[#2B2B2F]">{label}</span>
             {isBadge ? (
-                <span className="justify-self-end rounded-full bg-[rgba(122,184,122,0.2)] px-3 py-1 text-[14px] text-[#7AB87A]">{value}</span>
+                <span className="justify-self-start rounded-full bg-[rgba(122,184,122,0.2)] px-3 py-1 text-[14px] text-[#7AB87A] sm:justify-self-end">{value}</span>
             ) : (
-                <span className="justify-self-end text-[15px] text-[#2B2B2F]/65">{value}</span>
+                <span className="justify-self-start text-[15px] text-[#2B2B2F]/65 sm:justify-self-end">{value}</span>
             )}
             <span>{trailing}</span>
         </div>

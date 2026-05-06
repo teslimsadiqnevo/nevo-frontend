@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BrowserQRCodeReader } from "@zxing/browser";
 import { connectTeacher } from "../api/connectTeacher";
 import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import { getDashboardPath } from "@/shared/lib";
 
 export function Connect() {
     const router = useRouter();
@@ -17,7 +18,7 @@ export function Connect() {
     const [error, setError] = useState<string | null>(null);
     const [teacherName, setTeacherName] = useState<string | null>(null);
     const { token } = useRegistrationStore();
-    const studentDashboardUrl = "/dashboard?view=home&role=student";
+    const studentDashboardUrl = getDashboardPath("student", "home");
 
     useEffect(() => {
         const videoElement = videoRef.current;

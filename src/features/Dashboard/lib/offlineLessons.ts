@@ -4,6 +4,7 @@ export type OfflineLessonContentBlock = Record<string, unknown>;
 
 export type OfflineLessonPackage = {
   lesson_id: string;
+  original_lesson_id?: string | null;
   title: string;
   subject?: string | null;
   topic?: string | null;
@@ -148,4 +149,3 @@ export function removeOfflineLessonPackage(lessonId: string | number) {
   if (!canUseStorage()) return;
   window.localStorage.removeItem(getOfflineLessonStorageKey(lessonId));
 }
-

@@ -2,6 +2,7 @@
 
 import { signIn } from "@/features/Auth/api/auth";
 import { AuthError } from "next-auth";
+import { getDashboardPath } from "@/shared/lib";
 
 export async function loginSchool(data: {
   email: string;
@@ -12,7 +13,7 @@ export async function loginSchool(data: {
       email: data.email,
       password: data.password,
       loginType: "school",
-      redirectTo: "/dashboard",
+      redirectTo: getDashboardPath("school", "home"),
     });
     return { success: true };
   } catch (error) {

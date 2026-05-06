@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 import { getSchoolTeachersPage } from '../api/school';
 import { InviteTeacherModal } from './InviteTeacherModal';
+import { DashboardViewSkeleton } from './DashboardSkeletons';
 
 export function TeachersView() {
     const guardAuth = useAuthGuard('school');
@@ -40,7 +41,7 @@ export function TeachersView() {
     return (
         <>
             <div className="mx-auto flex w-full max-w-[1136px] flex-col gap-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <h1 className="text-[22px] font-bold text-[#3B3F6E]">Teachers</h1>
                     <button
                         onClick={() => setShowInviteModal(true)}
@@ -55,7 +56,7 @@ export function TeachersView() {
                 </div>
 
                 {loading ? (
-                    <div className="text-[14px] text-[#2B2B2F]/60">Loading teachers...</div>
+                    <DashboardViewSkeleton titleWidth="w-36" cardCount={0} rowCount={6} />
                 ) : error ? (
                     <div className="text-[14px] text-[#D4534A]">{error}</div>
                 ) : teachersPage?.show_empty_state ? (
@@ -86,6 +87,8 @@ export function TeachersView() {
 function TeachersTable({ teachers, onViewTeacher }: { teachers: any[]; onViewTeacher: (teacher: any) => void }) {
     return (
         <div className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-white">
+            <div className="overflow-x-auto">
+            <div className="min-w-[760px]">
             <div className="grid grid-cols-[1.35fr_1.25fr_100px_120px_100px_60px] items-center border-b border-[#E0D9CE] bg-[#FCFCFC] px-5 py-4 text-[11px] uppercase tracking-[0.08em] text-[#3B3F6E]/65">
                 <span>Name</span>
                 <span>Classes</span>
@@ -136,6 +139,8 @@ function TeachersTable({ teachers, onViewTeacher }: { teachers: any[]; onViewTea
                     </button>
                 </div>
             ))}
+            </div>
+            </div>
         </div>
     );
 }
@@ -212,7 +217,7 @@ function TeacherDetailView({ teacher, onBack }: { teacher: any; onBack: () => vo
                     </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                     <DetailBlock label="Status" value={teacher.status} />
                     <DetailBlock label="Last active" value={teacher.last_active_label} />
                     <DetailBlock label="Lessons uploaded" value={String(teacher.lessons_uploaded)} />

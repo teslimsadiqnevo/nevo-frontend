@@ -2,6 +2,7 @@
 
 import { signIn } from "@/features/Auth/api/auth";
 import { AuthError } from "next-auth";
+import { getDashboardPath } from "@/shared/lib";
 
 export async function loginStudent(data: {
   firstName: string;
@@ -13,7 +14,7 @@ export async function loginStudent(data: {
       firstName: data.firstName,
       nevoId: data.nevoId,
       pin: data.pin,
-      redirectTo: "/dashboard",
+      redirectTo: getDashboardPath("student", "home"),
     });
     console.log("loginStudent", data);
     return { success: true };

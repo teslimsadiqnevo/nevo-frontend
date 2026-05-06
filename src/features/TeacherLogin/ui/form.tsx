@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Icon } from "@/shared/ui";
+import { getDashboardPath } from "@/shared/lib";
 
 export function TeacherLoginForm() {
     const router = useRouter();
@@ -20,18 +21,18 @@ export function TeacherLoginForm() {
     const redirectParam = searchParams.get('redirect') || '';
 
     const normalizedRedirect = useMemo(() => {
-        if (!redirectParam) return '/dashboard';
+        if (!redirectParam) return getDashboardPath('teacher', 'home');
         if (redirectParam.startsWith('/')) return redirectParam;
-        if (typeof window === 'undefined') return '/dashboard';
+        if (typeof window === 'undefined') return getDashboardPath('teacher', 'home');
         try {
             const parsed = new URL(redirectParam);
             if (parsed.origin === window.location.origin) {
                 return `${parsed.pathname}${parsed.search}${parsed.hash}`;
             }
         } catch {
-            return '/dashboard';
+            return getDashboardPath('teacher', 'home');
         }
-        return '/dashboard';
+        return getDashboardPath('teacher', 'home');
     }, [redirectParam]);
 
     const handleSubmit = async (e: React.FormEvent) => {

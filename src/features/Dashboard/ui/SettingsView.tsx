@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
 import { deleteSchoolAccount, getSchoolSettings, updateSchoolSettings } from '../api/school';
 import { LogoutDialog } from '@/widgets/LogoutDialog';
+import { DashboardViewSkeleton } from './DashboardSkeletons';
 
 type SectionId = 'school-profile' | 'features' | 'permissions' | 'data-privacy' | 'danger-zone';
 
@@ -206,13 +207,7 @@ export function SettingsView() {
         sectionRefs[sectionId].current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
 
-    if (loading) {
-        return (
-            <div className="flex min-h-[70vh] items-center justify-center text-[14px] text-[#2B2B2F]/60">
-                Loading settings...
-            </div>
-        );
-    }
+    if (loading) return <DashboardViewSkeleton titleWidth="w-36" cardCount={0} rowCount={6} />;
 
     if (error && !settings) {
         return (
@@ -224,8 +219,8 @@ export function SettingsView() {
     }
 
     return (
-        <div className="mx-auto flex w-full max-w-[1136px] gap-8">
-            <aside className="sticky top-8 h-fit w-[200px] shrink-0">
+        <div className="mx-auto flex w-full max-w-[1136px] flex-col gap-8 xl:flex-row">
+            <aside className="h-fit w-full shrink-0 xl:sticky xl:top-8 xl:w-[200px]">
                 <nav className="flex flex-col">
                     {SECTION_ITEMS.map((item) => {
                         const active = activeSection === item.id;
@@ -458,12 +453,12 @@ function FeatureRow({
     last?: boolean;
 }) {
     return (
-        <div className={`flex min-h-[64px] items-center justify-between px-7 py-4 ${last ? '' : 'border-b border-[#E0D9CE]'}`}>
+        <div className={`flex min-h-[64px] flex-col gap-4 px-5 py-4 sm:px-7 md:flex-row md:items-center md:justify-between ${last ? '' : 'border-b border-[#E0D9CE]'}`}>
             <div>
                 <p className="text-[15px] leading-[22px] text-[#2B2B2F]">{title}</p>
                 <p className="mt-1 text-[13px] leading-5 text-[#2B2B2F]/55">{description}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 self-start md:self-auto">
                 <span className="text-[13px] leading-5 text-[#2B2B2F]/55">{enabled ? 'Enabled' : 'Disabled'}</span>
                 <button
                     onClick={onToggle}

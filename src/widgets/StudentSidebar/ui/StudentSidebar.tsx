@@ -2,8 +2,8 @@
 
 import { Icon, NevoLogo } from "@/shared/ui";
 import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
+import { getDashboardPath } from "@/shared/lib";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 const navItems = [
@@ -15,10 +15,8 @@ const navItems = [
   { name: "Profile", view: "profile" },
 ] as const;
 
-export function StudentSidebar() {
+export function StudentSidebar({ currentView = "home" }: { currentView?: string | null }) {
   const [showAskNevo, setShowAskNevo] = useState(false);
-  const searchParams = useSearchParams();
-  const currentView = searchParams.get("view") || null;
   const askPage = currentView || "home";
   const askContext = `You are on Student Dashboard > ${
     currentView
@@ -40,20 +38,11 @@ export function StudentSidebar() {
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-0 pb-0">
           {navItems.map((item) => {
-            const isActive = item.view === currentView;
-            const role = searchParams.get("role");
-            const params = new URLSearchParams();
-            if (role) params.set("role", role);
-            if (item.view) params.set("view", item.view);
-            const href = params.toString()
-              ? `/dashboard?${params.toString()}`
-              : role
-                ? `/dashboard?role=${role}`
-                : "/dashboard";
+            const isActive = (item.view || "home") === (currentView || "home");
             return (
               <Link
                 key={item.name}
-                href={href}
+                href={getDashboardPath("student", item.view || "home")}
                 className={`relative flex h-[48px] items-center gap-3 px-5 transition-all text-[14px] ${
                   isActive
                     ? "bg-[#4A5080] text-[#F7F1E6] font-medium"

@@ -3,7 +3,7 @@
 import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { type LearningMode } from '@/shared/store/useRegistrationStore';
-import { useApiTokenExpiryRedirect } from '@/shared/lib';
+import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import { STAGE_ORDER, type StageKey, type ToolbarState } from '../api/types';
@@ -210,7 +210,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
                 open={showLeaveDialog}
                 onClose={() => {
                     setShowLeaveDialog(false);
-                    router.push('/dashboard?view=lessons');
+                    router.push(getDashboardPath('student', 'lessons'));
                 }}
                 onConfirm={() => setShowLeaveDialog(false)}
             />

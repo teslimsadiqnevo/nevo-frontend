@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { getDashboardPath } from '@/shared/lib';
 
 export default function TeacherInviteAcceptPage() {
     const router = useRouter();
@@ -85,7 +86,7 @@ export default function TeacherInviteAcceptPage() {
             }
 
             setMessage('Class attached. Taking you to your students...');
-            router.replace('/dashboard?view=students');
+            router.replace(getDashboardPath('teacher', 'students'));
         })();
 
         return () => {
@@ -110,7 +111,7 @@ export default function TeacherInviteAcceptPage() {
                 {error ? (
                     <button
                         type="button"
-                        onClick={() => router.replace('/dashboard?view=connect')}
+                        onClick={() => router.replace(getDashboardPath('teacher', 'connect'))}
                         className="mt-7 inline-flex h-[44px] items-center justify-center rounded-[12px] border border-[#3B3F6E] px-5 text-[14px] font-medium text-[#3B3F6E]"
                     >
                         Go to dashboard

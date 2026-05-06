@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuthGuard } from '@/shared/lib';
+import { getDashboardPath, useAuthGuard } from '@/shared/lib';
 import { StudentDetailView } from './StudentDetailView';
 import {
   getTeacherDashboard,
@@ -86,7 +86,7 @@ export function TeacherHomeBackendView({
             Assign lesson
           </button>
           <button
-            onClick={() => router.push('/dashboard?view=students')}
+            onClick={() => router.push(getDashboardPath('teacher', 'students'))}
             className="flex-1 py-3 px-5 text-center border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-full text-[13.5px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all duration-200 cursor-pointer"
           >
             View students

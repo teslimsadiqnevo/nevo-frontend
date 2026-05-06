@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSchoolOnboardingStatus } from "@/features/Dashboard/api/school";
+import { getDashboardPath } from "@/shared/lib";
 
 export default function SchoolSuccessPage() {
     const router = useRouter();
@@ -105,7 +106,7 @@ export default function SchoolSuccessPage() {
                 <div className="w-full max-w-[580px]">
                     <button
                         type="button"
-                        onClick={() => router.push('/dashboard')}
+                        onClick={() => router.push(getDashboardPath('school', 'home'))}
                         className="w-full font-bold rounded-[8px] py-[15px] text-[14px] outline-none transition-all shadow-sm bg-[#3B3F6E] hover:opacity-90 text-white cursor-pointer active:scale-[0.98]"
                     >
                         Go to dashboard

@@ -2,8 +2,8 @@
 
 import { Icon, NevoLogo, UserAvatar } from "@/shared/ui";
 import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
+import { getDashboardPath, type TeacherDashboardView } from "@/shared/lib";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 const navItems = [
@@ -19,11 +19,14 @@ type SidebarUser = {
     avatarUrl?: string | null;
 };
 
-export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
+export function TeacherSidebar({
+    user,
+    currentView = 'home',
+}: {
+    user?: SidebarUser | null;
+    currentView?: string | null;
+}) {
     const [showAskNevo, setShowAskNevo] = useState(false);
-    const searchParams = useSearchParams();
-    const currentView = searchParams.get('view') || null;
-    const role = searchParams.get('role');
     const displayName = user?.name?.trim() || '';
     const isProfileActive = currentView === 'profile';
     const askPage = currentView || 'home';
@@ -31,13 +34,7 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
         currentView ? currentView.charAt(0).toUpperCase() + currentView.slice(1) : 'Home'
     }`;
 
-    const buildHref = (view: string | null) => {
-        const params = new URLSearchParams();
-        if (view) params.set('view', view);
-        if (role) params.set('role', role);
-        const query = params.toString();
-        return query ? `/dashboard?${query}` : '/dashboard';
-    };
+    const buildHref = (view: TeacherDashboardView | null) => getDashboardPath('teacher', view || 'home');
 
     return (
         <aside className="w-[200px] min-w-[200px] bg-[#3B3F6E] flex flex-col h-full">
@@ -47,7 +44,7 @@ export function TeacherSidebar({ user }: { user?: SidebarUser | null }) {
 
             <nav className="flex flex-col gap-1 px-3 flex-1">
                 {navItems.map((item) => {
-                    const isActive = item.view === currentView;
+                    const isActive = (item.view || 'home') === (currentView || 'home');
                     return (
                         <Link
                             key={item.name}
