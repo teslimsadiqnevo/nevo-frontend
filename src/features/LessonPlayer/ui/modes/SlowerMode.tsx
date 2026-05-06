@@ -8,6 +8,7 @@ import { StageShell } from '../StageShell';
 type SlowerModeProps = {
     stage: Stage;
     progress: number;
+    onExit: () => void;
     onBack: () => void;
     askContext?: string | null;
     activeMode: LearningMode;
@@ -45,6 +46,7 @@ function PauseModal({ onClose }: { onClose: () => void }) {
 export function SlowerMode({
     stage,
     progress,
+    onExit,
     onBack,
     askContext,
     activeMode,
@@ -171,6 +173,7 @@ export function SlowerMode({
                 media={media}
                 body={body}
                 progress={progress}
+                onExit={onExit}
                 onBack={onBack}
                 askContext={askContext}
                 toolbarState="slower"

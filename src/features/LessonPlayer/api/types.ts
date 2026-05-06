@@ -243,6 +243,8 @@ export type Stage = {
 
 export type LessonPlayerData = {
     id: string;
+    originalLessonId?: string;
+    adaptedLessonId?: string;
     title: string;
     subject: string;
     topic: string;

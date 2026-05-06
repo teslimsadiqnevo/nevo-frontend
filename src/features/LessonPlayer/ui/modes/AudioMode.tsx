@@ -8,6 +8,7 @@ import type { LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 type AudioModeProps = {
     stage: Stage;
     progress: number;
+    onExit: () => void;
     onBack: () => void;
     onContinue: () => void;
     continueLabel: string;
@@ -21,6 +22,7 @@ type AudioModeProps = {
 export function AudioMode({
     stage,
     progress,
+    onExit,
     onBack,
     onContinue,
     continueLabel,
@@ -75,6 +77,7 @@ export function AudioMode({
                 </div>
             }
             progress={progress}
+            onExit={onExit}
             onBack={onBack}
             onContinue={onContinue}
             continueLabel={continueLabel}

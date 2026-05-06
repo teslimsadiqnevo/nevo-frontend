@@ -122,6 +122,33 @@ export async function getStudentProgressOverview() {
     }
 }
 
+export async function updateLessonProgress(payload: {
+    lesson_id: string;
+    blocks_completed: number;
+    time_spent_seconds: number;
+    quiz_score?: number | null;
+    is_completed?: boolean;
+}) {
+    try {
+        const headers = await getAuthHeader();
+        const res = await apiFetch(`/progress/update`, {
+            method: "POST",
+            headers: {
+                ...headers,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                ...payload,
+                quiz_score: payload.quiz_score ?? null,
+                is_completed: payload.is_completed ?? false,
+            }),
+        });
+        return unwrap(res, "Failed to update lesson progress");
+    } catch (e: any) {
+        return { data: null, error: e.message };
+    }
+}
+
 export async function getStudentSubjectDetail(subject: string) {
     try {
         const headers = await getAuthHeader();

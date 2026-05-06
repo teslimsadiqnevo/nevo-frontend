@@ -8,6 +8,7 @@ import type { Stage, ActionStep, LessonPaceDensity, ToolbarState } from '../../a
 type ActionModeProps = {
     stage: Stage;
     progress: number;
+    onExit: () => void;
     onBack: () => void;
     onContinue: () => void;
     continueLabel: string;
@@ -67,6 +68,7 @@ function StepRow({ index, step }: { index: number; step: ActionStep }) {
 export function ActionMode({
     stage,
     progress,
+    onExit,
     onBack,
     onContinue,
     continueLabel,
@@ -163,6 +165,7 @@ export function ActionMode({
                 </div>
             }
             progress={progress}
+            onExit={onExit}
             onBack={onBack}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}

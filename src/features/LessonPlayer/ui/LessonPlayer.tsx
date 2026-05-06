@@ -1,16 +1,18 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { type LearningMode } from '@/shared/store/useRegistrationStore';
 import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
+import { updateLessonProgress } from '@/features/Dashboard/api/student';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import { STAGE_ORDER, type StageKey, type ToolbarState } from '../api/types';
 import { VisualMode } from './modes/VisualMode';
 import { AudioMode } from './modes/AudioMode';
 import { ActionMode } from './modes/ActionMode';
 import { ReadingMode } from './modes/ReadingMode';
+import { SlowerMode } from './modes/SlowerMode';
 import { LeaveLessonDialog } from './LeaveLessonDialog';
 import { PaceAdjustmentOverlay } from './PaceAdjustmentOverlay';
 import { LessonReflectionOverlay } from './LessonReflectionOverlay';
@@ -36,6 +38,8 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const [paceDensity, setPaceDensity] = useState<LessonPaceDensity>('standard');
     const [sessionAutoAdapt, setSessionAutoAdapt] = useState<boolean | null>(null);
     const [manualMode, setManualMode] = useState<LearningMode | null>(null);
+    const progressSessionStartedAt = useRef(Date.now());
+    const lastProgressKey = useRef<string | null>(null);
     const backendAutoAdapt = data?.adaptAutomatically ?? true;
     const isAutoAdaptActive = sessionAutoAdapt ?? backendAutoAdapt;
     const activeMode: LearningMode =
@@ -47,6 +51,30 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         scopeKey,
         state: 'original',
     });
+    const stageIndex = STAGE_ORDER.indexOf(stage);
+    const persistedLessonId = data?.originalLessonId || lessonId;
+
+    useEffect(() => {
+        if (!data || stageIndex < 0) return;
+
+        const progressKey = `${persistedLessonId}:${stageIndex + 1}`;
+        if (lastProgressKey.current === progressKey) return;
+        lastProgressKey.current = progressKey;
+
+        const elapsedSeconds = Math.max(
+            1,
+            Math.round((Date.now() - progressSessionStartedAt.current) / 1000),
+        );
+
+        updateLessonProgress({
+            lesson_id: persistedLessonId,
+            blocks_completed: stageIndex + 1,
+            time_spent_seconds: elapsedSeconds,
+            is_completed: false,
+        }).catch(() => {
+            lastProgressKey.current = null;
+        });
+    }, [data, persistedLessonId, stageIndex]);
 
     if (loading) {
         return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
@@ -60,7 +88,6 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         );
     }
 
-    const stageIndex = STAGE_ORDER.indexOf(stage);
     if (stageIndex === -1) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-parchment">
@@ -127,6 +154,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const shellProps = {
         stage: currentStage,
         progress,
+        onExit: () => setShowLeaveDialog(true),
         onBack: goToPrevStage,
         canGoBack: stageIndex > 0,
         askContext,
@@ -183,10 +211,21 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         <>
             <div className="flex min-h-screen justify-center bg-parchment px-0 py-0">
                 <div className="relative w-full bg-parchment">
-                    {activeMode === 'visual' ? <VisualMode {...shellProps} /> : null}
-                    {activeMode === 'audio' ? <AudioMode {...shellProps} /> : null}
-                    {activeMode === 'action' ? <ActionMode {...shellProps} /> : null}
-                    {activeMode === 'reading' ? <ReadingMode {...shellProps} /> : null}
+                    {toolbarState === 'slower' ? (
+                        <SlowerMode
+                            stage={currentStage}
+                            progress={progress}
+                            onExit={() => setShowLeaveDialog(true)}
+                            onBack={goToPrevStage}
+                            askContext={askContext}
+                            activeMode={activeMode}
+                            onToolbarChange={onToolbarChange}
+                        />
+                    ) : null}
+                    {toolbarState !== 'slower' && activeMode === 'visual' ? <VisualMode {...shellProps} /> : null}
+                    {toolbarState !== 'slower' && activeMode === 'audio' ? <AudioMode {...shellProps} /> : null}
+                    {toolbarState !== 'slower' && activeMode === 'action' ? <ActionMode {...shellProps} /> : null}
+                    {toolbarState !== 'slower' && activeMode === 'reading' ? <ReadingMode {...shellProps} /> : null}
 
                     {showReflectionOverlay ? (
                         <LessonReflectionOverlay data={data.reflection} onSelect={handleReflectionSelect} />

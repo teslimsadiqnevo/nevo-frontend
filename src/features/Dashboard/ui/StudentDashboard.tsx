@@ -34,6 +34,7 @@ import {
   type OfflineLessonPackage,
 } from "../lib/offlineLessons";
 import dynamic from "next/dynamic";
+import { STAGE_ORDER } from "@/features/LessonPlayer";
 
 const StudentProgressPanel = dynamic(
   () =>
@@ -228,6 +229,19 @@ function getLessonActionLabel(lesson: Lesson | null) {
   return "Start Lesson";
 }
 
+function getLessonResumePath(lesson: Lesson) {
+  const lessonPath = `/lesson/${lesson.lessonId || lesson.id}`;
+  if (lesson.status !== "in_progress") return lessonPath;
+
+  const progress = normalizeProgress(lesson);
+  const stageIndex = Math.max(
+    0,
+    Math.min(STAGE_ORDER.length - 1, progress.currentStep - 1),
+  );
+
+  return `${lessonPath}/${STAGE_ORDER[stageIndex]}`;
+}
+
 function getLessonPickupLabel(
   lesson: Lesson | null,
   progress: ReturnType<typeof normalizeProgress>,
@@ -372,6 +386,21 @@ export function StudentDashboard({
               item?.id ||
               `${item?.title || "lesson"}-${estimatedMinutes}`,
           );
+          const currentStep = Number(
+            item?.current_step ?? item?.currentStep ?? 0,
+          );
+          const totalSteps = Number(item?.total_steps ?? item?.totalSteps ?? 0);
+          const progressPercentage = Number(
+            item?.progress_percentage ?? item?.progressPercentage ?? 0,
+          );
+          const inferredStatus =
+            item?.status ||
+            (progressPercentage >= 100
+              ? "completed"
+              : currentStep > 0 || progressPercentage > 0
+                ? "in_progress"
+                : "not_started");
+
           return {
             id: canonicalLessonId,
             lessonId: canonicalLessonId,
@@ -380,7 +409,7 @@ export function StudentDashboard({
             topic: item?.topic || "Topic",
             grade: item?.grade || `~${estimatedMinutes} min`,
             duration: `${estimatedMinutes} min`,
-            status: item?.status || "not_started",
+            status: inferredStatus,
             objectives: item?.objectives || [],
             image_url: item?.image_url,
             media_url: item?.media_url,
@@ -396,17 +425,9 @@ export function StudentDashboard({
               item?.current_step != null ||
               item?.total_steps != null
                 ? {
-                    currentStep: Number(
-                      item?.current_step ?? item?.currentStep ?? 0,
-                    ),
-                    totalSteps: Number(
-                      item?.total_steps ?? item?.totalSteps ?? 0,
-                    ),
-                    progressPercentage: Number(
-                      item?.progress_percentage ??
-                        item?.progressPercentage ??
-                        0,
-                    ),
+                    currentStep,
+                    totalSteps,
+                    progressPercentage,
                   }
                 : undefined,
           };
@@ -1002,10 +1023,9 @@ function StudentLessonsView({
 }) {
   const [completedOpen, setCompletedOpen] = useState(false);
   const featuredLesson = currentLesson ?? teacherLessons[0] ?? null;
-  const teacherLessonList =
-    currentLesson || teacherLessons.length === 0
-      ? teacherLessons
-      : teacherLessons.filter((lesson) => lesson.id !== featuredLesson?.id);
+  const teacherLessonList = featuredLesson
+    ? teacherLessons.filter((lesson) => lesson.id !== featuredLesson.id)
+    : teacherLessons;
   const featuredProgress = normalizeProgress(featuredLesson);
   const featuredActionLabel = getLessonActionLabel(featuredLesson);
 
@@ -1825,23 +1845,37 @@ function LessonDetailView({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="text-[14px] text-[#2B2B2F] font-medium">
-                Download for offline use
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] text-[#2B2B2F] font-medium">
+                  Download for offline use
+                </span>
+                {downloadBusy ? (
+                  <span className="inline-flex items-center gap-2 text-[12px] font-medium text-[#3B3F6E]/70">
+                    <span className="h-3 w-3 animate-spin rounded-full border border-[#3B3F6E]/25 border-t-[#3B3F6E]" />
+                    {downloadOffline ? "Removing..." : "Downloading..."}
+                  </span>
+                ) : null}
+              </div>
             </div>
             {/* Toggle */}
             <button
               onClick={toggleOfflineDownload}
               disabled={downloadBusy}
-              className={`w-[44px] h-[24px] rounded-full transition-colors duration-200 cursor-pointer relative ${
+              className={`relative h-[24px] w-[44px] rounded-full transition-colors duration-200 ${
+                downloadBusy ? "cursor-wait opacity-80" : "cursor-pointer"
+              } ${
                 downloadOffline ? "bg-[#3B3F6E]" : "bg-[#D5D3CE]"
               }`}
             >
               <div
-                className={`absolute top-[2px] w-[20px] h-[20px] rounded-full bg-white shadow-sm transition-transform duration-200 ${
+                className={`absolute top-[2px] flex h-[20px] w-[20px] items-center justify-center rounded-full bg-white shadow-sm transition-transform duration-200 ${
                   downloadOffline ? "translate-x-[22px]" : "translate-x-[2px]"
                 }`}
-              />
+              >
+                {downloadBusy ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border border-[#3B3F6E]/20 border-t-[#3B3F6E]" />
+                ) : null}
+              </div>
             </button>
           </div>
         </div>
@@ -1859,6 +1893,7 @@ function LessonDetailView({
 function LessonActionBar({ lesson }: { lesson: Lesson }) {
   const router = useRouter();
   const lessonPath = `/lesson/${lesson.lessonId || lesson.id}`;
+  const resumePath = getLessonResumePath(lesson);
 
   switch (lesson.status) {
     case "not_started":
@@ -1867,17 +1902,17 @@ function LessonActionBar({ lesson }: { lesson: Lesson }) {
           onClick={() => router.push(lessonPath)}
           className="w-full py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer"
         >
-          Start lesson
+          Start Lesson
         </button>
       );
     case "in_progress":
       return (
         <div className="flex gap-4">
           <button
-            onClick={() => router.push(`${lessonPath}/notice`)}
+            onClick={() => router.push(resumePath)}
             className="flex-[2] py-[14px] bg-[#3B3F6E] hover:bg-[#2C2F52] text-white rounded-xl text-[15px] font-semibold transition-colors cursor-pointer"
           >
-            Resume
+            Continue Lesson
           </button>
           <button
             onClick={() => router.push(lessonPath)}
@@ -1893,7 +1928,7 @@ function LessonActionBar({ lesson }: { lesson: Lesson }) {
           onClick={() => router.push(`${lessonPath}/complete`)}
           className="w-full py-[14px] bg-transparent border-2 border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[15px] font-semibold hover:bg-[#3B3F6E] hover:text-white transition-all cursor-pointer"
         >
-          Review lesson
+          Review Lesson
         </button>
       );
   }
@@ -2379,6 +2414,13 @@ function StudentConnectView({
         : [],
     );
   }, [connectionsData]);
+
+  const acceptedConnections = Array.isArray(connectionsData)
+    ? connectionsData.filter((c: any) => {
+        const status = (c.request_status || c.status || "").toLowerCase();
+        return status !== "pending" && status !== "rejected";
+      })
+    : [];
 
   if (loading && !profile) {
     return <StudentConnectSkeleton />;
@@ -2901,64 +2943,36 @@ function StudentConnectView({
           <h4 className="text-[15px] font-bold text-[#2B2B2F] mb-4">
             Connected
           </h4>
-          {profile?.connections?.length > 0 ? (
+          {loadingConnections ? (
+            <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 text-[13px] text-graphite-40 font-medium">
+              Loading...
+            </div>
+          ) : connectError ? (
+            <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 text-[13px] text-[#C0392B] font-medium">
+              {connectError}
+            </div>
+          ) : acceptedConnections.length > 0 ? (
             <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] overflow-hidden">
-              {loadingConnections ? (
-                <div className="p-6">Loading...</div>
-              ) : connectError ? (
-                <div className="p-6 text-[#C0392B]">{connectError}</div>
-              ) : connectionsData.length > 0 ? (
-                connectionsData.map((conn: any) => (
-                  <div
-                    key={conn.id}
-                    className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EDE7] last:border-b-0"
-                  >
-                    <div className="w-10 h-10 rounded-full bg-[#E8D5C4] flex items-center justify-center text-[12px] font-bold text-[#5C4A32] shrink-0">
-                      {conn.teacher_name
-                        ? conn.teacher_name.substring(0, 2).toUpperCase()
-                        : "T"}
-                    </div>
-                    <div>
-                      <p className="text-[13.5px] font-semibold text-[#2B2B2F]">
-                        {conn.teacher_name || "Teacher"}
-                      </p>
-                      <p className="text-[11.5px] text-graphite-40">
-                        {conn.subject || "Subject"}
-                      </p>
-                    </div>
+              {acceptedConnections.map((conn: any) => (
+                <div
+                  key={conn.id ?? conn.connection_id ?? conn.teacher_id}
+                  className="flex items-center gap-3 px-5 py-4 border-b border-[#F0EDE7] last:border-b-0"
+                >
+                  <div className="w-10 h-10 rounded-full bg-[#E8D5C4] flex items-center justify-center text-[12px] font-bold text-[#5C4A32] shrink-0">
+                    {conn.teacher_name
+                      ? conn.teacher_name.substring(0, 2).toUpperCase()
+                      : "T"}
                   </div>
-                ))
-              ) : (
-                <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">
-                  <svg
-                    width="32"
-                    height="32"
-                    viewBox="0 0 32 32"
-                    fill="none"
-                    className="mb-3 opacity-40"
-                  >
-                    <rect
-                      x="4"
-                      y="8"
-                      width="24"
-                      height="16"
-                      rx="3"
-                      stroke="#8A8D9F"
-                      strokeWidth="1.5"
-                    />
-                    <path
-                      d="M4 11L16 19L28 11"
-                      stroke="#8A8D9F"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                  <p className="text-[13px] text-graphite-40 font-medium">
-                    No connected teachers yet.
-                  </p>
+                  <div>
+                    <p className="text-[13.5px] font-semibold text-[#2B2B2F]">
+                      {conn.teacher_name || "Teacher"}
+                    </p>
+                    <p className="text-[11.5px] text-graphite-40">
+                      {conn.subject || "Subject"}
+                    </p>
+                  </div>
                 </div>
-              )}
+              ))}
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#E9E7E2] shadow-[0_2px_8px_rgba(0,0,0,0.03)] px-6 py-8 flex flex-col items-center justify-center">

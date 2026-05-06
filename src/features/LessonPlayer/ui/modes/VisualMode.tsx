@@ -17,6 +17,7 @@ const STAGE_VISUAL_INTENT: Record<StageKey, string> = {
 type VisualModeProps = {
     stage: Stage;
     progress: number;
+    onExit: () => void;
     onBack: () => void;
     onContinue: () => void;
     continueLabel: string;
@@ -30,6 +31,7 @@ type VisualModeProps = {
 export function VisualMode({
     stage,
     progress,
+    onExit,
     onBack,
     onContinue,
     continueLabel,
@@ -204,6 +206,7 @@ export function VisualMode({
                 </p>
             }
             progress={progress}
+            onExit={onExit}
             onBack={onBack}
             onContinue={onContinue}
             continueLabel={continueLabel}

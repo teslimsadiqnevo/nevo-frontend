@@ -7,6 +7,7 @@ import type { LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 type ReadingModeProps = {
     stage: Stage;
     progress: number;
+    onExit: () => void;
     onBack: () => void;
     onContinue: () => void;
     continueLabel: string;
@@ -20,6 +21,7 @@ type ReadingModeProps = {
 export function ReadingMode({
     stage,
     progress,
+    onExit,
     onBack,
     onContinue,
     continueLabel,
@@ -61,6 +63,7 @@ export function ReadingMode({
                 )
             }
             progress={progress}
+            onExit={onExit}
             onBack={onBack}
             onContinue={onContinue}
             continueLabel={continueLabel}

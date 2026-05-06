@@ -98,10 +98,22 @@ const STAGE_LABELS: Record<
 };
 
 function normalizeLearningMode(mode?: string | null): LearningMode {
-    const value = String(mode || '').toLowerCase();
-    if (value.includes('audio')) return 'audio';
-    if (value.includes('action') || value.includes('kinesthetic')) return 'action';
-    if (value.includes('read')) return 'reading';
+    const value = String(mode || '')
+        .toLowerCase()
+        .replace(/[_-]+/g, ' ');
+
+    if (/(audio|auditory|aural|listen|listening|hear|hearing|spoken|voice)/.test(value)) {
+        return 'audio';
+    }
+
+    if (/(action|kinesthetic|kinaesthetic|hands on|hands-on|doing|movement|practical|tactile)/.test(value)) {
+        return 'action';
+    }
+
+    if (/(read|reading|write|writing|text|notes|verbal|literacy)/.test(value)) {
+        return 'reading';
+    }
+
     return 'visual';
 }
 
@@ -112,19 +124,93 @@ function splitIntoSentences(text: string) {
         .filter(Boolean);
 }
 
+function removeFormalNoise(text: string) {
+    return text
+        .replace(/\([^)]*\)/g, '')
+        .replace(/\b(?:therefore|however|moreover|thus|hence|consequently)\b[:,]?/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
 function simplifyText(text: string) {
-    return splitIntoSentences(text).slice(0, 2).join(' ');
+    const cleaned = removeFormalNoise(text);
+    const sentences = splitIntoSentences(cleaned);
+    const firstSentence = sentences[0] || cleaned;
+    const secondSentence = sentences[1] || '';
+    const pieces = [
+        ensureSentence(`Here is the simple version`),
+        ensureSentence(firstSentence),
+    ];
+
+    if (secondSentence) {
+        pieces.push(ensureSentence(`What this means is ${toPlainPhrase(secondSentence)}`));
+    }
+
+    return pieces.filter(Boolean).join(' ');
+}
+
+function ensureSentence(text: string) {
+    const value = text.trim();
+    if (!value) return '';
+    return /[.!?]$/.test(value) ? value : `${value}.`;
+}
+
+function toPlainPhrase(text: string) {
+    return text
+        .trim()
+        .replace(/^[A-Z]/, (char) => char.toLowerCase())
+        .replace(/[.!?]+$/, '');
 }
 
 function expandText(text: string, concept: BackendConcept) {
-    const pieces = [text];
+    const sentences = splitIntoSentences(text);
+    const firstSentence = sentences[0] || text;
+    const simplified = simplifyText(text) || text;
+    const pieces = [
+        ensureSentence(`Let's slow this down and make it easier to picture`),
+        ensureSentence(simplified),
+        ensureSentence(`In a fuller way, ${toPlainPhrase(firstSentence)}`),
+    ];
+
+    if (sentences.length > 1) {
+        pieces.push(
+            ensureSentence(
+                `Another important part is that ${toPlainPhrase(sentences.slice(1).join(' '))}`,
+            ),
+        );
+    }
+
     if (concept.key_term) {
-        pieces.push(`Key term: ${concept.key_term}.`);
+        pieces.push(
+            ensureSentence(
+                `${concept.key_term} is the key idea to pay attention to here`,
+            ),
+        );
     }
     if (concept.contains_formal_representation && concept.formal_representation) {
-        pieces.push(`Formal representation: ${concept.formal_representation}`);
+        pieces.push(
+            ensureSentence(
+                `If you see it written in a formal way, it may look like this: ${concept.formal_representation}`,
+            ),
+        );
     }
-    return pieces.join(' ');
+    return pieces.filter(Boolean).join(' ');
+}
+
+function expandActionSteps(steps: Array<{ text: string; state: 'unread' | 'active' | 'completed' }>) {
+    return steps.map((step) => ({
+        ...step,
+        text: `${ensureSentence(step.text)} ${ensureSentence(
+            `Take your time with this part and make sure it makes sense before you move on`,
+        )}`,
+    }));
+}
+
+function simplifyActionSteps(steps: Array<{ text: string; state: 'unread' | 'active' | 'completed' }>) {
+    return steps.slice(0, Math.max(1, Math.min(2, steps.length))).map((step) => ({
+        ...step,
+        text: simplifyText(step.text),
+    }));
 }
 
 function buildActionSteps(concept: BackendConcept) {
@@ -210,8 +296,8 @@ function buildStage(stageKey: StageKey, concept: BackendConcept): Stage {
             },
             action: {
                 steps: actionSteps,
-                stepsSimplified: actionSteps.slice(0, Math.max(1, Math.min(2, actionSteps.length))),
-                stepsExpanded: actionSteps,
+                stepsSimplified: simplifyActionSteps(actionSteps),
+                stepsExpanded: expandActionSteps(actionSteps),
             },
             reading: {
                 keyTermLabel: labels.label,
@@ -553,6 +639,8 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
 
     return {
         id: payload.adapted_lesson_id || payload.original_lesson_id,
+        originalLessonId: payload.original_lesson_id,
+        adaptedLessonId: payload.adapted_lesson_id,
         title: payload.lesson_title,
         subject: payload.lesson_title,
         topic: sourceConcepts[0]?.key_term || payload.lesson_title,

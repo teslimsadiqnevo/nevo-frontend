@@ -11,6 +11,7 @@ type StageShellProps = {
     media?: ReactNode;
     meta?: ReactNode;
     progress: number;
+    onExit?: () => void;
     onBack: () => void;
     canGoBack?: boolean;
     askContext?: string | null;
@@ -36,6 +37,7 @@ export function StageShell({
     media,
     meta,
     progress,
+    onExit,
     onBack,
     canGoBack = true,
     askContext,
@@ -56,9 +58,9 @@ export function StageShell({
             <div className="flex min-h-16 items-center justify-between gap-3 px-6 py-2 lg:px-12">
                 <button
                     type="button"
-                    onClick={onBack}
+                    onClick={onExit ?? onBack}
                     className="flex items-center justify-center w-11 h-11 cursor-pointer bg-transparent border-none"
-                    aria-label="Back"
+                    aria-label="Leave lesson"
                 >
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
                         <path
@@ -92,7 +94,7 @@ export function StageShell({
                     {body}
                 </div>
 
-                <div className="mt-auto pt-9">
+                <div className="pt-6">
                     <div className="relative w-full h-1 rounded-full bg-[#E0D9CE]">
                         <div
                             className="absolute left-0 top-0 bottom-0 bg-indigo rounded-full"
@@ -101,7 +103,7 @@ export function StageShell({
                     </div>
                 </div>
 
-                <div className="flex items-center justify-center gap-3 pb-9 pt-9">
+                <div className="flex items-center justify-center gap-3 pb-9 pt-8">
                     <button
                         type="button"
                         onClick={onBack}
