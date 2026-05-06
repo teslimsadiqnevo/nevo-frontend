@@ -52,7 +52,7 @@ export function StageShell({
     const forwardIsDisabled = !showStageNavigation || !canGoForward;
 
     return (
-        <div className="mx-auto flex min-h-[900px] w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
+        <div className="relative mx-auto flex h-[900px] min-h-[900px] w-full max-w-[1024px] flex-col overflow-hidden bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
             <div className="flex min-h-16 items-center justify-between gap-3 px-6 py-2 lg:px-12">
                 <button
                     type="button"
@@ -79,7 +79,7 @@ export function StageShell({
                 </div>
             </div>
 
-            <div className="flex flex-1 flex-col px-6 pb-9 pt-6 lg:px-12 lg:pt-8">
+            <div className="flex flex-1 flex-col px-6 pb-[133px] pt-6 lg:px-12 lg:pt-8">
                 <h2 className="text-[13px] font-semibold leading-5 tracking-[0.325px] uppercase text-lavender">
                     {label}
                 </h2>
@@ -100,11 +100,64 @@ export function StageShell({
                         />
                     </div>
                 </div>
+
+                <div className="flex items-center justify-center gap-3 pb-9 pt-9">
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        disabled={backIsDisabled}
+                        aria-label="Previous step"
+                        className={[
+                            'flex h-9 w-9 items-center justify-center rounded-full border-none bg-transparent transition-opacity',
+                            backIsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100',
+                        ].join(' ')}
+                    >
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                            <path
+                                d="M15 5L8 12L15 19"
+                                stroke="#3B3F6E"
+                                strokeWidth="2.25"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                        </svg>
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={onContinue}
+                        disabled={forwardIsDisabled}
+                        aria-label={continueLabel ?? 'Next step'}
+                        className={[
+                            'flex h-9 w-9 items-center justify-center rounded-full border-none bg-transparent transition-opacity',
+                            forwardIsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100',
+                        ].join(' ')}
+                    >
+                        <svg
+                            width="24"
+                            height="24"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            aria-hidden="true"
+                            className="rotate-180"
+                        >
+                            <path
+                                d="M15 5L8 12L15 19"
+                                stroke="#3B3F6E"
+                                strokeWidth="2.25"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                            />
+                        </svg>
+                    </button>
+                </div>
             </div>
 
-            <div className="w-full border-t border-[#E0D9CE] bg-parchment px-6 py-[15px] lg:px-12">
-                <div className="flex min-h-[31px] items-center justify-between gap-6">
-                    <div className="flex min-w-0 items-center gap-5">
+            <div className="absolute inset-x-0 bottom-0 w-full border-t border-[#E0D9CE] bg-parchment px-6 py-[15px] lg:px-12">
+                <div className="grid min-h-[31px] grid-cols-[1fr_auto_1fr] items-center gap-6">
+                    <div />
+
+                    <div className="flex min-w-0 items-center justify-center gap-5">
                         {TOOLBAR_BUTTONS.map((button) => {
                             const isActive = toolbarState === button.state;
                             return (
@@ -123,57 +176,6 @@ export function StageShell({
                                 </button>
                             );
                         })}
-                    </div>
-
-                    <div className="flex shrink-0 items-center justify-center gap-3">
-                        <button
-                            type="button"
-                            onClick={onBack}
-                            disabled={backIsDisabled}
-                            aria-label="Previous step"
-                            className={[
-                                'flex h-9 w-9 items-center justify-center rounded-full border-none bg-transparent transition-opacity',
-                                backIsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100',
-                            ].join(' ')}
-                        >
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                                <path
-                                    d="M15 5L8 12L15 19"
-                                    stroke={backIsDisabled ? '#3B3F6E' : '#3B3F6E'}
-                                    strokeWidth="2.25"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
-                        </button>
-
-                        <button
-                            type="button"
-                            onClick={onContinue}
-                            disabled={forwardIsDisabled}
-                            aria-label={continueLabel ?? 'Next step'}
-                            className={[
-                                'flex h-9 w-9 items-center justify-center rounded-full border-none bg-transparent transition-opacity',
-                                forwardIsDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer opacity-100',
-                            ].join(' ')}
-                        >
-                            <svg
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                aria-hidden="true"
-                                className="rotate-180"
-                            >
-                                <path
-                                    d="M15 5L8 12L15 19"
-                                    stroke="#3B3F6E"
-                                    strokeWidth="2.25"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                />
-                            </svg>
-                        </button>
                     </div>
 
                     <div className="flex shrink-0 justify-end">

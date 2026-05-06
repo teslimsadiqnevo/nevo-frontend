@@ -4,6 +4,7 @@ import { useLessonPlayer } from '../api/useLessonPlayer';
 import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import type { LessonBreakVariant, StageKey } from '../api/types';
 import { LessonBreakScreen } from './LessonBreakScreen';
+import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
 
 type LessonBreakRouteProps = {
     lessonId: string;
@@ -16,11 +17,7 @@ export function LessonBreakRoute({ lessonId, variant, returnStage }: LessonBreak
     const { data, loading, error } = useLessonPlayer(lessonId);
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-parchment">
-                <span className="text-[14px] text-graphite-60">Loading lesson...</span>
-            </div>
-        );
+        return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
     }
 
     if (error || !data) {

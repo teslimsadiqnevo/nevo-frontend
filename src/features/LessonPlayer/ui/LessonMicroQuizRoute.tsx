@@ -3,6 +3,7 @@
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import { LessonMicroQuizScreen } from './LessonMicroQuizScreen';
+import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
 
 type LessonMicroQuizRouteProps = {
     lessonId: string;
@@ -14,11 +15,7 @@ export function LessonMicroQuizRoute({ lessonId, index }: LessonMicroQuizRoutePr
     const { data, loading, error } = useLessonPlayer(lessonId);
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-parchment">
-                <span className="text-[14px] text-graphite-60">Loading quiz...</span>
-            </div>
-        );
+        return <LessonPlayerSkeleton pillWidthClassName="w-20" />;
     }
 
     if (error || !data) {

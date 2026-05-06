@@ -15,6 +15,7 @@ import { LeaveLessonDialog } from './LeaveLessonDialog';
 import { PaceAdjustmentOverlay } from './PaceAdjustmentOverlay';
 import { LessonReflectionOverlay } from './LessonReflectionOverlay';
 import { LessonReorientationOverlay } from './LessonReorientationOverlay';
+import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
 import type { LessonPaceDensity } from '../api/types';
 
 type LessonPlayerProps = {
@@ -48,11 +49,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     });
 
     if (loading) {
-        return (
-            <div className="flex items-center justify-center min-h-screen bg-parchment">
-                <span className="text-[14px] text-graphite-60">Loading lesson...</span>
-            </div>
-        );
+        return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
     }
 
     if (error || !data) {

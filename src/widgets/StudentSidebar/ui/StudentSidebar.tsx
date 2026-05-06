@@ -26,8 +26,8 @@ export function StudentSidebar({ currentView = "home" }: { currentView?: string 
 
   return (
     <>
-      <aside className="fixed inset-y-0 left-0 z-30 flex h-screen w-[220px] min-w-[220px] flex-col bg-[#3B3F6E]">
-        <div className="px-6 pb-5 pt-6">
+      <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[220px] min-w-[220px] flex-col overflow-hidden bg-[#3B3F6E]">
+        <div className="shrink-0 px-6 pb-5 pt-6">
           <NevoLogo
             className="h-6 w-auto"
             width={80}
@@ -36,7 +36,8 @@ export function StudentSidebar({ currentView = "home" }: { currentView?: string 
           />
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-0 pb-0">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-0 pb-2">
+          <div className="flex flex-col gap-1">
           {navItems.map((item) => {
             const isActive = (item.view || "home") === (currentView || "home");
             return (
@@ -57,9 +58,10 @@ export function StudentSidebar({ currentView = "home" }: { currentView?: string 
               </Link>
             );
           })}
+          </div>
         </nav>
 
-        <div className="px-4 pb-6 pt-2">
+        <div className="mt-auto shrink-0 px-4 pb-6 pt-2">
           <button
             type="button"
             onClick={() => setShowAskNevo(true)}
