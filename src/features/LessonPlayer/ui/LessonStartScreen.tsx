@@ -86,8 +86,8 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
 
     return (
         <>
-            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
-                <div className="relative flex min-h-screen w-full max-w-[1024px] items-center justify-center bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
+            <div className="flex h-screen justify-center overflow-hidden bg-parchment px-0 py-0">
+                <div className="relative flex h-full min-h-[900px] w-full max-w-[1024px] items-center justify-center bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)]">
                     <button
                         type="button"
                         onClick={() => setShowLeaveDialog(true)}

@@ -477,14 +477,14 @@ export function StudentDashboard({
     <>
       <div className="flex min-h-screen w-full bg-[#F7F1E6] font-sans">
         <StudentSidebar currentView={view} />
-        <main className="relative ml-[220px] min-h-screen flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6 lg:px-[44px] lg:py-[32px]">
+        <main className="relative ml-[220px] flex min-h-screen flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-[44px] lg:py-[32px]">
           {selectedLesson ? (
             <LessonDetailView
               lesson={selectedLesson}
               onBack={() => setSelectedLesson(null)}
             />
           ) : view === "lessons" ? (
-            <div>
+            <div className="w-full">
               <StudentLessonsView
                 onSelectLesson={setSelectedLesson}
                 currentLesson={currentLesson}
@@ -494,19 +494,19 @@ export function StudentDashboard({
               />
             </div>
           ) : view === "downloads" ? (
-            <div>
+            <div className="h-full min-h-0 w-full flex-1 overflow-hidden">
               <StudentDownloadsView />
             </div>
           ) : view === "progress" ? (
-            <div>
+            <div className="w-full">
               <StudentProgressPanel progressData={progressData} />
             </div>
           ) : view === "connect" ? (
-            <div>
+            <div className="w-full">
               <StudentConnectView profile={profile} loading={loading} />
             </div>
           ) : view === "profile" ? (
-            <div>
+            <div className="w-full">
               <StudentProfileView
                 user={user}
                 profile={profile}
@@ -515,7 +515,7 @@ export function StudentDashboard({
               />
             </div>
           ) : (
-            <div>
+            <div className="w-full">
               <StudentHomeView
                 onSelectLesson={setSelectedLesson}
                 user={user}
@@ -1671,7 +1671,7 @@ function LessonDetailView({
   return (
     <div className="flex flex-col h-full">
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1">
         {/* Banner */}
         <div
           className="relative w-full h-[260px]"
@@ -2039,7 +2039,7 @@ function StudentDownloadsView() {
 
   if (loading) {
     return (
-      <div className="max-w-[820px]">
+      <div className="flex h-full max-w-[820px] flex-col">
         <h1 className="text-[24px] font-bold text-[#3B3F6E] tracking-[-0.01em] mb-6">
           Downloads
         </h1>
@@ -2050,7 +2050,7 @@ function StudentDownloadsView() {
 
   if (lessons.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[calc(100vh-96px)]">
+      <div className="flex h-full flex-col items-center justify-center">
         <svg
           width="200"
           height="160"
@@ -2109,7 +2109,16 @@ function StudentDownloadsView() {
   }
 
   return (
-    <div className="max-w-[820px]">
+      <div className="flex h-full max-w-[820px] flex-col">
+      {menuOpenId ? (
+        <button
+          type="button"
+          aria-label="Close download actions"
+          onClick={() => setMenuOpenId(null)}
+          className="fixed inset-0 z-10 cursor-default"
+        />
+      ) : null}
+
       {isOffline ? (
         <div className="bg-[#FFF8E1] border border-[#F5E6A3] rounded-xl px-5 py-3 mb-6 flex items-center gap-3">
           <svg width="18" height="18" viewBox="0 0 20 20" fill="none">
@@ -2195,7 +2204,7 @@ function StudentDownloadsView() {
 
             {/* Dropdown menu */}
             {menuOpenId === lesson.id && (
-              <div className="absolute right-6 top-16 bg-white rounded-xl border border-[#E9E7E2] shadow-[0_4px_16px_rgba(0,0,0,0.1)] py-2 z-20 animate-fade-in">
+              <div className="absolute right-6 top-[72px] z-20 animate-fade-in rounded-xl border border-[#E9E7E2] bg-white py-2 shadow-[0_4px_16px_rgba(0,0,0,0.1)]">
                 <button
                   onClick={() => {
                     setRemoveTarget(lesson);
