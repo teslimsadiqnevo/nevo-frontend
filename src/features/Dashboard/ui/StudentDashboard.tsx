@@ -484,6 +484,7 @@ export function StudentDashboard({
                 currentLesson={currentLesson}
                 teacherLessons={teacherLessons}
                 completedLessons={completedLessons}
+                loading={loading}
               />
             </div>
           ) : view === "downloads" ? (
@@ -496,7 +497,7 @@ export function StudentDashboard({
             </div>
           ) : view === "connect" ? (
             <div>
-              <StudentConnectView profile={profile} />
+              <StudentConnectView profile={profile} loading={loading} />
             </div>
           ) : view === "profile" ? (
             <div>
@@ -504,6 +505,7 @@ export function StudentDashboard({
                 user={user}
                 profile={profile}
                 onLogout={handleStudentLogout}
+                loading={loading}
               />
             </div>
           ) : (
@@ -515,6 +517,7 @@ export function StudentDashboard({
                 assignedLessons={assignedLessons}
                 recommendedLessons={recommendedLessons}
                 currentLesson={currentLesson}
+                loading={loading}
               />
             </div>
           )}
@@ -532,6 +535,7 @@ function StudentHomeView({
   assignedLessons,
   recommendedLessons,
   currentLesson,
+  loading,
 }: {
   onSelectLesson: (lesson: Lesson) => void;
   user?: any;
@@ -539,6 +543,7 @@ function StudentHomeView({
   assignedLessons: Lesson[];
   recommendedLessons: Lesson[];
   currentLesson: Lesson | null;
+  loading: boolean;
 }) {
   const firstName =
     (studentName || user?.name || "Student").split(" ")[0] || "Student";
@@ -548,6 +553,10 @@ function StudentHomeView({
     ? assignedLessons.filter((lesson) => lesson.id !== featuredLesson.id)
     : assignedLessons;
   const topicImageUrl = featuredLesson ? getLessonVisualUrl(featuredLesson) : null;
+
+  if (loading) {
+    return <StudentHomeSkeleton />;
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-[716px] flex-col gap-10 lg:max-w-[720px]">
@@ -687,6 +696,69 @@ function StudentHomeView({
             </button>
           </DashboardEmptyState>
         )}
+      </section>
+    </div>
+  );
+}
+
+function StudentHomeSkeleton() {
+  return (
+    <div className="mx-auto flex w-full max-w-[716px] animate-pulse flex-col gap-10 lg:max-w-[720px]">
+      <div>
+        <div className="h-12 w-56 rounded-2xl bg-[#E8E1D5] sm:h-14 sm:w-72" />
+        <div className="mt-3 h-6 w-72 rounded-xl bg-[#EEE7DB] sm:w-96" />
+      </div>
+
+      <section className="w-full rounded-[24px] border border-black/5 bg-[#FAF9F6] p-5 shadow-[0_1px_2px_rgba(0,0,0,0.05)] sm:p-8">
+        <div className="h-4 w-40 rounded-full bg-[#E4DDCF]" />
+        <div className="mt-5 h-12 w-full max-w-[420px] rounded-2xl bg-[#E8E1D5]" />
+
+        <div className="mt-6 overflow-hidden rounded-[16px] border border-black/5 bg-[#F7F1E6]">
+          <div className="h-[118px] w-full bg-[linear-gradient(90deg,#ece4d7_0%,#e2d8c7_45%,#d7cbb7_100%)]" />
+        </div>
+
+        <div className="mt-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="h-6 w-40 rounded-xl bg-[#EEE7DB]" />
+          <div className="h-14 w-full rounded-[16px] bg-[#D7D0E9] sm:w-[195px]" />
+        </div>
+      </section>
+
+      <section className="w-full">
+        <div className="mb-4 h-6 w-24 rounded-xl bg-[#E4DDCF]" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`assigned-skeleton-${index}`}
+              className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]"
+            >
+              <div className="h-20 w-full bg-[#E8E1D5]" />
+              <div className="space-y-3 p-4">
+                <div className="h-10 w-3/4 rounded-xl bg-[#EEE7DB]" />
+                <div className="h-6 w-20 rounded-full bg-[#E2DAF2]" />
+                <div className="h-4 w-16 rounded-lg bg-[#EEE7DB]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="w-full pb-12">
+        <div className="mb-4 h-6 w-40 rounded-xl bg-[#E4DDCF]" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`recommended-skeleton-${index}`}
+              className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]"
+            >
+              <div className="h-20 w-full bg-[#E8E1D5]" />
+              <div className="space-y-3 p-4">
+                <div className="h-10 w-4/5 rounded-xl bg-[#EEE7DB]" />
+                <div className="h-6 w-24 rounded-full bg-[#E2DAF2]" />
+                <div className="h-4 w-16 rounded-lg bg-[#EEE7DB]" />
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
     </div>
   );
@@ -851,11 +923,13 @@ function StudentLessonsView({
   currentLesson,
   teacherLessons,
   completedLessons,
+  loading,
 }: {
   onSelectLesson: (lesson: Lesson) => void;
   currentLesson: Lesson | null;
   teacherLessons: Lesson[];
   completedLessons: Lesson[];
+  loading: boolean;
 }) {
   const [completedOpen, setCompletedOpen] = useState(false);
   const featuredLesson = currentLesson ?? teacherLessons[0] ?? null;
@@ -865,6 +939,10 @@ function StudentLessonsView({
       : teacherLessons.filter((lesson) => lesson.id !== featuredLesson?.id);
   const featuredProgress = normalizeProgress(featuredLesson);
   const featuredActionLabel = getLessonActionLabel(featuredLesson);
+
+  if (loading) {
+    return <StudentLessonsSkeleton />;
+  }
 
   return (
     <div className="w-full max-w-[688px]">
@@ -1264,6 +1342,80 @@ function getLessonImageUrl(lesson: Lesson) {
     `https://loremflickr.com/800/600/${encodeURIComponent(
       keywords.join(",") || "education,lesson",
     )}`
+  );
+}
+
+function StudentLessonsSkeleton() {
+  return (
+    <div className="w-full max-w-[688px] animate-pulse">
+      <div className="h-12 w-36 rounded-2xl bg-[#E8E1D5]" />
+      <div className="mt-3 h-6 w-72 rounded-xl bg-[#EEE7DB]" />
+
+      <section className="mb-10 mt-8">
+        <div className="w-full rounded-3xl border border-black/5 bg-[#FCFCFC] p-6 shadow-[0_20px_40px_-15px_rgba(0,0,0,0.05)] sm:p-8">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between lg:gap-8">
+            <div className="flex min-h-[221px] w-full flex-col justify-between lg:w-[312px]">
+              <div>
+                <div className="h-4 w-40 rounded-full bg-[#E4DDCF]" />
+                <div className="mt-4 h-10 w-full max-w-[280px] rounded-2xl bg-[#E8E1D5]" />
+                <div className="mt-3 h-10 w-4/5 rounded-2xl bg-[#EEE7DB]" />
+                <div className="mt-6 h-8 w-36 rounded-full bg-[#F1EBDD]" />
+              </div>
+              <div className="mt-4 h-14 w-full rounded-2xl bg-[#D7D0E9] sm:w-[190px]" />
+            </div>
+
+            <div className="h-[220px] w-full rounded-2xl bg-[#E8E1D5] lg:h-[180px] lg:w-[280px]" />
+          </div>
+
+          <div className="mt-5 h-2 w-full rounded-full bg-[#ECE5D8]" />
+        </div>
+      </section>
+
+      <section className="mb-10">
+        <div className="mb-5 h-7 w-40 rounded-xl bg-[#E4DDCF]" />
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div
+              key={`teacher-lesson-skeleton-${index}`}
+              className="flex h-[184px] flex-col justify-between rounded-[20px] border border-black/5 bg-[#FCFCFC] p-[25px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+            >
+              <div className="flex items-start gap-4">
+                <div className="h-16 w-16 rounded-2xl bg-[#E8E1D5] shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="h-6 w-4/5 rounded-xl bg-[#E8E1D5]" />
+                  <div className="mt-3 h-4 w-24 rounded-lg bg-[#EEE7DB]" />
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <div className="h-[41px] w-24 rounded-xl bg-[#EEE7DB]" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="border-t border-black/5 pt-5">
+        <div className="flex items-center justify-between">
+          <div className="h-6 w-28 rounded-xl bg-[#E4DDCF]" />
+          <div className="h-5 w-28 rounded-lg bg-[#EEE7DB]" />
+        </div>
+        <div className="mt-4 flex flex-col gap-3">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div
+              key={`completed-skeleton-${index}`}
+              className="flex items-center gap-3 rounded-xl border border-[#E9E7E2] bg-white px-5 py-4"
+            >
+              <div className="h-8 w-8 rounded-full bg-[#E8E1D5] shrink-0" />
+              <div className="flex-1">
+                <div className="h-5 w-40 rounded-lg bg-[#E8E1D5]" />
+                <div className="mt-2 h-4 w-20 rounded-lg bg-[#EEE7DB]" />
+              </div>
+              <div className="h-4 w-12 rounded-lg bg-[#EEE7DB]" />
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
@@ -1932,7 +2084,13 @@ function StudentDownloadsView() {
   );
 }
 
-function StudentConnectView({ profile }: { profile?: any }) {
+function StudentConnectView({
+  profile,
+  loading = false,
+}: {
+  profile?: any;
+  loading?: boolean;
+}) {
   const [classCode, setClassCode] = useState("");
   const [copied, setCopied] = useState(false);
   const [connectionsData, setConnectionsData] = useState<any[]>(
@@ -2021,6 +2179,10 @@ function StudentConnectView({ profile }: { profile?: any }) {
   useEffect(() => {
     void fetchConnections();
   }, []);
+
+  if (loading && !profile) {
+    return <StudentConnectSkeleton />;
+  }
 
   useEffect(() => {
     // keep pendingRequests in sync if profile initial data provided
@@ -2647,15 +2809,64 @@ function StudentConnectView({ profile }: { profile?: any }) {
   );
 }
 
+function StudentConnectSkeleton() {
+  return (
+    <div className="max-w-[820px] animate-pulse">
+      <div className="h-10 w-32 rounded-2xl bg-[#E8E1D5]" />
+      <div className="mt-3 h-6 w-56 rounded-xl bg-[#EEE7DB]" />
+
+      <div className="mt-8 rounded-2xl border border-[#E9E7E2] bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-[#E8E1D5] shrink-0" />
+          <div className="flex-1">
+            <div className="h-5 w-40 rounded-lg bg-[#E8E1D5]" />
+            <div className="mt-2 h-4 w-52 rounded-lg bg-[#EEE7DB]" />
+          </div>
+          <div className="h-10 w-28 rounded-xl bg-[#EEE7DB]" />
+        </div>
+      </div>
+
+      <div className="mt-4 rounded-2xl border border-[#E9E7E2] bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+        <div className="flex items-center gap-4">
+          <div className="h-12 w-12 rounded-xl bg-[#E8E1D5] shrink-0" />
+          <div className="flex-1">
+            <div className="h-5 w-44 rounded-lg bg-[#E8E1D5]" />
+            <div className="mt-2 h-4 w-48 rounded-lg bg-[#EEE7DB]" />
+          </div>
+          <div className="h-10 w-28 rounded-xl bg-[#EEE7DB]" />
+        </div>
+      </div>
+
+      <div className="mt-8 h-7 w-36 rounded-xl bg-[#E4DDCF]" />
+      <div className="mt-5 rounded-2xl border border-[#E9E7E2] bg-white px-6 py-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+        {Array.from({ length: 2 }).map((_, index) => (
+          <div
+            key={`connect-skeleton-row-${index}`}
+            className={`flex items-center gap-3 py-4 ${index === 0 ? "border-b border-[#F0EDE7]" : ""}`}
+          >
+            <div className="h-10 w-10 rounded-full bg-[#E8E1D5] shrink-0" />
+            <div className="flex-1">
+              <div className="h-4 w-32 rounded-lg bg-[#E8E1D5]" />
+              <div className="mt-2 h-3 w-20 rounded-lg bg-[#EEE7DB]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── Profile View ──────────────────────────────────────────────────────────────
 function StudentProfileView({
   user,
   profile,
   onLogout,
+  loading = false,
 }: {
   user?: any;
   profile?: any;
   onLogout: () => Promise<void>;
+  loading?: boolean;
 }) {
   const guardAuth = useAuthGuard("student");
   const [settings, setSettings] = useState<StudentSettingsState>(
@@ -2855,6 +3066,10 @@ function StudentProfileView({
     setIdCopied(true);
     setTimeout(() => setIdCopied(false), 2000);
   };
+
+  if (loading && !profile) {
+    return <StudentProfileSkeleton />;
+  }
 
   const toggleSetting = async (key: keyof typeof settings) => {
     const newValue = !settings[key];
@@ -3090,6 +3305,59 @@ function StudentProfileView({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function StudentProfileSkeleton() {
+  return (
+    <div className="max-w-[820px] animate-pulse">
+      <div className="mb-8 flex items-center gap-4">
+        <div className="h-[56px] w-[56px] rounded-full bg-[#E8E1D5] shrink-0" />
+        <div>
+          <div className="h-6 w-40 rounded-xl bg-[#E8E1D5]" />
+          <div className="mt-2 h-4 w-48 rounded-lg bg-[#EEE7DB]" />
+        </div>
+      </div>
+
+      <section className="mb-8">
+        <div className="mb-4 h-4 w-28 rounded-full bg-[#E4DDCF]" />
+        <div className="overflow-hidden rounded-2xl border border-[#E9E7E2] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={`profile-learning-skeleton-${index}`}
+              className={`flex items-center justify-between px-6 py-4 ${index < 2 ? "border-b border-[#F0EDE7]" : ""}`}
+            >
+              <div className="h-5 w-36 rounded-lg bg-[#E8E1D5]" />
+              <div className="h-5 w-24 rounded-lg bg-[#EEE7DB]" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mb-8">
+        <div className="mb-4 h-4 w-20 rounded-full bg-[#E4DDCF]" />
+        <div className="overflow-hidden rounded-2xl border border-[#E9E7E2] bg-white shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={`profile-setting-skeleton-${index}`}
+              className={`flex items-center justify-between px-6 py-4 ${index < 3 ? "border-b border-[#F0EDE7]" : ""}`}
+            >
+              <div className="h-5 w-44 rounded-lg bg-[#E8E1D5]" />
+              <div className="h-6 w-11 rounded-full bg-[#EEE7DB]" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <div className="mb-6 flex items-center justify-between rounded-2xl border border-[#E9E7E2] bg-white px-6 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
+        <div className="h-5 w-20 rounded-lg bg-[#E8E1D5]" />
+        <div className="h-5 w-28 rounded-lg bg-[#EEE7DB]" />
+      </div>
+
+      <div className="flex justify-center">
+        <div className="h-5 w-16 rounded-lg bg-[#EEE7DB]" />
+      </div>
     </div>
   );
 }
