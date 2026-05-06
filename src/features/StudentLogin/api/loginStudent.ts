@@ -16,7 +16,6 @@ export async function loginStudent(data: {
       pin: data.pin,
       redirectTo: getDashboardPath("student", "home"),
     });
-    console.log("loginStudent", data);
     return { success: true };
   } catch (error) {
     if (error instanceof AuthError) {

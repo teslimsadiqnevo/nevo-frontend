@@ -6,6 +6,14 @@ import type { LessonPaceDensity, Stage, StageKey, ToolbarState } from '../../api
 
 const RELATE_CHIPS = ['Coffee', 'Sink drain', 'Roundabout'];
 
+const STAGE_VISUAL_INTENT: Record<StageKey, string> = {
+    observe: 'Find an image showing the main object or concept clearly.',
+    notice: 'Find an image showing an important detail, part, pattern, or mechanism.',
+    relate: 'Find an image showing a familiar real-world connection or analogy.',
+    predict: 'Find an image showing what changes, happens next, or cause and effect.',
+    confirm: 'Find an image showing the completed idea, summary, or key takeaway.',
+};
+
 type VisualModeProps = {
     stage: Stage;
     progress: number;
@@ -52,7 +60,14 @@ export function VisualMode({
         .map((sentence) => sentence.trim())
         .filter(Boolean)
         .slice(0, 3);
-    const visualScopeKey = `${stage.key}:${content.conceptId}:${content.imageUrl}:${content.imageFetchStatus}`;
+    const visualContext = [
+        stage.key,
+        stage.label,
+        STAGE_VISUAL_INTENT[stage.key],
+        stage.modes.reading.keyTerm,
+        body,
+    ].filter(Boolean).join(' ');
+    const visualScopeKey = `${stage.key}:${content.conceptId}:${visualContext}:${content.imageUrl}:${content.imageFetchStatus}`;
     const [imageState, setImageState] = useState({
         scopeKey: visualScopeKey,
         imageUrl: content.imageUrl,
@@ -64,25 +79,30 @@ export function VisualMode({
             ? imageState
             : {
                 scopeKey: visualScopeKey,
-                imageUrl: content.imageUrl,
+                imageUrl: '',
                 imageAltText: content.imageAltText || '',
-                fetchStatus: content.imageFetchStatus,
+                fetchStatus: 'pending',
             };
 
     useEffect(() => {
         let isCancelled = false;
         let intervalId: ReturnType<typeof setInterval> | null = null;
 
-        if (content.imageFetchStatus !== 'pending' || !content.conceptId) {
+        if (!content.conceptId) {
             return () => {
                 isCancelled = true;
             };
         }
 
+        const contextQuery = new URLSearchParams({
+            visual_stage: stage.key,
+            visual_context: visualContext.slice(0, 850),
+        }).toString();
+
         const pollForImage = async () => {
             try {
                 const response = await fetch(
-                    `/api/concepts/${encodeURIComponent(content.conceptId)}/image`,
+                    `/api/concepts/${encodeURIComponent(content.conceptId)}/image?${contextQuery}`,
                     { cache: 'no-store' },
                 );
                 const data = await response.json().catch(() => ({}));
@@ -98,7 +118,15 @@ export function VisualMode({
 
                 setImageState((current) =>
                     current.scopeKey !== visualScopeKey
-                        ? current
+                        ? {
+                            scopeKey: visualScopeKey,
+                            imageUrl:
+                                typeof data?.image_url === 'string' && data.image_url
+                                    ? data.image_url
+                                    : '',
+                            imageAltText: content.imageAltText || '',
+                            fetchStatus: nextStatus,
+                        }
                         : {
                             scopeKey: visualScopeKey,
                             imageUrl:
@@ -130,6 +158,12 @@ export function VisualMode({
         };
 
         void pollForImage();
+        if (content.imageFetchStatus !== 'pending') {
+            return () => {
+                isCancelled = true;
+            };
+        }
+
         intervalId = setInterval(() => {
             void pollForImage();
         }, 3000);
@@ -145,6 +179,8 @@ export function VisualMode({
         content.imageAltText,
         content.imageFetchStatus,
         content.imageUrl,
+        stage.key,
+        visualContext,
         visualScopeKey,
     ]);
 
@@ -152,8 +188,8 @@ export function VisualMode({
     const loaderSteps = useMemo(
         () => [
             'Reading this concept',
-            'Composing a classroom-safe visual',
-            'Fitting it for the lesson player',
+            'Finding a relevant lesson image',
+            'Fitting the image for this screen',
         ],
         [],
     );
@@ -179,18 +215,17 @@ export function VisualMode({
             media={
                 <div
                     className={[
-                        'relative w-full rounded-xl border-2 border-[#E0D9CE] overflow-hidden',
+                        'relative h-[260px] w-full overflow-hidden rounded-xl border-2 border-[#E0D9CE] sm:h-[300px] lg:h-[320px]',
                         hasResolvedImage
                             ? 'bg-[#F5F0E8]'
                             : 'bg-[linear-gradient(135deg,#f1ece2_0%,#ebe4d7_45%,#e1d8c9_100%)]',
-                        isCalmDensity ? 'min-h-[240px] sm:min-h-[280px]' : 'min-h-[240px] sm:min-h-[280px]',
                     ].join(' ')}
                 >
                     {hasResolvedImage ? (
                         <img
                             src={resolvedImageState.imageUrl}
                             alt={resolvedImageState.imageAltText || `Visual explanation for ${stage.label}`}
-                            className="h-full w-full object-contain p-3 sm:p-4"
+                            className="absolute inset-0 h-full w-full object-cover object-center"
                         />
                     ) : resolvedImageState.fetchStatus === 'pending' ? (
                         <div className="absolute inset-0 flex flex-col justify-between p-6">
@@ -227,7 +262,7 @@ export function VisualMode({
 
                             <div className="flex justify-end">
                                 <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-[12px] text-indigo/80">
-                                    Nevo is generating a concept illustration
+                                    Nevo is fetching a relevant lesson image
                                 </div>
                             </div>
                         </div>

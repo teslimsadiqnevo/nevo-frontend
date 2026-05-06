@@ -31,6 +31,10 @@ type SessionToken = {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   secret: process.env.AUTH_SECRET || "fallback-secret-for-development-only-123",
+  trustHost: true,
+  session: {
+    strategy: "jwt",
+  },
   providers: [
     Credentials({
       credentials: {

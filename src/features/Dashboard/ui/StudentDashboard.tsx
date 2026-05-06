@@ -477,7 +477,13 @@ export function StudentDashboard({
     <>
       <div className="flex min-h-screen w-full bg-[#F7F1E6] font-sans">
         <StudentSidebar currentView={view} />
-        <main className="relative ml-[220px] flex min-h-screen flex-1 px-4 py-5 sm:px-6 sm:py-6 lg:px-[44px] lg:py-[32px]">
+        <main
+          className={`relative ml-[220px] flex min-h-screen flex-1 ${
+            selectedLesson
+              ? "px-0 py-0"
+              : "px-4 py-5 sm:px-6 sm:py-6 lg:px-[44px] lg:py-[32px]"
+          }`}
+        >
           {selectedLesson ? (
             <LessonDetailView
               lesson={selectedLesson}
@@ -1669,7 +1675,7 @@ function LessonDetailView({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full w-full flex-col bg-[#F7F1E6]">
       {/* Scrollable content */}
       <div className="flex-1">
         {/* Banner */}

@@ -2,8 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { signIn } from "next-auth/react";
-import { getDashboardPath } from "@/shared/lib";
+import { loginStudent } from "@/features/StudentLogin/api/loginStudent";
 
 export function StudentLoginForm() {
     const [firstName, setFirstName] = useState("");
@@ -38,12 +37,10 @@ export function StudentLoginForm() {
         setError(null);
 
         try {
-            const result = await signIn("credentials", {
+            const result = await loginStudent({
                 firstName: firstName.trim(),
                 nevoId: normalizedNevoId,
                 pin,
-                redirect: false,
-                callbackUrl: getDashboardPath("student", "home"),
             });
 
             if (result?.error) {
@@ -52,10 +49,8 @@ export function StudentLoginForm() {
                 setPin("");
                 return;
             }
-
-            window.location.assign(result?.url || getDashboardPath("student", "home"));
         } catch {
-            setError("We couldn't find that account. Check your ID and try again.");
+            // NextAuth redirect via the server action throws NEXT_REDIRECT on success.
             setIsLoading(false);
         }
     };

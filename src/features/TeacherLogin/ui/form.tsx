@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "next-auth/react";
 import { Icon } from "@/shared/ui";
 import { getDashboardPath } from "@/shared/lib";
+import { loginTeacher } from "@/features/TeacherLogin/api/loginTeacher";
 
 export function TeacherLoginForm() {
     const router = useRouter();
@@ -43,12 +43,10 @@ export function TeacherLoginForm() {
         setError(null);
 
         try {
-            const result = await signIn("credentials", {
+            const result = await loginTeacher({
                 email,
                 password,
-                loginType: "teacher",
-                redirect: false,
-                callbackUrl: normalizedRedirect,
+                redirectTo: normalizedRedirect,
             });
 
             if (result?.error) {
@@ -56,11 +54,8 @@ export function TeacherLoginForm() {
                 setIsLoading(false);
                 return;
             }
-
-            router.replace(result?.url || normalizedRedirect);
-            router.refresh();
         } catch {
-            setError("Something went wrong. Please try again.");
+            // NextAuth redirect via the server action throws NEXT_REDIRECT on success.
             setIsLoading(false);
         }
     };
