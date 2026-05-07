@@ -485,6 +485,100 @@ function getAssessmentIcon(index: number) {
     return icons[index % icons.length];
 }
 
+function toSentenceCase(text: string) {
+    const value = text.trim();
+    if (!value) return '';
+    return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function toLowerSentence(text: string) {
+    const value = text.trim().replace(/[.!?]+$/, '');
+    if (!value) return '';
+    return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+function buildAssessmentCorrectSummary(module: ModuleBlueprint, concept: BackendConcept) {
+    const topic = concept.key_term || 'this idea';
+    const moduleSummary = summarizeModule(module) || concept.concept_text;
+    const normalizedSummary = toLowerSentence(moduleSummary);
+    return ensureSentence(`It means ${normalizedSummary} and connects back to ${topic}`);
+}
+
+function buildAssessmentDistractors(
+    module: ModuleBlueprint,
+    concept: BackendConcept,
+    modules: ModuleBlueprint[],
+) {
+    const topic = concept.key_term || 'the topic';
+    const otherModule = modules.find((candidate) => candidate.moduleNumber !== module.moduleNumber);
+    const otherSummary = otherModule ? summarizeModule(otherModule) : '';
+
+    const distractors = [
+        ensureSentence(`It only asks you to memorize the word ${topic} without understanding it`),
+        ensureSentence(`It means the opposite of what the module just explained about ${topic}`),
+        otherSummary
+            ? ensureSentence(`It is really about ${toLowerSentence(otherSummary)}`)
+            : ensureSentence(`It is a different idea from another part of the lesson`),
+    ];
+
+    return distractors.filter(Boolean);
+}
+
+function buildAssessmentPrompt(
+    variant: 'standard' | 'kids',
+    mode: LearningMode | 'kids',
+    moduleNumber: number,
+) {
+    if (variant === 'kids') {
+        return `Module ${moduleNumber}: which answer best tells what this part was really teaching?`;
+    }
+
+    if (mode === 'audio') {
+        return `After listening to Module ${moduleNumber}, which answer best explains the main meaning of that section?`;
+    }
+
+    if (mode === 'action') {
+        return `After working through Module ${moduleNumber}, which answer best explains what those steps were teaching you?`;
+    }
+
+    if (mode === 'reading') {
+        return `After reading Module ${moduleNumber}, which answer best captures the key idea from that section?`;
+    }
+
+    return `After Module ${moduleNumber}, which answer best explains the main idea from that section of the lesson?`;
+}
+
+function buildAssessmentQuestionsForVariant(
+    modules: ModuleBlueprint[],
+    variant: 'standard' | 'kids',
+    mode: LearningMode | 'kids',
+) {
+    const totalQuestions = Math.max(1, modules.length);
+
+    return modules.map((module, index) => {
+        const anchorConcept = getModuleAnchorConcept(module);
+        const correctLabel = buildAssessmentCorrectSummary(module, anchorConcept);
+        const distractors = buildAssessmentDistractors(module, anchorConcept, modules);
+        const optionLabels = [correctLabel, ...distractors].slice(0, 4);
+
+        return {
+            id: `module-assessment-${mode}-${module.moduleNumber}`,
+            moduleNumber: module.moduleNumber,
+            questionNumber: index + 1,
+            totalQuestions,
+            prompt: buildAssessmentPrompt(variant, mode, module.moduleNumber),
+            helperLabel: anchorConcept?.checkpoint_tts_text ? 'Tap to replay' : undefined,
+            options: optionLabels.map((option, optionIndex) => ({
+                id: `option-${optionIndex}`,
+                label: toSentenceCase(option),
+                icon: getAssessmentIcon(optionIndex),
+            })),
+            correctOptionId: 'option-0',
+            explanation: summarizeModule(module) || anchorConcept?.concept_text || '',
+        };
+    });
+}
+
 function buildCheckpointPrompt(module: ModuleBlueprint, concept: BackendConcept, isFinalCheckpoint: boolean) {
     const topic = concept.key_term || 'this idea';
     const sourcePrompt = concept.checkpoint_question.trim();
@@ -540,48 +634,13 @@ function buildReorientation(mode: LearningMode): LessonReorientationData {
 }
 
 function buildAssessment(modules: ModuleBlueprint[]): LessonAssessmentData {
-    const totalQuestions = Math.max(1, modules.length);
-
-    const buildQuestionSet = (variant: 'standard' | 'kids') =>
-        modules.map((module, index) => {
-            const anchorConcept = getModuleAnchorConcept(module);
-            const moduleSummary = summarizeModule(module);
-            const optionLabels = anchorConcept?.checkpoint_options?.length
-                ? anchorConcept.checkpoint_options
-                : ['This matches the module idea', 'This does not match the module idea'];
-
-            const prompt =
-                variant === 'kids'
-                    ? `Module ${module.moduleNumber} check: which answer best matches what you just learned?`
-                    : `For Module ${module.moduleNumber}, which answer best matches the main idea you just studied?`;
-
-            return {
-                id: `module-assessment-${module.moduleNumber}`,
-                moduleNumber: module.moduleNumber,
-                questionNumber: index + 1,
-                totalQuestions,
-                prompt,
-                helperLabel: anchorConcept?.checkpoint_tts_text ? 'Tap to replay' : undefined,
-                options: optionLabels.map((option, optionIndex) => ({
-                    id: `option-${optionIndex}`,
-                    label: option,
-                    icon: getAssessmentIcon(optionIndex),
-                })),
-                correctOptionId: resolveCorrectOptionId(anchorConcept),
-                explanation: moduleSummary || anchorConcept?.concept_text || '',
-            };
-        });
-
-    const standardQuestions = buildQuestionSet('standard');
-    const kidsQuestions = buildQuestionSet('kids');
-
     return {
         questionsByVariant: {
-            visual: standardQuestions,
-            audio: standardQuestions,
-            action: standardQuestions,
-            reading: standardQuestions,
-            kids: kidsQuestions,
+            visual: buildAssessmentQuestionsForVariant(modules, 'standard', 'visual'),
+            audio: buildAssessmentQuestionsForVariant(modules, 'standard', 'audio'),
+            action: buildAssessmentQuestionsForVariant(modules, 'standard', 'action'),
+            reading: buildAssessmentQuestionsForVariant(modules, 'standard', 'reading'),
+            kids: buildAssessmentQuestionsForVariant(modules, 'kids', 'kids'),
         },
         submitLabel: 'Check answer',
         helperText: 'Choose one answer to continue.',

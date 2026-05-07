@@ -1,0 +1,19 @@
+
+> nevo@0.1.0 dev
+> node scripts/pregenerate-assessment-audio.mjs && next dev
+
+[assessment-audio] Ready: 5 assessment audio files available.
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.20.10.2:3000
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 1865ms
+○ Compiling / ...
+ GET / 200 in 6.5s (compile: 5.9s, proxy.ts: 213ms, render: 318ms)
+ GET /login/student 200 in 2.5s (compile: 2.3s, proxy.ts: 22ms, render: 190ms)
+ GET /manifest.webmanifest 200 in 1374ms (compile: 1311ms, proxy.ts: 27ms, render: 36ms)
+ GET /manifest.webmanifest 200 in 95ms (compile: 60ms, proxy.ts: 25ms, render: 10ms)
+ GET / 200 in 281ms (compile: 21ms, proxy.ts: 25ms, render: 236ms)
+ GET /offline 200 in 1136ms (compile: 1008ms, proxy.ts: 25ms, render: 104ms)

@@ -1,0 +1,153 @@
+[31m[auth][error][0m CredentialsSignin: Read more at https://errors.authjs.dev#credentialssignin
+    at Module.callback (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:11708:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async AuthInternal (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:12542:24)
+    at async Auth (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:12764:34)
+    at async signIn (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:20493:17)
+    at async loginStudent (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\[root-of-the-server]__6e13f721._.js:664:9)
+    at async executeActionAndPrepareForRender (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:36:3803)
+    at async C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:36:1109
+    at async handleAction (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:34:23616)
+    at async renderToHTMLOrFlightImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:41:42130)
+    at async doRender (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_next_dist_5c7d02a9._.js:3085:28)
+    at async AppPageRouteModule.handleResponse (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:43:64241)
+    at async handleResponse (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_next_dist_5c7d02a9._.js:3291:32)
+    at async Module.handler (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_next_dist_5c7d02a9._.js:3662:20)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\Users\Admin\nevo-frontend\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\start-server.js:226:13)
+[31m[auth][error][0m CredentialsSignin: Read more at https://errors.authjs.dev#credentialssignin
+    at Module.callback (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:11708:30)
+    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at async AuthInternal (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:12542:24)
+    at async Auth (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:12764:34)
+    at async signIn (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_823defdd._.js:20493:17)
+    at async loginStudent (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\[root-of-the-server]__6e13f721._.js:665:9)
+    at async executeActionAndPrepareForRender (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:36:3803)
+    at async C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:36:1109
+    at async handleAction (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:34:23616)
+    at async renderToHTMLOrFlightImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:41:42130)
+    at async doRender (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_next_dist_5c7d02a9._.js:3085:28)
+    at async AppPageRouteModule.handleResponse (C:\Users\Admin\nevo-frontend\node_modules\next\dist\compiled\next-server\app-page-turbo.runtime.dev.js:43:64241)
+    at async handleResponse (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_next_dist_5c7d02a9._.js:3291:32)
+    at async Module.handler (C:\Users\Admin\nevo-frontend\.next\dev\server\chunks\ssr\node_modules_next_dist_5c7d02a9._.js:3662:20)
+    at async DevServer.renderToResponseWithComponentsImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1442:9)
+    at async DevServer.renderPageComponent (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1494:24)
+    at async DevServer.renderToResponseImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1544:32)
+    at async DevServer.pipeImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:1038:25)
+    at async NextNodeServer.handleCatchallRenderRequest (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\next-server.js:395:17)
+    at async DevServer.handleRequestImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\base-server.js:929:17)
+    at async C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\dev\next-dev-server.js:387:20
+    at async Span.traceAsyncFn (C:\Users\Admin\nevo-frontend\node_modules\next\dist\trace\trace.js:157:20)
+    at async DevServer.handleRequest (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\dev\next-dev-server.js:383:24)
+    at async invokeRender (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\router-server.js:248:21)
+    at async handleRequest (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\router-server.js:447:24)
+    at async requestHandlerImpl (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\router-server.js:496:13)
+    at async Server.requestListener (C:\Users\Admin\nevo-frontend\node_modules\next\dist\server\lib\start-server.js:226:13)
+⨯ Error: ENOENT: no such file or directory, open 'C:\Users\Admin\nevo-frontend\.next\dev\server\app\student\dashboard\[[...slug]]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Admin\\nevo-frontend\\.next\\dev\\server\\app\\student\\dashboard\\[[...slug]]\\page\\build-manifest.json'
+}
+
+thread 'tokio-runtime-worker' (22320) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Caused by:
+    0: Looking up data for TaskId 355326 from database failed
+    1: Unable to open static sorted file referenced from 00014974.meta
+    2: Unable to open static sorted file 00014968.sst
+    3: The system cannot find the file specified. (os error 2)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+-----
+[1m[31mFATAL[39m[0m: An unexpected Turbopack error occurred. A panic log has been written to C:\Users\Admin\AppData\Local\Temp\next-panic-885c17339979453bb225d7740610f927.log.
+
+To help make Turbopack better, report this error by clicking here: https://github.com/vercel/next.js/discussions/new?category=turbopack-error-report&title=Turbopack%20Error%3A%20Failed%20to%20restore%20task%20data%20%28corrupted%20database%20or%20bug%29%3A%20Data%20for%20get_written_endpoint_with_issues_operation%20%28TaskId%20355326%29%29&body=Turbopack%20version%3A%20%6023c46498%60%0ANext.js%20version%3A%20%600.0.0%60%0A%0AError%20message%3A%0A%60%60%60%0ATurbopack%20Error%3A%20Failed%20to%20restore%20task%20data%20%28corrupted%20database%20or%20bug%29%3A%20Data%20for%20get_written_endpoint_with_issues_operation%20%28TaskId%20355326%29%29%0A%60%60%60&labels=Turbopack,Turbopack%20Panic%20Backtrace
+-----
+
+⨯ Error [TurbopackInternalError]: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+  
+  Caused by:
+      0: Looking up data for TaskId 355326 from database failed
+      1: Unable to open static sorted file referenced from 00014974.meta
+      2: Unable to open static sorted file 00014968.sst
+      3: The system cannot find the file specified. (os error 2)
+    at <unknown> (TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+
+thread 'tokio-runtime-worker' (37664) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Caused by:
+    0: Looking up data for TaskId 355326 from database failed
+    1: Unable to open static sorted file referenced from 00014974.meta
+    2: Unable to open static sorted file 00014968.sst
+    3: The system cannot find the file specified. (os error 2)
+Error: ENOENT: no such file or directory, open 'C:\Users\Admin\nevo-frontend\.next\dev\server\app\student\dashboard\[[...slug]]\page\build-manifest.json'
+    at ignore-listed frames {
+  errno: -4058,
+  code: 'ENOENT',
+  syscall: 'open',
+  path: 'C:\\Users\\Admin\\nevo-frontend\\.next\\dev\\server\\app\\student\\dashboard\\[[...slug]]\\page\\build-manifest.json'
+}
+
+thread 'tokio-runtime-worker' (37664) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Caused by:
+    0: Looking up data for TaskId 355326 from database failed
+    1: Unable to open static sorted file referenced from 00014974.meta
+    2: Unable to open static sorted file 00014968.sst
+    3: The system cannot find the file specified. (os error 2)
+⨯ Error [TurbopackInternalError]: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+  
+  Caused by:
+      0: Looking up data for TaskId 355326 from database failed
+      1: Unable to open static sorted file referenced from 00014974.meta
+      2: Unable to open static sorted file 00014968.sst
+      3: The system cannot find the file specified. (os error 2)
+    at <unknown> (TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
+
+thread 'tokio-runtime-worker' (22320) panicked at C:\actions-runner\_work\next.js\next.js\turbopack\crates\turbo-tasks-backend\src\backend\operation\mod.rs:156:17:
+Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Caused by:
+    0: Looking up data for TaskId 355326 from database failed
+    1: Unable to open static sorted file referenced from 00014974.meta
+    2: Unable to open static sorted file 00014968.sst
+    3: The system cannot find the file specified. (os error 2)
+Error [TurbopackInternalError]: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+
+Debug info:
+- Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))
+  
+  Caused by:
+      0: Looking up data for TaskId 355326 from database failed
+      1: Unable to open static sorted file referenced from 00014974.meta
+      2: Unable to open static sorted file 00014968.sst
+      3: The system cannot find the file specified. (os error 2)
+    at <unknown> (TurbopackInternalError: Failed to restore task data (corrupted database or bug): Data for get_written_endpoint_with_issues_operation (TaskId 355326))) {
+  location: 'C:\\actions-runner\\_work\\next.js\\next.js\\turbopack\\crates\\turbo-tasks-backend\\src\\backend\\operation\\mod.rs:156:17'
+}
