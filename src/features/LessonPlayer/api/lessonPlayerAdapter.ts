@@ -103,6 +103,7 @@ type StageBlueprint = {
     phase: StagePhaseKey;
     concept: BackendConcept;
     stepText: string;
+    audioStepText: string;
     moduleNumber: number;
     moduleStepNumber: number;
     totalModuleSteps: number;
@@ -341,6 +342,65 @@ function buildActionSteps(concept: BackendConcept) {
     })) as Array<{ text: string; state: 'unread' | 'active' | 'completed' }>;
 }
 
+function alignTextChunksToCount(text: string, targetCount: number, fallbacks: string[]) {
+    const normalizedTargetCount = Math.max(1, targetCount);
+    const cleanedText = text.trim();
+
+    if (!cleanedText) {
+        return fallbacks.slice(0, normalizedTargetCount);
+    }
+
+    if (normalizedTargetCount === 1) {
+        return [cleanedText];
+    }
+
+    const totalWords = Math.max(1, getWordCount(cleanedText));
+    let chunks = createStepChunksFromText(cleanedText, Math.max(12, Math.ceil(totalWords / normalizedTargetCount)));
+
+    while (chunks.length > normalizedTargetCount) {
+        const lastChunk = chunks.pop();
+        if (!lastChunk || chunks.length === 0) {
+            break;
+        }
+        chunks[chunks.length - 1] = `${chunks[chunks.length - 1]} ${lastChunk}`.trim();
+    }
+
+    while (chunks.length < normalizedTargetCount) {
+        const longestIndex = chunks.reduce((bestIndex, current, index, all) => {
+            return getWordCount(current) > getWordCount(all[bestIndex]) ? index : bestIndex;
+        }, 0);
+        const longestChunk = chunks[longestIndex];
+        const parts = splitLongSentence(longestChunk);
+
+        if (parts.length > 1) {
+            const midpoint = Math.ceil(parts.length / 2);
+            chunks.splice(longestIndex, 1, parts.slice(0, midpoint).join(' ').trim(), parts.slice(midpoint).join(' ').trim());
+            continue;
+        }
+
+        break;
+    }
+
+    while (chunks.length < normalizedTargetCount) {
+        const fallback = fallbacks[chunks.length] || chunks[chunks.length - 1] || cleanedText;
+        chunks.push(fallback);
+    }
+
+    return chunks.slice(0, normalizedTargetCount);
+}
+
+function buildConceptAudioStepTexts(concept: BackendConcept, visualStepTexts: string[]) {
+    const spokenSource =
+        (typeof concept.tts_text === 'string' && concept.tts_text.trim()) ||
+        concept.concept_text;
+
+    if (!spokenSource.trim()) {
+        return visualStepTexts;
+    }
+
+    return alignTextChunksToCount(spokenSource, Math.max(1, visualStepTexts.length), visualStepTexts);
+}
+
 function buildSlowerSteps(concept: BackendConcept) {
     const steps = buildActionSteps(concept);
     return steps.map((step, index) => ({
@@ -370,13 +430,15 @@ function buildStage(blueprint: StageBlueprint): Stage {
     const { phase, concept } = blueprint;
     const labels = STAGE_LABELS[phase];
     const visualBody = blueprint.stepText;
-    const audioBody = blueprint.stepText;
+    const audioBody = blueprint.audioStepText;
     const simplified = simplifyText(blueprint.stepText);
     const expanded = expandText(blueprint.stepText, concept);
+    const audioSimplified = simplifyText(audioBody);
+    const audioExpanded = expandText(audioBody, concept);
     const scopedConcept = {
         ...concept,
         concept_text: blueprint.stepText,
-        tts_text: blueprint.stepText,
+        tts_text: blueprint.audioStepText,
     };
     const actionSteps = buildActionSteps(scopedConcept);
 
@@ -412,8 +474,11 @@ function buildStage(blueprint: StageBlueprint): Stage {
             audio: {
                 audioUrl: '',
                 body: audioBody,
-                bodySimplified: simplifyText(audioBody),
-                bodyExpanded: expandText(audioBody, concept),
+                bodySimplified: audioSimplified,
+                bodyExpanded: audioExpanded,
+                spokenBody: audioBody,
+                spokenBodySimplified: audioSimplified,
+                spokenBodyExpanded: audioExpanded,
             },
             action: {
                 steps: actionSteps,
@@ -435,12 +500,16 @@ function buildStage(blueprint: StageBlueprint): Stage {
 }
 
 function buildStageBlueprints(concepts: BackendConcept[]) {
-    const stepEntries = concepts.flatMap((concept) =>
-        buildConceptStepTexts(concept).map((stepText) => ({
+    const stepEntries = concepts.flatMap((concept) => {
+        const stepTexts = buildConceptStepTexts(concept);
+        const audioStepTexts = buildConceptAudioStepTexts(concept, stepTexts);
+
+        return stepTexts.map((stepText, index) => ({
             concept,
             stepText,
-        })),
-    );
+            audioStepText: audioStepTexts[index] || stepText,
+        }));
+    });
 
     const totalOverallSteps = Math.max(1, stepEntries.length);
     const moduleChunks = chunkArray(stepEntries, 4);
@@ -453,6 +522,7 @@ function buildStageBlueprints(concepts: BackendConcept[]) {
                 phase: STAGE_ORDER[(overallStepNumber - 1) % STAGE_ORDER.length],
                 concept: entry.concept,
                 stepText: entry.stepText,
+                audioStepText: entry.audioStepText,
                 moduleNumber: moduleIndex + 1,
                 moduleStepNumber: entryIndex + 1,
                 totalModuleSteps: moduleEntries.length,
@@ -567,7 +637,13 @@ function buildAssessmentQuestionsForVariant(
             questionNumber: index + 1,
             totalQuestions,
             prompt: buildAssessmentPrompt(variant, mode, module.moduleNumber),
-            helperLabel: anchorConcept?.checkpoint_tts_text ? 'Tap to replay' : undefined,
+            spokenPrompt:
+                (typeof anchorConcept?.checkpoint_tts_text === 'string' && anchorConcept.checkpoint_tts_text.trim()) ||
+                undefined,
+            helperLabel:
+                (typeof anchorConcept?.checkpoint_tts_text === 'string' && anchorConcept.checkpoint_tts_text.trim())
+                    ? 'Tap to hear the question'
+                    : undefined,
             options: optionLabels.map((option, optionIndex) => ({
                 id: `option-${optionIndex}`,
                 label: toSentenceCase(option),
@@ -607,19 +683,19 @@ function buildReflection(title: string): LessonReflectionData {
 
 function buildReorientation(mode: LearningMode): LessonReorientationData {
     return {
-        title: "Let's try a different approach.",
-        description: `Nevo can shift this lesson into another mode if ${mode} is not helping enough right now.`,
+        title: "Let's make this easier.",
+        description: `Your learning mode stays the same for now. If this ${mode} lesson feels hard, Nevo can slow it down or explain it more simply.`,
         options: [
             {
-                id: 'action',
-                title: 'Try the hands-on version',
-                description: 'Break the idea into active, guided steps.',
+                id: 'slow-down',
+                title: 'Slow this step down',
+                description: 'Break this part into smaller, calmer steps.',
                 icon: 'hands',
             },
             {
-                id: 'visual',
-                title: 'See a visual version',
-                description: 'Use a clearer picture-led explanation instead.',
+                id: 'simplify',
+                title: 'Use simpler words',
+                description: 'Keep the same lesson, but explain it more clearly.',
                 icon: 'image',
             },
             {
@@ -728,9 +804,9 @@ function buildCompletion(
     return {
         badgeLabel: payload.learning_mode_delivered || 'Adaptive lesson',
         heading: payload.lesson_title,
-        completedAtLabel: `Completed ${new Date().toLocaleDateString('en-GB', {
+        completedAtLabel: `Completed ${new Date().toLocaleDateString('en-US', {
             day: 'numeric',
-            month: 'short',
+            month: 'long',
             year: 'numeric',
         })}`,
         metrics: [

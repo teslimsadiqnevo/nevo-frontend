@@ -2,6 +2,7 @@
 
 import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
 import { getDashboardPath } from '@/shared/lib';
 import type { LessonPlayerData, LessonModeCard } from '../api/types';
 import { LeaveLessonDialog } from './LeaveLessonDialog';
@@ -67,11 +68,19 @@ function MetaItem({
     );
 }
 
+function getModeLabel(mode: LearningMode) {
+    if (mode === 'audio') return 'Best in audio';
+    if (mode === 'action') return 'Best in action';
+    if (mode === 'reading') return 'Best in reading';
+    return 'Best in visual';
+}
+
 export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
     const router = useRouter();
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);
+    const learningMode = useRegistrationStore((state) => state.learningMode);
 
-    const activeMode = data.recommendedMode;
+    const activeMode = learningMode;
     const activeCard = data.start.cards[activeMode];
 
     const beginLesson = () => {
@@ -138,7 +147,7 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
                                         <path d="M3 12.5V3.5L7.5 7.5L13 3.5V12.5H3Z" fill="currentColor" />
                                     </svg>
                                 }
-                                label={data.start.modeLabel}
+                                label={getModeLabel(activeMode)}
                                 active
                             />
                         </div>

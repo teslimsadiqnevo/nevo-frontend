@@ -2,12 +2,12 @@
 
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { type LearningMode } from '@/shared/store/useRegistrationStore';
+import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
 import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { updateLessonProgress } from '@/features/Dashboard/api/student';
 import { useLessonPlayer } from '../api/useLessonPlayer';
-import type { StageKey, ToolbarState } from '../api/types';
+import type { Stage, StageKey, ToolbarState } from '../api/types';
 import { VisualMode } from './modes/VisualMode';
 import { AudioMode } from './modes/AudioMode';
 import { ActionMode } from './modes/ActionMode';
@@ -19,6 +19,7 @@ import { LessonReflectionOverlay } from './LessonReflectionOverlay';
 import { LessonReorientationOverlay } from './LessonReorientationOverlay';
 import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
 import type { LessonPaceDensity } from '../api/types';
+import { preloadLessonTts, stopAllLessonTts } from '../api/useLessonTts';
 
 type LessonPlayerProps = {
     lessonId: string;
@@ -51,6 +52,18 @@ async function syncLessonProgress(
     throw new Error(lastError || 'Failed to update lesson progress');
 }
 
+function getAudioBodyForToolbar(stage: Stage, state: Exclude<ToolbarState, 'slower'>) {
+    const content = stage.modes.audio;
+
+    if (state === 'simplified') return content.bodySimplified;
+    if (state === 'expanded') return content.bodyExpanded;
+    return content.body;
+}
+
+function getAudioCacheBaseKey(lessonId: string, stage: Stage) {
+    return `${lessonId}:${stage.key}:audio`;
+}
+
 export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     useApiTokenExpiryRedirect('student');
     const router = useRouter();
@@ -62,17 +75,11 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const [showAskNevoDrawer, setShowAskNevoDrawer] = useState(false);
     const [paceSelection, setPaceSelection] = useState<'slower' | 'steady' | 'faster'>('slower');
     const [paceDensity, setPaceDensity] = useState<LessonPaceDensity>('standard');
-    const [sessionAutoAdapt, setSessionAutoAdapt] = useState<boolean | null>(null);
-    const [manualMode, setManualMode] = useState<LearningMode | null>(null);
+    const learningMode = useRegistrationStore((state) => state.learningMode);
     const progressSessionStartedAt = useRef(Date.now());
     const lastProgressKey = useRef<string | null>(null);
-    const backendAutoAdapt = data?.adaptAutomatically ?? true;
-    const isAutoAdaptActive = sessionAutoAdapt ?? backendAutoAdapt;
-    const activeMode: LearningMode =
-        isAutoAdaptActive
-            ? data?.recommendedMode ?? 'visual'
-            : manualMode ?? data?.recommendedMode ?? 'visual';
-    const scopeKey = `${lessonId}:${stage}:${activeMode}:${isAutoAdaptActive ? '1' : '0'}`;
+    const activeMode: LearningMode = learningMode;
+    const scopeKey = `${lessonId}:${stage}:${activeMode}`;
     const [toolbarSession, setToolbarSession] = useState<{ scopeKey: string; state: ToolbarState }>({
         scopeKey,
         state: 'original',
@@ -107,6 +114,40 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             lastProgressKey.current = null;
         });
     }, [data, progressIdCandidates, stageIndex]);
+
+    useEffect(() => {
+        return () => {
+            stopAllLessonTts();
+        };
+    }, [lessonId, stage]);
+
+    useEffect(() => {
+        if (!data || activeMode !== 'audio' || stageIndex < 0) return;
+
+        const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
+        const nextStage = stageIndex < data.stageOrder.length - 1 ? data.stages[stageIndex + 1] : null;
+        const currentCacheBaseKey = getAudioCacheBaseKey(lessonId, currentStage);
+
+        void preloadLessonTts(
+            getAudioBodyForToolbar(currentStage, 'original'),
+            `${currentCacheBaseKey}:original`,
+        );
+        void preloadLessonTts(
+            getAudioBodyForToolbar(currentStage, 'simplified'),
+            `${currentCacheBaseKey}:simplified`,
+        );
+        void preloadLessonTts(
+            getAudioBodyForToolbar(currentStage, 'expanded'),
+            `${currentCacheBaseKey}:expanded`,
+        );
+
+        if (nextStage) {
+            void preloadLessonTts(
+                getAudioBodyForToolbar(nextStage, 'original'),
+                `${getAudioCacheBaseKey(lessonId, nextStage)}:original`,
+            );
+        }
+    }, [activeMode, data, lessonId, stage, stageIndex]);
 
     if (loading) {
         return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
@@ -143,9 +184,15 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const toolbarState = toolbarSession.scopeKey === scopeKey ? toolbarSession.state : 'original';
     const headerAction: ReactNode = null;
 
+    const requestLeaveLesson = () => {
+        stopAllLessonTts();
+        setShowLeaveDialog(true);
+    };
+
     const goToPrevStage = () => {
+        stopAllLessonTts();
         if (stageIndex === 0) {
-            setShowLeaveDialog(true);
+            requestLeaveLesson();
             return;
         }
 
@@ -154,6 +201,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     };
 
     const goToNextStage = () => {
+        stopAllLessonTts();
         if (stageIndex >= stageOrder.length - 1) {
             const finalCheckpointIndex = data.microQuiz.findIndex((question) => question.isFinalCheckpoint);
             if (finalCheckpointIndex >= 0) {
@@ -180,6 +228,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     };
 
     const onToolbarChange = (nextState: ToolbarState) => {
+        stopAllLessonTts();
         if ((nextState === 'simplified' || nextState === 'slower') && toolbarState === nextState) {
             setShowReflectionOverlay(true);
             return;
@@ -200,7 +249,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const shellProps = {
         stage: currentStage,
         progress,
-        onExit: () => setShowLeaveDialog(true),
+        onExit: requestLeaveLesson,
         onBack: goToPrevStage,
         canGoBack: stageIndex > 0,
         askContext,
@@ -208,12 +257,14 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         onToolbarChange,
         headerAction,
         paceDensity,
+        audioCacheBaseKey: getAudioCacheBaseKey(lessonId, currentStage),
         continueLabel,
         onContinue: goToNextStage,
         canGoForward: stageIndex < stageOrder.length - 1 || hasFinalCheckpoint,
     };
 
     const applyPaceSelection = () => {
+        stopAllLessonTts();
         const nextDensity: LessonPaceDensity = paceSelection === 'slower' ? 'calm' : 'standard';
         const nextToolbarState: ToolbarState = paceSelection === 'slower' ? 'slower' : 'original';
 
@@ -226,6 +277,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     };
 
     const handleReflectionSelect = (optionId: string) => {
+        stopAllLessonTts();
         if (optionId === 'thinking') {
             setShowReflectionOverlay(false);
             return;
@@ -242,14 +294,28 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     };
 
     const handleReorientationSelect = (optionId: string) => {
+        stopAllLessonTts();
         if (optionId === 'skip') {
             setShowReorientationOverlay(false);
             goToNextStage();
             return;
         }
 
-        setSessionAutoAdapt(false);
-        setManualMode(optionId === 'action' ? 'action' : 'visual');
+        if (optionId === 'slow-down') {
+            setPaceDensity('calm');
+            setToolbarSession({
+                scopeKey,
+                state: 'slower',
+            });
+        }
+
+        if (optionId === 'simplify') {
+            setToolbarSession({
+                scopeKey,
+                state: 'simplified',
+            });
+        }
+
         setShowReorientationOverlay(false);
     };
 
@@ -261,7 +327,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
                         <SlowerMode
                             stage={currentStage}
                             progress={progress}
-                            onExit={() => setShowLeaveDialog(true)}
+                            onExit={requestLeaveLesson}
                             onBack={goToPrevStage}
                             askContext={askContext}
                             activeMode={activeMode}
@@ -293,10 +359,14 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             <LeaveLessonDialog
                 open={showLeaveDialog}
                 onClose={() => {
+                    stopAllLessonTts();
                     setShowLeaveDialog(false);
                     router.push(getDashboardPath('student', 'lessons'));
                 }}
-                onConfirm={() => setShowLeaveDialog(false)}
+                onConfirm={() => {
+                    stopAllLessonTts();
+                    setShowLeaveDialog(false);
+                }}
             />
 
             {showPaceOverlay ? (

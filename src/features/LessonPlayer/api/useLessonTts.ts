@@ -11,11 +11,85 @@ type LessonTtsState = {
     stop: () => void;
 };
 
+type LessonTtsOptions = {
+    autoPlay?: boolean;
+    cacheKey?: string;
+};
+
 type TtsResponseBody = {
     detail?: string;
     message?: string;
     error?: string;
 };
+
+let activeLessonAudio: HTMLAudioElement | null = null;
+const lessonTtsCache = new Map<string, { objectUrl: string; blob: Blob }>();
+const lessonTtsPending = new Map<string, Promise<string | null>>();
+const MAX_LESSON_TTS_CACHE_ENTRIES = 48;
+
+function hashText(value: string) {
+    let hash = 5381;
+
+    for (let index = 0; index < value.length; index += 1) {
+        hash = (hash * 33) ^ value.charCodeAt(index);
+    }
+
+    return (hash >>> 0).toString(36);
+}
+
+function getAudioCacheKey(text: string, explicitKey?: string) {
+    const cleanedText = text.trim();
+    return explicitKey || `tts:${hashText(cleanedText)}:${cleanedText.length}`;
+}
+
+function touchLessonTtsCacheEntry(cacheKey: string, entry: { objectUrl: string; blob: Blob }) {
+    lessonTtsCache.delete(cacheKey);
+    lessonTtsCache.set(cacheKey, entry);
+}
+
+function trimLessonTtsCache() {
+    let guard = 0;
+
+    while (lessonTtsCache.size > MAX_LESSON_TTS_CACHE_ENTRIES && guard < MAX_LESSON_TTS_CACHE_ENTRIES * 2) {
+        const oldestEntry = lessonTtsCache.entries().next().value as
+            | [string, { objectUrl: string; blob: Blob }]
+            | undefined;
+
+        if (!oldestEntry) {
+            return;
+        }
+
+        const [oldestKey, cachedEntry] = oldestEntry;
+
+        if (activeLessonAudio?.src === cachedEntry.objectUrl) {
+            touchLessonTtsCacheEntry(oldestKey, cachedEntry);
+            guard += 1;
+            continue;
+        }
+
+        lessonTtsCache.delete(oldestKey);
+        URL.revokeObjectURL(cachedEntry.objectUrl);
+        guard += 1;
+    }
+}
+
+function pauseAudio(audio: HTMLAudioElement | null, reset = true) {
+    if (!audio) return;
+
+    audio.pause();
+    if (reset) {
+        try {
+            audio.currentTime = 0;
+        } catch {
+            // Some browsers can throw while metadata is still loading.
+        }
+    }
+}
+
+export function stopAllLessonTts() {
+    pauseAudio(activeLessonAudio);
+    activeLessonAudio = null;
+}
 
 function buildErrorMessage(payload: TtsResponseBody | null, fallback: string) {
     if (!payload) return fallback;
@@ -25,35 +99,119 @@ function buildErrorMessage(payload: TtsResponseBody | null, fallback: string) {
     return fallback;
 }
 
-export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): LessonTtsState {
+function waitForAbort(signal: AbortSignal) {
+    return new Promise<null>((resolve) => {
+        if (signal.aborted) {
+            resolve(null);
+            return;
+        }
+
+        signal.addEventListener('abort', () => resolve(null), { once: true });
+    });
+}
+
+async function fetchLessonTtsAudio(text: string, cacheKey: string) {
+    const cached = lessonTtsCache.get(cacheKey);
+    if (cached) {
+        touchLessonTtsCacheEntry(cacheKey, cached);
+        return cached.objectUrl;
+    }
+
+    const pending = lessonTtsPending.get(cacheKey);
+    if (pending) {
+        return pending;
+    }
+
+    const request = (async () => {
+        try {
+            const response = await fetch('/api/tts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    text,
+                }),
+            });
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null);
+                throw new Error(buildErrorMessage(payload, 'Could not generate lesson audio.'));
+            }
+
+            const blob = await response.blob();
+            const objectUrl = URL.createObjectURL(blob);
+            lessonTtsCache.set(cacheKey, { objectUrl, blob });
+            trimLessonTtsCache();
+            return objectUrl;
+        } finally {
+            lessonTtsPending.delete(cacheKey);
+        }
+    })();
+
+    lessonTtsPending.set(cacheKey, request);
+    return request;
+}
+
+export function preloadLessonTts(text: string, cacheKey?: string) {
+    const cleanedText = text.trim();
+    if (!cleanedText || typeof window === 'undefined') {
+        return Promise.resolve(null);
+    }
+
+    return fetchLessonTtsAudio(cleanedText, getAudioCacheKey(cleanedText, cacheKey)).catch(() => null);
+}
+
+export function useLessonTts(
+    text: string,
+    prefetchedAudioUrl?: string | null,
+    options: LessonTtsOptions = {},
+): LessonTtsState {
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const objectUrlRef = useRef<string | null>(null);
     const preparedTextRef = useRef<string>('');
+    const abortControllerRef = useRef<AbortController | null>(null);
+    const requestIdRef = useRef(0);
+    const mountedRef = useRef(false);
+    const audioSourceIsCachedRef = useRef(false);
     const [isLoading, setIsLoading] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const autoPlay = options.autoPlay ?? false;
 
     const stop = useCallback(() => {
         const audio = audioRef.current;
         if (!audio) return;
 
-        audio.pause();
-        audio.currentTime = 0;
+        pauseAudio(audio);
+        if (activeLessonAudio === audio) {
+            activeLessonAudio = null;
+        }
         setIsPlaying(false);
     }, []);
 
     const releaseAudio = useCallback(() => {
+        requestIdRef.current += 1;
+        abortControllerRef.current?.abort();
+        abortControllerRef.current = null;
+
         const audio = audioRef.current;
         if (audio) {
-            audio.pause();
+            pauseAudio(audio);
+            if (activeLessonAudio === audio) {
+                activeLessonAudio = null;
+            }
             audio.removeAttribute('src');
             audio.load();
         }
 
         if (objectUrlRef.current) {
-            URL.revokeObjectURL(objectUrlRef.current);
+            if (!audioSourceIsCachedRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
+            }
             objectUrlRef.current = null;
         }
+        audioSourceIsCachedRef.current = false;
 
         preparedTextRef.current = '';
         setIsPlaying(false);
@@ -63,6 +221,7 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
 
     const ensureAudio = useCallback(async () => {
         const cleanedText = text.trim();
+        const cacheKey = getAudioCacheKey(cleanedText, options.cacheKey);
         const audio = audioRef.current;
 
         if (!audio || !cleanedText) {
@@ -75,9 +234,12 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
 
         if (prefetchedAudioUrl) {
             if (objectUrlRef.current) {
-                URL.revokeObjectURL(objectUrlRef.current);
+                if (!audioSourceIsCachedRef.current) {
+                    URL.revokeObjectURL(objectUrlRef.current);
+                }
                 objectUrlRef.current = null;
             }
+            audioSourceIsCachedRef.current = false;
 
             preparedTextRef.current = cleanedText;
             audio.src = prefetchedAudioUrl;
@@ -88,46 +250,68 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
             return objectUrlRef.current;
         }
 
-        setIsLoading(true);
-        setError(null);
-
-        try {
-            const response = await fetch('/api/tts', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    text: cleanedText,
-                }),
-            });
-
-            if (!response.ok) {
-                const payload = await response.json().catch(() => null);
-                throw new Error(buildErrorMessage(payload, 'Could not generate lesson audio.'));
+        const cached = lessonTtsCache.get(cacheKey);
+        if (cached) {
+            touchLessonTtsCacheEntry(cacheKey, cached);
+            if (objectUrlRef.current && !audioSourceIsCachedRef.current) {
+                URL.revokeObjectURL(objectUrlRef.current);
             }
 
-            const blob = await response.blob();
-            const objectUrl = URL.createObjectURL(blob);
+            objectUrlRef.current = cached.objectUrl;
+            audioSourceIsCachedRef.current = true;
+            preparedTextRef.current = cleanedText;
+            audio.src = cached.objectUrl;
+            return cached.objectUrl;
+        }
 
-            if (objectUrlRef.current) {
+        setIsLoading(true);
+        setError(null);
+        abortControllerRef.current?.abort();
+        const requestId = requestIdRef.current + 1;
+        requestIdRef.current = requestId;
+        const abortController = new AbortController();
+        abortControllerRef.current = abortController;
+
+        try {
+            const objectUrl = await Promise.race([
+                fetchLessonTtsAudio(cleanedText, cacheKey),
+                waitForAbort(abortController.signal),
+            ]);
+
+            if (!mountedRef.current || requestIdRef.current !== requestId || text.trim() !== cleanedText) {
+                return null;
+            }
+
+            if (!objectUrl) {
+                return null;
+            }
+
+            if (objectUrlRef.current && !audioSourceIsCachedRef.current) {
                 URL.revokeObjectURL(objectUrlRef.current);
             }
 
             objectUrlRef.current = objectUrl;
+            audioSourceIsCachedRef.current = Boolean(lessonTtsCache.get(cacheKey));
             preparedTextRef.current = cleanedText;
             audio.src = objectUrl;
 
             return objectUrl;
         } catch (fetchError) {
+            if (fetchError instanceof DOMException && fetchError.name === 'AbortError') {
+                return null;
+            }
             const message =
                 fetchError instanceof Error ? fetchError.message : 'Could not generate lesson audio.';
-            setError(message);
+            if (mountedRef.current && requestIdRef.current === requestId) {
+                setError(message);
+            }
             return null;
         } finally {
-            setIsLoading(false);
+            if (mountedRef.current && requestIdRef.current === requestId) {
+                setIsLoading(false);
+            }
         }
-    }, [prefetchedAudioUrl, text]);
+    }, [options.cacheKey, prefetchedAudioUrl, text]);
 
     const play = useCallback(async () => {
         const audio = audioRef.current;
@@ -137,6 +321,10 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
         if (!objectUrl) return;
 
         try {
+            if (activeLessonAudio && activeLessonAudio !== audio) {
+                pauseAudio(activeLessonAudio);
+            }
+            activeLessonAudio = audio;
             await audio.play();
         } catch (playError) {
             const message =
@@ -163,8 +351,7 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
         const audio = audioRef.current;
         if (!audio || !text.trim()) return;
 
-        audio.pause();
-        audio.currentTime = 0;
+        pauseAudio(audio);
         setIsPlaying(false);
         await play();
     }, [play, text]);
@@ -172,6 +359,7 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
     useEffect(() => {
         if (typeof Audio === 'undefined') return undefined;
 
+        mountedRef.current = true;
         const audio = new Audio();
         audio.preload = 'none';
         audioRef.current = audio;
@@ -185,10 +373,19 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
         audio.addEventListener('ended', handleEnded);
 
         return () => {
-            audio.pause();
+            mountedRef.current = false;
+            requestIdRef.current += 1;
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
+            pauseAudio(audio);
+            if (activeLessonAudio === audio) {
+                activeLessonAudio = null;
+            }
             audio.removeEventListener('play', handlePlay);
             audio.removeEventListener('pause', handlePause);
             audio.removeEventListener('ended', handleEnded);
+            audio.removeAttribute('src');
+            audio.load();
             audioRef.current = null;
         };
     }, []);
@@ -196,12 +393,31 @@ export function useLessonTts(text: string, prefetchedAudioUrl?: string | null): 
     useEffect(() => {
         releaseAudio();
         return () => {
+            requestIdRef.current += 1;
+            abortControllerRef.current?.abort();
+            abortControllerRef.current = null;
             if (objectUrlRef.current) {
-                URL.revokeObjectURL(objectUrlRef.current);
+                if (!audioSourceIsCachedRef.current) {
+                    URL.revokeObjectURL(objectUrlRef.current);
+                }
                 objectUrlRef.current = null;
             }
+            audioSourceIsCachedRef.current = false;
         };
     }, [prefetchedAudioUrl, releaseAudio, text]);
+
+    useEffect(() => {
+        if (!autoPlay || !text.trim()) return undefined;
+
+        const timeoutId = window.setTimeout(() => {
+            void replay();
+        }, 0);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+            stop();
+        };
+    }, [autoPlay, replay, stop, text]);
 
     return {
         isLoading,

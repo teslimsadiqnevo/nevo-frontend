@@ -17,6 +17,7 @@ type AudioModeProps = {
     onToolbarChange: (state: ToolbarState) => void;
     headerAction?: ReactNode;
     paceDensity: LessonPaceDensity;
+    audioCacheBaseKey?: string;
 };
 
 export function AudioMode({
@@ -31,6 +32,7 @@ export function AudioMode({
     onToolbarChange,
     headerAction,
     paceDensity,
+    audioCacheBaseKey,
 }: AudioModeProps) {
     const content = stage.modes.audio;
     const label =
@@ -45,8 +47,17 @@ export function AudioMode({
             : toolbarState === 'expanded'
               ? content.bodyExpanded
               : content.body;
+    const spokenBody =
+        toolbarState === 'simplified'
+            ? content.spokenBodySimplified
+            : toolbarState === 'expanded'
+              ? content.spokenBodyExpanded
+              : content.spokenBody;
     const isCalmDensity = paceDensity === 'calm';
-    const { isLoading, isPlaying, error, togglePlayback, replay } = useLessonTts(body);
+    const { isLoading, isPlaying, error, togglePlayback, replay } = useLessonTts(spokenBody, null, {
+        autoPlay: true,
+        cacheKey: audioCacheBaseKey ? `${audioCacheBaseKey}:${toolbarState}` : undefined,
+    });
 
     return (
         <StageShell
@@ -60,7 +71,6 @@ export function AudioMode({
                                 .split('. ')
                                 .map((line) => line.trim())
                                 .filter(Boolean)
-                                .slice(0, 3)
                                 .map((line, index) => (
                                     <p key={`${line}:${index}`} className="text-[20px] font-semibold leading-8 text-graphite">
                                         {line.endsWith('.') ? line : `${line}.`}

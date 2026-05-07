@@ -86,6 +86,9 @@ export type AudioContent = {
     body: string;
     bodySimplified: string;
     bodyExpanded: string;
+    spokenBody: string;
+    spokenBodySimplified: string;
+    spokenBodyExpanded: string;
 };
 
 export type ActionStep = {
@@ -204,6 +207,7 @@ export type LessonAssessmentQuestion = {
     questionNumber: number;
     totalQuestions: number;
     prompt: string;
+    spokenPrompt?: string;
     helperLabel?: string;
     options: LessonAssessmentOption[];
     correctOptionId: string;

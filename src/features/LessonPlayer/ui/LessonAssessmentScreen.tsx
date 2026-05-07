@@ -135,7 +135,8 @@ function AssessmentQuestionView({
 }) {
     const isKids = variant === 'kids';
     const optionTextClass = isKids ? 'text-[16px] font-semibold' : 'text-[15px] font-medium';
-    const { isLoading, isPlaying, error, togglePlayback } = useLessonTts(prompt);
+    const spokenPrompt = question.spokenPrompt || prompt;
+    const { isLoading, isPlaying, error, togglePlayback } = useLessonTts(spokenPrompt);
 
     return (
         <>
@@ -292,13 +293,12 @@ function AssessmentBackButton({ onClick }: { onClick: () => void }) {
 export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScreenProps) {
     const router = useRouter();
     const age = useRegistrationStore((state) => state.age);
-    const isAutoAdapt = useRegistrationStore((state) => state.isAutoAdapt);
     const learningMode = useRegistrationStore((state) => state.learningMode);
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
     const [view, setView] = useState<AssessmentView>('question');
     const [questionIndex, setQuestionIndex] = useState(0);
 
-    const activeMode: LearningMode = isAutoAdapt ? data.recommendedMode : learningMode;
+    const activeMode: LearningMode = learningMode;
     const variant = getAssessmentVariant(age, activeMode);
     const questions = data.assessment.questionsByVariant[variant];
     const question: LessonAssessmentQuestion = questions[Math.max(0, Math.min(questionIndex, questions.length - 1))];
