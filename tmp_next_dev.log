@@ -17,3 +17,4 @@
  GET /manifest.webmanifest 200 in 95ms (compile: 60ms, proxy.ts: 25ms, render: 10ms)
  GET / 200 in 281ms (compile: 21ms, proxy.ts: 25ms, render: 236ms)
  GET /offline 200 in 1136ms (compile: 1008ms, proxy.ts: 25ms, render: 104ms)
+✓ Compiled in 2.7s

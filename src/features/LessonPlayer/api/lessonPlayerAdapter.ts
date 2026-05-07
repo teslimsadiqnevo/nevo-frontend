@@ -151,6 +151,16 @@ function removeFormalNoise(text: string) {
         .trim();
 }
 
+function removeVisualFiller(text: string) {
+    return text
+        .replace(/^(?:now,\s*)?picture\s+this(?:\s+while\s+you\s+hear\s+it)?[:.,]?\s*/i, '')
+        .replace(/^picture\s+it\s+this\s+way[:.,]?\s*/i, '')
+        .replace(/^imagine\s+this[:.,]?\s*/i, '')
+        .replace(/^imagine\s+/i, '')
+        .replace(/^here\s+is\s+what\s+to\s+picture\s+and\s+hear[:.,]?\s*/i, '')
+        .trim();
+}
+
 function simplifyText(text: string) {
     const cleaned = removeFormalNoise(text);
     const sentences = splitIntoSentences(cleaned);
@@ -246,7 +256,7 @@ function expandText(text: string, concept: BackendConcept) {
     const firstSentence = sentences[0] || text;
     const simplified = simplifyText(text) || text;
     const pieces = [
-        ensureSentence(`Let's slow this down and make it easier to picture`),
+        ensureSentence(`Let's slow this down and make it clearer`),
         ensureSentence(simplified),
         ensureSentence(`In a fuller way, ${toPlainPhrase(firstSentence)}`),
     ];
@@ -429,15 +439,15 @@ function resolveCorrectOptionId(concept: BackendConcept) {
 function buildStage(blueprint: StageBlueprint): Stage {
     const { phase, concept } = blueprint;
     const labels = STAGE_LABELS[phase];
-    const visualBody = blueprint.stepText;
+    const visualBody = removeVisualFiller(blueprint.stepText);
     const audioBody = blueprint.audioStepText;
-    const simplified = simplifyText(blueprint.stepText);
-    const expanded = expandText(blueprint.stepText, concept);
+    const simplified = removeVisualFiller(simplifyText(visualBody));
+    const expanded = removeVisualFiller(expandText(visualBody, concept));
     const audioSimplified = simplifyText(audioBody);
     const audioExpanded = expandText(audioBody, concept);
     const scopedConcept = {
         ...concept,
-        concept_text: blueprint.stepText,
+        concept_text: visualBody,
         tts_text: blueprint.audioStepText,
     };
     const actionSteps = buildActionSteps(scopedConcept);
