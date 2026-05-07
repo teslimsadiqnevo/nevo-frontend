@@ -9,6 +9,7 @@ type LessonMicroQuizScreenProps = {
     lessonId: string;
     data: LessonPlayerData;
     index: number;
+    returnStageKey?: string;
 };
 
 function OptionStateRow({
@@ -58,7 +59,7 @@ function OptionStateRow({
     );
 }
 
-export function LessonMicroQuizScreen({ lessonId, data, index }: LessonMicroQuizScreenProps) {
+export function LessonMicroQuizScreen({ lessonId, data, index, returnStageKey }: LessonMicroQuizScreenProps) {
     const router = useRouter();
     const safeIndex = Math.max(0, Math.min(index, data.microQuiz.length - 1));
     const question: LessonMicroQuizQuestion = data.microQuiz[safeIndex];
@@ -97,12 +98,17 @@ export function LessonMicroQuizScreen({ lessonId, data, index }: LessonMicroQuiz
     };
 
     const continueFlow = () => {
-        if (safeIndex < data.microQuiz.length - 1) {
-            router.push(`/lesson/${lessonId}/micro-quiz?index=${safeIndex + 1}`);
+        if (returnStageKey && data.stageOrder.includes(returnStageKey)) {
+            router.push(`/lesson/${lessonId}/${returnStageKey}`);
             return;
         }
 
-        router.push(`/lesson/${lessonId}/complete`);
+        if (question.continueToStageKey) {
+            router.push(`/lesson/${lessonId}/${question.continueToStageKey}`);
+            return;
+        }
+
+        router.push(`/lesson/${lessonId}/assessment`);
     };
 
     const activePrompt = activePromptIndex !== null ? question.feedbackPrompts[activePromptIndex] : null;

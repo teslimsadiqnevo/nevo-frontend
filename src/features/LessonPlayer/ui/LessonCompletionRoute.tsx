@@ -6,7 +6,6 @@ import { useLessonPlayer } from '../api/useLessonPlayer';
 import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import { LessonCompletionScreen } from './LessonCompletionScreen';
 import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
-import { STAGE_ORDER } from '../api/types';
 
 type LessonCompletionRouteProps = {
     lessonId: string;
@@ -65,7 +64,7 @@ export function LessonCompletionRoute({ lessonId, showNextLesson }: LessonComple
         );
 
         syncLessonCompletion(progressIdCandidates, {
-            blocks_completed: STAGE_ORDER.length,
+            blocks_completed: Math.max(1, data.stageOrder.length),
             time_spent_seconds: 1,
             is_completed: true,
         })

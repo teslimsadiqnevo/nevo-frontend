@@ -10,18 +10,57 @@ type LessonPlayerHookState = {
     error: string | null;
 };
 
+const lessonPlayerCache = new Map<string, LessonPlayerData>();
+const lessonPlayerInflight = new Map<string, Promise<LessonPlayerData>>();
+
+function readCachedLessonPlayer(lessonId: string) {
+    return lessonPlayerCache.get(lessonId) ?? null;
+}
+
+async function loadLessonPlayer(lessonId: string) {
+    const cached = lessonPlayerCache.get(lessonId);
+    if (cached) {
+        return cached;
+    }
+
+    const inflight = lessonPlayerInflight.get(lessonId);
+    if (inflight) {
+        return inflight;
+    }
+
+    const request = getLessonPlayer(lessonId)
+        .then((data) => {
+            lessonPlayerCache.set(lessonId, data);
+            lessonPlayerInflight.delete(lessonId);
+            return data;
+        })
+        .catch((error) => {
+            lessonPlayerInflight.delete(lessonId);
+            throw error;
+        });
+
+    lessonPlayerInflight.set(lessonId, request);
+    return request;
+}
+
 export function useLessonPlayer(lessonId: string): LessonPlayerHookState {
     const [state, setState] = useState<LessonPlayerHookState>({
-        data: null,
-        loading: true,
+        data: readCachedLessonPlayer(lessonId),
+        loading: !readCachedLessonPlayer(lessonId),
         error: null,
     });
 
     useEffect(() => {
         let cancelled = false;
-        setState({ data: null, loading: true, error: null });
+        const cached = readCachedLessonPlayer(lessonId);
 
-        getLessonPlayer(lessonId)
+        setState({
+            data: cached,
+            loading: !cached,
+            error: null,
+        });
+
+        loadLessonPlayer(lessonId)
             .then((data) => {
                 if (cancelled) return;
                 setState({ data, loading: false, error: null });
@@ -29,7 +68,7 @@ export function useLessonPlayer(lessonId: string): LessonPlayerHookState {
             .catch((err) => {
                 if (cancelled) return;
                 setState({
-                    data: null,
+                    data: readCachedLessonPlayer(lessonId),
                     loading: false,
                     error: err instanceof Error ? err.message : 'Failed to load lesson',
                 });

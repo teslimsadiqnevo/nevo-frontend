@@ -1,5 +1,4 @@
-import { notFound } from 'next/navigation';
-import { LessonBreakRoute, STAGE_ORDER, type StageKey } from '@/features/LessonPlayer';
+import { LessonBreakRoute, type StageKey } from '@/features/LessonPlayer';
 import type { LessonBreakVariant } from '@/features/LessonPlayer/api/types';
 
 type PageProps = {
@@ -11,11 +10,7 @@ export default async function LessonBreakPage({ params, searchParams }: PageProp
     const { id } = await params;
     const resolvedSearchParams = await searchParams;
     const variant = resolvedSearchParams.variant === 'long' ? 'long' : 'quick';
-    const returnStage = (resolvedSearchParams.returnStage ?? 'notice') as StageKey;
-
-    if (!STAGE_ORDER.includes(returnStage)) {
-        notFound();
-    }
+    const returnStage = (resolvedSearchParams.returnStage ?? 'step-2') as StageKey;
 
     return <LessonBreakRoute lessonId={id} variant={variant as LessonBreakVariant} returnStage={returnStage} />;
 }

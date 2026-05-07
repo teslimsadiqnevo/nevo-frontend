@@ -1,12 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { StageShell } from '../StageShell';
-import type { LessonPaceDensity, Stage, StageKey, ToolbarState } from '../../api/types';
+import type { LessonPaceDensity, Stage, StagePhaseKey, ToolbarState } from '../../api/types';
 
-const RELATE_CHIPS = ['Coffee', 'Sink drain', 'Roundabout'];
-
-const STAGE_VISUAL_INTENT: Record<StageKey, string> = {
+const STAGE_VISUAL_INTENT: Record<StagePhaseKey, string> = {
     observe: 'Find an image showing the main object or concept clearly.',
     notice: 'Find an image showing an important detail, part, pattern, or mechanism.',
     relate: 'Find an image showing a familiar real-world connection or analogy.',
@@ -42,7 +40,7 @@ export function VisualMode({
     paceDensity,
 }: VisualModeProps) {
     const content = stage.modes.visual;
-    const stageKey: StageKey = stage.key;
+    const stageKey: StagePhaseKey = stage.phase;
     const label =
         toolbarState === 'simplified'
             ? stage.labelSimplified || stage.label
@@ -57,15 +55,10 @@ export function VisualMode({
               : content.body;
 
     const isCalmDensity = paceDensity === 'calm';
-    const fallbackPoints = body
-        .split(/(?<=[.!?])\s+/)
-        .map((sentence) => sentence.trim())
-        .filter(Boolean)
-        .slice(0, 3);
     const visualContext = [
-        stage.key,
+        stage.phase,
         stage.label,
-        STAGE_VISUAL_INTENT[stage.key],
+        STAGE_VISUAL_INTENT[stage.phase],
         stage.modes.reading.keyTerm,
         content.body,
     ].filter(Boolean).join(' ');
@@ -97,7 +90,7 @@ export function VisualMode({
         }
 
         const contextQuery = new URLSearchParams({
-            visual_stage: stage.key,
+            visual_stage: stage.phase,
             visual_context: visualContext.slice(0, 850),
         }).toString();
 
@@ -181,20 +174,12 @@ export function VisualMode({
         content.imageAltText,
         content.imageFetchStatus,
         content.imageUrl,
-        stage.key,
+        stage.phase,
         visualContext,
         visualScopeKey,
     ]);
 
     const hasResolvedImage = Boolean(resolvedImageState.imageUrl);
-    const loaderSteps = useMemo(
-        () => [
-            'Reading this concept',
-            'Finding a relevant lesson image',
-            'Fitting the image for this screen',
-        ],
-        [],
-    );
 
     return (
         <StageShell
@@ -230,72 +215,16 @@ export function VisualMode({
                             alt={resolvedImageState.imageAltText || `Visual explanation for ${stage.label}`}
                             className="absolute inset-0 h-full w-full object-cover object-center"
                         />
-                    ) : resolvedImageState.fetchStatus === 'pending' ? (
-                        <div className="absolute inset-0 flex flex-col justify-between p-6">
-                            <div className="flex items-center justify-between">
-                                <span className="rounded-full bg-white/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-indigo">
-                                    Visual loading
-                                </span>
-                                <span className="rounded-full bg-[#3B3F6E] px-3 py-1 text-[11px] font-semibold text-parchment">
-                                    {stage.modes.reading.keyTerm}
-                                </span>
-                            </div>
-
-                            <div className="mx-auto flex w-full max-w-[460px] flex-col gap-3">
-                                {loaderSteps.map((step, index) => (
-                                    <div
-                                        key={`${step}:${index}`}
-                                        className="overflow-hidden rounded-2xl border border-white/70 bg-white/75 px-4 py-3 shadow-[0_12px_24px_rgba(59,63,110,0.08)]"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-indigo" />
-                                            <span className="text-[13px] font-medium leading-5 text-graphite">
-                                                {step}
-                                            </span>
-                                        </div>
-                                        <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-[#E6DDCE]">
-                                            <div
-                                                className="h-full rounded-full bg-indigo/80"
-                                                style={{ width: `${45 + index * 18}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="flex justify-end">
-                                <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-[12px] text-indigo/80">
-                                    Nevo is fetching a relevant lesson image
-                                </div>
-                            </div>
-                        </div>
                     ) : (
-                        <div className="absolute inset-0 flex flex-col justify-between p-6">
-                            <div className="flex items-center justify-between">
-                                <span className="rounded-full bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-indigo">
-                                    Visual focus
-                                </span>
-                                <span className="rounded-full bg-[#3B3F6E] px-3 py-1 text-[11px] font-semibold text-parchment">
-                                    {stage.modes.reading.keyTerm}
-                                </span>
-                            </div>
-
-                            <div className="mx-auto flex w-full max-w-[420px] flex-col gap-3">
-                                {fallbackPoints.map((point, index) => (
-                                    <div
-                                        key={`${point}:${index}`}
-                                        className="rounded-2xl bg-white/70 px-4 py-3 text-[13px] leading-5 text-graphite shadow-[0_12px_24px_rgba(59,63,110,0.08)]"
-                                    >
-                                        {point}
+                        <div className="absolute inset-0 p-6">
+                            <div className="h-full w-full animate-pulse rounded-xl bg-white/55">
+                                <div className="flex h-full flex-col gap-4 p-5">
+                                    <div className="h-6 w-24 rounded-full bg-white/80" />
+                                    <div className="flex-1 rounded-2xl bg-white/70" />
+                                    <div className="flex gap-3">
+                                        <div className="h-3 flex-1 rounded-full bg-white/80" />
+                                        <div className="h-3 w-1/3 rounded-full bg-white/80" />
                                     </div>
-                                ))}
-                            </div>
-
-                            <div className="flex justify-end">
-                                <div className="rounded-2xl border border-white/70 bg-white/70 px-4 py-2 text-[12px] text-indigo/80">
-                                    {resolvedImageState.fetchStatus === 'failed'
-                                        ? 'Showing a visual fallback while the image is unavailable'
-                                        : 'Picture-led explanation for this concept'}
                                 </div>
                             </div>
                         </div>
@@ -325,21 +254,6 @@ export function VisualMode({
                                 </div>
                                 <div className="w-0.5 h-12 bg-indigo" />
                             </div>
-                        </div>
-                    ) : null}
-
-                    {stageKey === 'relate' ? (
-                        <div className="absolute bottom-0 left-0 right-0 flex flex-wrap items-center justify-center gap-3 px-4 pb-6">
-                            {RELATE_CHIPS.map((chip) => (
-                                <div
-                                    key={chip}
-                                    className="flex items-center px-6 h-[46px] rounded-xl bg-parchment border border-[rgba(59,63,110,0.1)]"
-                                >
-                                    <span className="text-[14px] font-medium leading-5 text-indigo">
-                                        {chip}
-                                    </span>
-                                </div>
-                            ))}
                         </div>
                     ) : null}
                 </div>

@@ -296,21 +296,36 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
     const learningMode = useRegistrationStore((state) => state.learningMode);
     const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
     const [view, setView] = useState<AssessmentView>('question');
+    const [questionIndex, setQuestionIndex] = useState(0);
 
     const activeMode: LearningMode = isAutoAdapt ? data.recommendedMode : learningMode;
     const variant = getAssessmentVariant(age, activeMode);
-    const question: LessonAssessmentQuestion = data.assessment.questionByVariant[variant];
-    const prompt = data.assessment.promptByVariant[variant];
-    const helperLabel = question.helperLabel ?? data.assessment.helperLabelByVariant?.[variant];
+    const questions = data.assessment.questionsByVariant[variant];
+    const question: LessonAssessmentQuestion = questions[Math.max(0, Math.min(questionIndex, questions.length - 1))];
+    const prompt = question.prompt;
+    const helperLabel = question.helperLabel;
     const selectedOption = useMemo(
         () => question.options.find((option) => option.id === selectedOptionId) ?? null,
-        [question.options, selectedOptionId]
+        [question, selectedOptionId]
     );
     const correctOption = useMemo(
         () => question.options.find((option) => option.id === question.correctOptionId) ?? null,
-        [question.options, question.correctOptionId]
+        [question]
     );
     const feedback = data.assessment.feedback;
+    const canAdvanceToNextQuestion = questionIndex < questions.length - 1;
+    const progressPercent = ((question.questionNumber - 1) / Math.max(1, question.totalQuestions)) * 100 + 20;
+
+    const advanceAfterFeedback = () => {
+        if (canAdvanceToNextQuestion) {
+            setQuestionIndex((current) => current + 1);
+            setSelectedOptionId(null);
+            setView('question');
+            return;
+        }
+
+        router.push(`/lesson/${lessonId}/complete`);
+    };
 
     const submitAnswer = () => {
         if (!selectedOptionId) return;
@@ -322,7 +337,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
             <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
                 <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-[#F0FAF0] shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-[#F0FAF0]">
-                        <div className="h-full rounded-full bg-indigo" style={{ width: '65%' }} />
+                        <div className="h-full rounded-full bg-indigo" style={{ width: `${Math.min(100, progressPercent + 20)}%` }} />
                     </div>
                     <div className="px-4 pt-4 sm:px-8 sm:pt-6 lg:px-12">
                         <AssessmentBackButton onClick={() => router.back()} />
@@ -337,14 +352,14 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
                             {feedback.correct.heading}
                         </h1>
                         <p className="mt-4 max-w-[640px] text-center text-[15px] leading-6 text-graphite/70">
-                            {feedback.correct.description}
+                            {question.explanation || feedback.correct.description}
                         </p>
                         <button
                             type="button"
-                            onClick={() => router.push(`/lesson/${lessonId}/complete`)}
+                            onClick={advanceAfterFeedback}
                             className="mt-8 flex h-[52px] w-full max-w-[240px] items-center justify-center rounded-xl border-none bg-indigo text-[15px] font-semibold text-parchment cursor-pointer"
                         >
-                            {feedback.correct.ctaLabel}
+                            {canAdvanceToNextQuestion ? 'Next question' : feedback.correct.ctaLabel}
                         </button>
                         <span className="mt-auto pb-8 text-[12px] leading-4 text-lavender/60">
                             {feedback.correct.footerLabel}
@@ -360,7 +375,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
             <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
                 <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-parchment">
-                        <div className="h-full rounded-full bg-indigo" style={{ width: '42%' }} />
+                        <div className="h-full rounded-full bg-indigo" style={{ width: `${Math.min(100, progressPercent)}%` }} />
                     </div>
                     <div className="px-4 pt-4 sm:px-8 sm:pt-6 lg:px-12">
                         <AssessmentBackButton onClick={() => router.back()} />
@@ -412,7 +427,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
             <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
                 <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-parchment">
-                        <div className="h-full rounded-full bg-indigo" style={{ width: '58%' }} />
+                        <div className="h-full rounded-full bg-indigo" style={{ width: `${Math.min(100, progressPercent + 10)}%` }} />
                     </div>
                     <div className="px-4 pt-4 sm:px-8 sm:pt-6 lg:px-12">
                         <AssessmentBackButton onClick={() => router.back()} />
@@ -443,15 +458,15 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
                         </div>
 
                         <p className="mt-4 max-w-[640px] text-center text-[15px] leading-6 text-graphite/70">
-                            {feedback.correction.description || question.explanation}
+                            {question.explanation || feedback.correction.description}
                         </p>
 
                         <button
                             type="button"
-                            onClick={() => router.push(`/lesson/${lessonId}/complete`)}
+                            onClick={advanceAfterFeedback}
                             className="mt-8 flex h-[52px] w-full max-w-[240px] items-center justify-center rounded-xl border-none bg-indigo text-[15px] font-semibold text-parchment cursor-pointer"
                         >
-                            {feedback.correction.ctaLabel}
+                            {canAdvanceToNextQuestion ? 'Next question' : feedback.correction.ctaLabel}
                         </button>
                     </div>
                 </div>
@@ -462,6 +477,14 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
     return (
         <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
             <div className="flex min-h-screen w-full max-w-[1024px] flex-col items-center bg-parchment px-4 pb-16 pt-10 shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px] sm:px-8 sm:pb-24 sm:pt-12 lg:px-12 lg:pb-[331px]">
+                <div className="mb-4 flex flex-col items-center">
+                    <span className="text-[12px] font-medium leading-4 text-indigo/60">
+                        {question.moduleNumber ? `Module ${question.moduleNumber}` : 'Final assessment'}
+                    </span>
+                    <span className="mt-1 text-[12px] leading-4 text-indigo/40">
+                        Question {question.questionNumber} of {question.totalQuestions}
+                    </span>
+                </div>
                 <AssessmentQuestionView
                     variant={variant}
                     question={question}

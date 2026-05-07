@@ -1,8 +1,9 @@
 import type { LearningMode } from '@/shared/store/useRegistrationStore';
 
-export type StageKey = 'observe' | 'notice' | 'relate' | 'predict' | 'confirm';
+export type StagePhaseKey = 'observe' | 'notice' | 'relate' | 'predict' | 'confirm';
+export type StageKey = string;
 
-export const STAGE_ORDER: StageKey[] = ['observe', 'notice', 'relate', 'predict', 'confirm'];
+export const STAGE_ORDER: StagePhaseKey[] = ['observe', 'notice', 'relate', 'predict', 'confirm'];
 
 export type DisplayState = 'original' | 'simplified' | 'expanded';
 export type ToolbarState = DisplayState | 'slower';
@@ -198,6 +199,10 @@ export type LessonAssessmentOption = {
 };
 
 export type LessonAssessmentQuestion = {
+    id: string;
+    moduleNumber?: number;
+    questionNumber: number;
+    totalQuestions: number;
     prompt: string;
     helperLabel?: string;
     options: LessonAssessmentOption[];
@@ -206,9 +211,7 @@ export type LessonAssessmentQuestion = {
 };
 
 export type LessonAssessmentData = {
-    promptByVariant: Record<LessonAssessmentVariant, string>;
-    helperLabelByVariant?: Partial<Record<LessonAssessmentVariant, string>>;
-    questionByVariant: Record<LessonAssessmentVariant, LessonAssessmentQuestion>;
+    questionsByVariant: Record<LessonAssessmentVariant, LessonAssessmentQuestion[]>;
     submitLabel: string;
     helperText: string;
     feedback: LessonAssessmentFeedbackData;
@@ -220,6 +223,7 @@ export type LessonMicroQuizOption = {
 };
 
 export type LessonMicroQuizQuestion = {
+    moduleNumber: number;
     prompt: string;
     progressLabel: string;
     progressPercent: number;
@@ -228,11 +232,19 @@ export type LessonMicroQuizQuestion = {
     explanation: string;
     continueLabel: string;
     retryLabel: string;
+    continueToStageKey?: StageKey;
+    isFinalCheckpoint?: boolean;
     feedbackPrompts: LessonMicroQuizPromptOverlayData[];
 };
 
 export type Stage = {
     key: StageKey;
+    phase: StagePhaseKey;
+    moduleNumber: number;
+    moduleStepNumber: number;
+    totalModuleSteps: number;
+    overallStepNumber: number;
+    totalOverallSteps: number;
     pillText: string;
     label: string;
     labelSimplified?: string;
@@ -257,5 +269,6 @@ export type LessonPlayerData = {
     completion: LessonCompletionData;
     assessment: LessonAssessmentData;
     microQuiz: LessonMicroQuizQuestion[];
+    stageOrder: StageKey[];
     stages: Stage[];
 };

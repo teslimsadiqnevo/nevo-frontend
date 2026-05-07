@@ -34,7 +34,6 @@ import {
   type OfflineLessonPackage,
 } from "../lib/offlineLessons";
 import dynamic from "next/dynamic";
-import { STAGE_ORDER } from "@/features/LessonPlayer";
 
 const StudentProgressPanel = dynamic(
   () =>
@@ -242,12 +241,7 @@ function getLessonResumePath(lesson: Lesson) {
   if (lesson.status !== "in_progress") return lessonPath;
 
   const progress = normalizeProgress(lesson);
-  const stageIndex = Math.max(
-    0,
-    Math.min(STAGE_ORDER.length - 1, progress.currentStep - 1),
-  );
-
-  return `${lessonPath}/${STAGE_ORDER[stageIndex]}`;
+  return `${lessonPath}/step-${Math.max(1, progress.currentStep)}`;
 }
 
 function getLessonPickupLabel(

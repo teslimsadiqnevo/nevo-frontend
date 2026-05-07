@@ -13,6 +13,7 @@ import {
     type LessonReflectionData,
     type Stage,
     type StageKey,
+    type StagePhaseKey,
 } from './types';
 
 type BackendConceptStep = {
@@ -62,7 +63,7 @@ type OfflineLessonPayload = {
 };
 
 const STAGE_LABELS: Record<
-    StageKey,
+    StagePhaseKey,
     { pill: string; label: string; simple: string; expanded: string }
 > = {
     observe: {
@@ -95,6 +96,23 @@ const STAGE_LABELS: Record<
         simple: 'CONFIRM - KEY IDEA',
         expanded: 'CONFIRM - CHECK YOUR UNDERSTANDING',
     },
+};
+
+type StageBlueprint = {
+    key: StageKey;
+    phase: StagePhaseKey;
+    concept: BackendConcept;
+    stepText: string;
+    moduleNumber: number;
+    moduleStepNumber: number;
+    totalModuleSteps: number;
+    overallStepNumber: number;
+    totalOverallSteps: number;
+};
+
+type ModuleBlueprint = {
+    moduleNumber: number;
+    stages: StageBlueprint[];
 };
 
 function normalizeLearningMode(mode?: string | null): LearningMode {
@@ -162,6 +180,66 @@ function toPlainPhrase(text: string) {
         .replace(/[.!?]+$/, '');
 }
 
+function getWordCount(text: string) {
+    return text
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean).length;
+}
+
+function splitLongSentence(sentence: string) {
+    const clauses = sentence
+        .split(/(?<=[,;:])\s+/)
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+    if (clauses.length <= 1) {
+        return [sentence.trim()];
+    }
+
+    return clauses;
+}
+
+function createStepChunksFromText(text: string, targetWordCount: number) {
+    const normalizedTarget = Math.max(18, targetWordCount);
+    const sourceSentences = splitIntoSentences(text)
+        .flatMap((sentence) => {
+            if (getWordCount(sentence) > normalizedTarget * 1.6) {
+                return splitLongSentence(sentence);
+            }
+            return [sentence];
+        })
+        .filter(Boolean);
+
+    if (sourceSentences.length === 0) {
+        return [text];
+    }
+
+    const chunks: string[] = [];
+    let currentChunk: string[] = [];
+    let currentCount = 0;
+
+    sourceSentences.forEach((sentence) => {
+        const sentenceCount = getWordCount(sentence);
+
+        if (currentChunk.length > 0 && currentCount + sentenceCount > normalizedTarget) {
+            chunks.push(currentChunk.join(' ').trim());
+            currentChunk = [sentence];
+            currentCount = sentenceCount;
+            return;
+        }
+
+        currentChunk.push(sentence);
+        currentCount += sentenceCount;
+    });
+
+    if (currentChunk.length > 0) {
+        chunks.push(currentChunk.join(' ').trim());
+    }
+
+    return chunks.filter(Boolean);
+}
+
 function expandText(text: string, concept: BackendConcept) {
     const sentences = splitIntoSentences(text);
     const firstSentence = sentences[0] || text;
@@ -213,6 +291,37 @@ function simplifyActionSteps(steps: Array<{ text: string; state: 'unread' | 'act
     }));
 }
 
+function chunkArray<T>(items: T[], size: number) {
+    const chunks: T[][] = [];
+    for (let index = 0; index < items.length; index += size) {
+        chunks.push(items.slice(index, index + size));
+    }
+    return chunks;
+}
+
+function buildConceptStepTexts(concept: BackendConcept) {
+    const sourceSteps =
+        Array.isArray(concept.steps) && concept.steps.length > 0
+            ? concept.steps
+                  .map((step, index) => step.text?.trim() || step.step_text?.trim() || `Step ${index + 1}`)
+                  .filter(Boolean)
+            : [];
+
+    if (sourceSteps.length > 0) {
+        return sourceSteps;
+    }
+
+    if (!concept.concept_text.trim()) {
+        return [concept.concept_text];
+    }
+
+    const estimatedSeconds = Math.max(20, Number(concept.estimated_read_time_seconds || 20));
+    const targetWordCount =
+        estimatedSeconds >= 120 ? 44 : estimatedSeconds >= 60 ? 34 : 26;
+    const chunks = createStepChunksFromText(concept.concept_text, targetWordCount);
+    return chunks.length > 0 ? chunks : [concept.concept_text];
+}
+
 function buildActionSteps(concept: BackendConcept) {
     const sourceSteps =
         Array.isArray(concept.steps) && concept.steps.length > 0
@@ -257,18 +366,30 @@ function resolveCorrectOptionId(concept: BackendConcept) {
     return directIndex >= 0 ? `option-${directIndex}` : 'option-0';
 }
 
-function buildStage(stageKey: StageKey, concept: BackendConcept): Stage {
-    const labels = STAGE_LABELS[stageKey];
-    const visualBody = concept.concept_text;
-    const audioBody = concept.tts_text || concept.concept_text;
-    const simplified = simplifyText(concept.concept_text);
-    const expanded = expandText(concept.concept_text, concept);
-    const actionSteps = buildActionSteps(concept);
+function buildStage(blueprint: StageBlueprint): Stage {
+    const { phase, concept } = blueprint;
+    const labels = STAGE_LABELS[phase];
+    const visualBody = blueprint.stepText;
+    const audioBody = blueprint.stepText;
+    const simplified = simplifyText(blueprint.stepText);
+    const expanded = expandText(blueprint.stepText, concept);
+    const scopedConcept = {
+        ...concept,
+        concept_text: blueprint.stepText,
+        tts_text: blueprint.stepText,
+    };
+    const actionSteps = buildActionSteps(scopedConcept);
 
     return {
-        key: stageKey,
-        pillText: labels.pill,
-        label: labels.label,
+        key: blueprint.key,
+        phase,
+        moduleNumber: blueprint.moduleNumber,
+        moduleStepNumber: blueprint.moduleStepNumber,
+        totalModuleSteps: blueprint.totalModuleSteps,
+        overallStepNumber: blueprint.overallStepNumber,
+        totalOverallSteps: blueprint.totalOverallSteps,
+        pillText: `Module ${blueprint.moduleNumber}`,
+        label: `${labels.label} - STEP ${blueprint.overallStepNumber}`,
         labelSimplified: labels.simple,
         labelExpanded: labels.expanded,
         modes: {
@@ -302,15 +423,80 @@ function buildStage(stageKey: StageKey, concept: BackendConcept): Stage {
             reading: {
                 keyTermLabel: labels.label,
                 keyTerm: concept.key_term || 'Key idea',
-                definition: concept.concept_text,
+                definition: blueprint.stepText,
                 definitionSimplified: simplified,
                 definitionExpanded: expanded,
                 formula: concept.contains_formal_representation ? concept.formal_representation || undefined : undefined,
                 formulaExpanded: concept.contains_formal_representation ? concept.formal_representation || undefined : undefined,
             },
         },
-        slowerSteps: buildSlowerSteps(concept),
+        slowerSteps: buildSlowerSteps(scopedConcept),
     };
+}
+
+function buildStageBlueprints(concepts: BackendConcept[]) {
+    const stepEntries = concepts.flatMap((concept) =>
+        buildConceptStepTexts(concept).map((stepText) => ({
+            concept,
+            stepText,
+        })),
+    );
+
+    const totalOverallSteps = Math.max(1, stepEntries.length);
+    const moduleChunks = chunkArray(stepEntries, 4);
+
+    return moduleChunks.flatMap((moduleEntries, moduleIndex) =>
+        moduleEntries.map((entry, entryIndex) => {
+            const overallStepNumber = moduleIndex * 4 + entryIndex + 1;
+            return {
+                key: `step-${overallStepNumber}`,
+                phase: STAGE_ORDER[(overallStepNumber - 1) % STAGE_ORDER.length],
+                concept: entry.concept,
+                stepText: entry.stepText,
+                moduleNumber: moduleIndex + 1,
+                moduleStepNumber: entryIndex + 1,
+                totalModuleSteps: moduleEntries.length,
+                overallStepNumber,
+                totalOverallSteps,
+            } satisfies StageBlueprint;
+        }),
+    );
+}
+
+function buildModules(stageBlueprints: StageBlueprint[]) {
+    return chunkArray(stageBlueprints, 4).map((stages, index) => ({
+        moduleNumber: index + 1,
+        stages,
+    })) as ModuleBlueprint[];
+}
+
+function getModuleAnchorConcept(module: ModuleBlueprint) {
+    return module.stages[module.stages.length - 1]?.concept ?? module.stages[0]?.concept;
+}
+
+function summarizeModule(module: ModuleBlueprint) {
+    const moduleTexts = module.stages.map((stage) => stage.stepText).filter(Boolean);
+    const summarySource = moduleTexts.slice(0, 2).join(' ');
+    return simplifyText(summarySource) || summarySource;
+}
+
+function getAssessmentIcon(index: number) {
+    const icons = ['sun', 'leaf', 'water', 'drop', 'speaker', 'seedling'] as const;
+    return icons[index % icons.length];
+}
+
+function buildCheckpointPrompt(module: ModuleBlueprint, concept: BackendConcept, isFinalCheckpoint: boolean) {
+    const topic = concept.key_term || 'this idea';
+    const sourcePrompt = concept.checkpoint_question.trim();
+    const normalizedPrompt = sourcePrompt
+        ? sourcePrompt.replace(/^[a-z]/, (char) => char.toLowerCase())
+        : `which answer best matches what you have learned about ${topic}?`;
+
+    if (isFinalCheckpoint) {
+        return `Final quick check for Module ${module.moduleNumber}: based on what you have learned so far about ${topic}, ${normalizedPrompt}`;
+    }
+
+    return `Quick check for Module ${module.moduleNumber}: based on what you have covered so far about ${topic}, ${normalizedPrompt}`;
 }
 
 function buildReflection(title: string): LessonReflectionData {
@@ -353,110 +539,133 @@ function buildReorientation(mode: LearningMode): LessonReorientationData {
     };
 }
 
-function buildAssessment(firstConcept: BackendConcept): LessonAssessmentData {
-    const correctOptionId = resolveCorrectOptionId(firstConcept);
-    const optionLabels = firstConcept.checkpoint_options.length
-        ? firstConcept.checkpoint_options
-        : ['Option A', 'Option B'];
+function buildAssessment(modules: ModuleBlueprint[]): LessonAssessmentData {
+    const totalQuestions = Math.max(1, modules.length);
 
-    const question = {
-        prompt: firstConcept.checkpoint_question,
-        helperLabel: firstConcept.checkpoint_tts_text ? 'Tap to replay' : undefined,
-        options: optionLabels.map((option, index) => ({
-            id: `option-${index}`,
-            label: option,
-            icon: 'speaker' as const,
-        })),
-        correctOptionId,
-        explanation: firstConcept.concept_text,
-    };
+    const buildQuestionSet = (variant: 'standard' | 'kids') =>
+        modules.map((module, index) => {
+            const anchorConcept = getModuleAnchorConcept(module);
+            const moduleSummary = summarizeModule(module);
+            const optionLabels = anchorConcept?.checkpoint_options?.length
+                ? anchorConcept.checkpoint_options
+                : ['This matches the module idea', 'This does not match the module idea'];
+
+            const prompt =
+                variant === 'kids'
+                    ? `Module ${module.moduleNumber} check: which answer best matches what you just learned?`
+                    : `For Module ${module.moduleNumber}, which answer best matches the main idea you just studied?`;
+
+            return {
+                id: `module-assessment-${module.moduleNumber}`,
+                moduleNumber: module.moduleNumber,
+                questionNumber: index + 1,
+                totalQuestions,
+                prompt,
+                helperLabel: anchorConcept?.checkpoint_tts_text ? 'Tap to replay' : undefined,
+                options: optionLabels.map((option, optionIndex) => ({
+                    id: `option-${optionIndex}`,
+                    label: option,
+                    icon: getAssessmentIcon(optionIndex),
+                })),
+                correctOptionId: resolveCorrectOptionId(anchorConcept),
+                explanation: moduleSummary || anchorConcept?.concept_text || '',
+            };
+        });
+
+    const standardQuestions = buildQuestionSet('standard');
+    const kidsQuestions = buildQuestionSet('kids');
 
     return {
-        promptByVariant: {
-            visual: firstConcept.checkpoint_question,
-            audio: firstConcept.checkpoint_question,
-            action: firstConcept.checkpoint_question,
-            reading: firstConcept.checkpoint_question,
-            kids: firstConcept.checkpoint_question,
-        },
-        helperLabelByVariant: firstConcept.checkpoint_tts_text
-            ? {
-                audio: 'Tap to replay',
-                kids: 'Listen',
-            }
-            : undefined,
-        questionByVariant: {
-            visual: question,
-            audio: question,
-            action: question,
-            reading: question,
-            kids: question,
+        questionsByVariant: {
+            visual: standardQuestions,
+            audio: standardQuestions,
+            action: standardQuestions,
+            reading: standardQuestions,
+            kids: kidsQuestions,
         },
         submitLabel: 'Check answer',
         helperText: 'Choose one answer to continue.',
         feedback: {
             correct: {
                 heading: 'You got it.',
-                description: firstConcept.concept_text,
+                description: 'Nice work. You understood this module well enough to move on.',
                 ctaLabel: 'Continue',
-                footerLabel: 'Understood clearly',
+                footerLabel: 'You are building understanding step by step.',
             },
             incorrect: {
                 heading: "Let's look at it another way.",
-                description: simplifyText(firstConcept.concept_text) || firstConcept.concept_text,
+                description: 'Take another look at the key idea from this module before you answer again.',
                 primaryCtaLabel: 'Try again',
-                secondaryCtaLabel: 'Move on',
-                footerLabel: 'You can revisit this concept later.',
+                secondaryCtaLabel: 'Show correction',
+                footerLabel: 'This check is here to help you learn, not just test you.',
             },
             correction: {
                 userAnswerLabel: 'Your answer',
                 answerLabel: 'Correct answer',
-                description: firstConcept.concept_text,
+                description: 'Here is the clearest explanation of what this module was teaching.',
                 ctaLabel: 'Continue',
             },
         },
     };
 }
 
-function buildMicroQuiz(concepts: BackendConcept[]): LessonMicroQuizQuestion[] {
-    const sourceConcepts = concepts.slice(0, 3);
-    return sourceConcepts.map((concept, index) => ({
-        prompt: concept.checkpoint_question,
-        progressLabel: `Question ${index + 1} of ${sourceConcepts.length}`,
-        progressPercent: ((index + 1) / sourceConcepts.length) * 100,
-        options: concept.checkpoint_options.map((option, optionIndex) => ({
-            id: `option-${optionIndex}`,
-            label: option,
-        })),
-        correctOptionId: resolveCorrectOptionId(concept),
-        explanation: concept.concept_text,
-        continueLabel: index < sourceConcepts.length - 1 ? 'Next question' : 'Finish quiz',
-        retryLabel: 'Try again',
-        feedbackPrompts: [
-            {
-                heading: 'This part can be tricky.',
-                description: 'Want to try a different explanation?',
-                primaryCtaLabel: "Yes, let's go",
-                secondaryCtaLabel: "I'm fine, keep going",
-            },
-            {
-                heading: "You've revisited this concept a few times.",
-                description: 'A simpler explanation might help.',
-                primaryCtaLabel: 'Show me a simpler version',
-                secondaryCtaLabel: 'I understand, continue',
-            },
-            {
-                heading: "Here's a clue.",
-                description: '',
-                primaryCtaLabel: 'Got it',
-                secondaryCtaLabel: 'I need a different answer',
-                hintLabel: simplifyText(concept.concept_text) || concept.concept_text,
-            },
-        ],
-    }));
+function buildMicroQuiz(modules: ModuleBlueprint[], allStages: StageBlueprint[]): LessonMicroQuizQuestion[] {
+    return modules.map((module, index) => {
+        const checkpoint = module.stages[module.stages.length - 1];
+        const concept = checkpoint.concept;
+        const nextStage = allStages.find((stage) => stage.overallStepNumber === checkpoint.overallStepNumber + 1);
+        const continueToStageKey = nextStage?.key;
+        const isFinalCheckpoint = !continueToStageKey;
+        const moduleSummary = summarizeModule(module);
+
+        return {
+            moduleNumber: module.moduleNumber,
+            prompt: buildCheckpointPrompt(module, concept, isFinalCheckpoint),
+            progressLabel: isFinalCheckpoint
+                ? `Final quick check ${index + 1} of ${modules.length}`
+                : `Module ${module.moduleNumber} quick check`,
+            progressPercent: ((index + 1) / modules.length) * 100,
+            options: concept.checkpoint_options.map((option, optionIndex) => ({
+                id: `option-${optionIndex}`,
+                label: option,
+            })),
+            correctOptionId: resolveCorrectOptionId(concept),
+            explanation: moduleSummary || concept.concept_text,
+            continueLabel: continueToStageKey ? `Start module ${module.moduleNumber + 1}` : 'Go to final assessment',
+            retryLabel: 'Try again',
+            continueToStageKey,
+            isFinalCheckpoint,
+            feedbackPrompts: [
+                {
+                    heading: 'This part can be tricky.',
+                    description: 'Want to try a different explanation?',
+                    primaryCtaLabel: "Yes, let's go",
+                    secondaryCtaLabel: "I'm fine, keep going",
+                },
+                {
+                    heading: "You've revisited this concept a few times.",
+                    description: 'A simpler explanation might help.',
+                    primaryCtaLabel: 'Show me a simpler version',
+                    secondaryCtaLabel: 'I understand, continue',
+                },
+                {
+                    heading: "Here's a clue.",
+                    description: '',
+                    primaryCtaLabel: 'Got it',
+                    secondaryCtaLabel: 'I need a different answer',
+                    hintLabel: simplifyText(moduleSummary || concept.concept_text) || moduleSummary || concept.concept_text,
+                },
+            ],
+        };
+    });
 }
 
-function buildCompletion(payload: BackendLessonPayload, concepts: BackendConcept[], mode: LearningMode): LessonCompletionData {
+function buildCompletion(
+    payload: BackendLessonPayload,
+    concepts: BackendConcept[],
+    mode: LearningMode,
+    quickCheckCount: number,
+): LessonCompletionData {
     return {
         badgeLabel: payload.learning_mode_delivered || 'Adaptive lesson',
         heading: payload.lesson_title,
@@ -478,7 +687,7 @@ function buildCompletion(payload: BackendLessonPayload, concepts: BackendConcept
                 accent: 'indigo',
             },
             {
-                value: `${Math.min(3, concepts.length)} quiz checks`,
+                value: `${quickCheckCount} quick checks`,
                 label: 'Quick checks',
                 description: '',
             },
@@ -628,14 +837,10 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
             },
         ];
 
-    const stageConcepts = [...sourceConcepts];
-    while (stageConcepts.length < STAGE_ORDER.length) {
-        stageConcepts.push(stageConcepts[stageConcepts.length - 1]);
-    }
-
-    const stages = STAGE_ORDER.map((stageKey, index) =>
-        buildStage(stageKey, stageConcepts[index]),
-    );
+    const stageBlueprints = buildStageBlueprints(sourceConcepts);
+    const modules = buildModules(stageBlueprints);
+    const stages = stageBlueprints.map((blueprint) => buildStage(blueprint));
+    const stageOrder = stageBlueprints.map((blueprint) => blueprint.key);
 
     return {
         id: payload.adapted_lesson_id || payload.original_lesson_id,
@@ -661,7 +866,7 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
                     ) / 60,
                 ),
             )} minutes`,
-            conceptsLabel: `${sourceConcepts.length} concepts`,
+            conceptsLabel: `${modules.length} modules · ${stageBlueprints.length} learning steps`,
             modeLabel: `Best in ${recommendedMode}`,
             cards: {
                 visual: {
@@ -705,9 +910,10 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
                 secondaryCta: 'Take a quick break',
             },
         },
-        completion: buildCompletion(payload, sourceConcepts, recommendedMode),
-        assessment: buildAssessment(sourceConcepts[0]),
-        microQuiz: buildMicroQuiz(sourceConcepts),
+        completion: buildCompletion(payload, sourceConcepts, recommendedMode, modules.length),
+        assessment: buildAssessment(modules),
+        microQuiz: buildMicroQuiz(modules, stageBlueprints),
+        stageOrder,
         stages,
     };
 }

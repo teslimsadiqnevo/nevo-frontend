@@ -7,7 +7,7 @@ import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { updateLessonProgress } from '@/features/Dashboard/api/student';
 import { useLessonPlayer } from '../api/useLessonPlayer';
-import { STAGE_ORDER, type StageKey, type ToolbarState } from '../api/types';
+import type { StageKey, ToolbarState } from '../api/types';
 import { VisualMode } from './modes/VisualMode';
 import { AudioMode } from './modes/AudioMode';
 import { ActionMode } from './modes/ActionMode';
@@ -77,7 +77,8 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         scopeKey,
         state: 'original',
     });
-    const stageIndex = STAGE_ORDER.indexOf(stage);
+    const stageOrder = data?.stageOrder ?? [];
+    const stageIndex = stageOrder.indexOf(stage);
     const persistedLessonId = data?.originalLessonId || lessonId;
     const progressIdCandidates = getLessonProgressIdCandidates(
         lessonId,
@@ -130,21 +131,17 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     }
 
     const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
-    const progress = ((stageIndex + 1) / STAGE_ORDER.length) * 100;
+    const progress = ((stageIndex + 1) / Math.max(1, stageOrder.length)) * 100;
     const askContext = `You're on: ${data.title} · Section ${stageIndex + 1}`;
-    const nextStage = stageIndex < STAGE_ORDER.length - 1 ? data.stages[stageIndex + 1] : null;
-    const continueLabel = nextStage ? `Continue to ${nextStage.pillText}` : 'Take final check';
+    const nextStage = stageIndex < stageOrder.length - 1 ? data.stages[stageIndex + 1] : null;
+    const hasFinalCheckpoint = data.microQuiz.some((question) => question.isFinalCheckpoint);
+    const continueLabel = nextStage
+        ? `Continue to ${nextStage.pillText}`
+        : hasFinalCheckpoint
+          ? 'Take final quick check'
+          : 'Review complete';
     const toolbarState = toolbarSession.scopeKey === scopeKey ? toolbarSession.state : 'original';
-    const headerAction: ReactNode =
-        stageIndex < STAGE_ORDER.length - 1 ? (
-            <button
-                type="button"
-                onClick={() => router.push(`/lesson/${lessonId}/micro-quiz?index=${Math.min(stageIndex, 2)}`)}
-                className="px-3 py-[6px] rounded-[20px] bg-lavender-20 text-[12px] font-medium leading-4 text-indigo cursor-pointer border-none"
-            >
-                Quick check
-            </button>
-        ) : null;
+    const headerAction: ReactNode = null;
 
     const goToPrevStage = () => {
         if (stageIndex === 0) {
@@ -152,18 +149,34 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             return;
         }
 
-        const previousStage = STAGE_ORDER[stageIndex - 1];
+        const previousStage = stageOrder[stageIndex - 1];
         router.push(`/lesson/${lessonId}/${previousStage}`);
     };
 
     const goToNextStage = () => {
-        if (stageIndex < STAGE_ORDER.length - 1) {
-            const nextStageKey = STAGE_ORDER[stageIndex + 1];
-            router.push(`/lesson/${lessonId}/${nextStageKey}`);
+        if (stageIndex >= stageOrder.length - 1) {
+            const finalCheckpointIndex = data.microQuiz.findIndex((question) => question.isFinalCheckpoint);
+            if (finalCheckpointIndex >= 0) {
+                router.push(`/lesson/${lessonId}/micro-quiz?index=${finalCheckpointIndex}`);
+            }
             return;
         }
 
-        router.push(`/lesson/${lessonId}/assessment`);
+        const completedStepNumber = stageIndex + 1;
+        const nextStageKey = stageOrder[stageIndex + 1];
+        const checkpointIndex = data.microQuiz.findIndex(
+            (question) => question.continueToStageKey === nextStageKey,
+        );
+
+        if (completedStepNumber % 4 === 0 && checkpointIndex >= 0) {
+            router.push(`/lesson/${lessonId}/micro-quiz?index=${checkpointIndex}`);
+            return;
+        }
+
+        if (stageIndex < stageOrder.length - 1) {
+            router.push(`/lesson/${lessonId}/${nextStageKey}`);
+            return;
+        }
     };
 
     const onToolbarChange = (nextState: ToolbarState) => {
@@ -197,7 +210,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         paceDensity,
         continueLabel,
         onContinue: goToNextStage,
-        canGoForward: true,
+        canGoForward: stageIndex < stageOrder.length - 1 || hasFinalCheckpoint,
     };
 
     const applyPaceSelection = () => {

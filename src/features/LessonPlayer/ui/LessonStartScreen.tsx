@@ -4,7 +4,6 @@ import { type ReactNode, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getDashboardPath } from '@/shared/lib';
 import type { LessonPlayerData, LessonModeCard } from '../api/types';
-import { STAGE_ORDER } from '../api/types';
 import { LeaveLessonDialog } from './LeaveLessonDialog';
 
 type LessonStartScreenProps = {
@@ -76,7 +75,7 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
     const activeCard = data.start.cards[activeMode];
 
     const beginLesson = () => {
-        router.push(`/lesson/${lessonId}/${STAGE_ORDER[0]}`);
+        router.push(`/lesson/${lessonId}/${data.stageOrder[0] || 'step-1'}`);
     };
 
     const leaveLesson = () => {
