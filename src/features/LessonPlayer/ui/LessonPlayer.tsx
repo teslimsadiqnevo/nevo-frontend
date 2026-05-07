@@ -2,10 +2,14 @@
 
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
+import {
+    useRegistrationStore,
+    type LearningMode,
+    normalizeLearningMode,
+} from '@/shared/store/useRegistrationStore';
 import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
-import { updateLessonProgress } from '@/features/Dashboard/api/student';
+import { getStudentProfile, updateLessonProgress } from '@/features/Dashboard/api/student';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import type { Stage, StageKey, ToolbarState } from '../api/types';
 import { VisualMode } from './modes/VisualMode';
@@ -76,9 +80,11 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const [paceSelection, setPaceSelection] = useState<'slower' | 'steady' | 'faster'>('slower');
     const [paceDensity, setPaceDensity] = useState<LessonPaceDensity>('standard');
     const learningMode = useRegistrationStore((state) => state.learningMode);
+    const setLearningMode = useRegistrationStore((state) => state.setLearningMode);
+    const [resolvedLearningMode, setResolvedLearningMode] = useState<LearningMode | null>(null);
     const progressSessionStartedAt = useRef(Date.now());
     const lastProgressKey = useRef<string | null>(null);
-    const activeMode: LearningMode = learningMode;
+    const activeMode: LearningMode = resolvedLearningMode ?? learningMode;
     const scopeKey = `${lessonId}:${stage}:${activeMode}`;
     const [toolbarSession, setToolbarSession] = useState<{ scopeKey: string; state: ToolbarState }>({
         scopeKey,
@@ -122,6 +128,36 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     }, [lessonId, stage]);
 
     useEffect(() => {
+        let cancelled = false;
+
+        getStudentProfile()
+            .then((response) => {
+                if (cancelled) return;
+
+                const profile = response?.data;
+                const backendMode =
+                    profile?.learning_preference ||
+                    profile?.learning_style ||
+                    profile?.learning_profile?.learning_preference ||
+                    profile?.learning_profile?.learning_style ||
+                    profile?.how_you_learn?.learning_style ||
+                    null;
+                const normalizedMode = normalizeLearningMode(backendMode);
+
+                setLearningMode(normalizedMode);
+                setResolvedLearningMode(normalizedMode);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setResolvedLearningMode(learningMode);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [learningMode, setLearningMode]);
+
+    useEffect(() => {
         if (!data || activeMode !== 'audio' || stageIndex < 0) return;
 
         const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
@@ -149,7 +185,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         }
     }, [activeMode, data, lessonId, stage, stageIndex]);
 
-    if (loading) {
+    if (loading || !resolvedLearningMode) {
         return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
     }
 

@@ -4,6 +4,27 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 export type LearningMode = 'visual' | 'audio' | 'action' | 'reading';
 type AssessmentAnswerValue = string | number | boolean | string[] | null;
 
+export function normalizeLearningMode(value?: string | null): LearningMode {
+    const normalized = String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/[_-]+/g, ' ');
+
+    if (/(audio|auditory|aural|listen|listening|hear|hearing|spoken|voice)/.test(normalized)) {
+        return 'audio';
+    }
+
+    if (/(action|kinesthetic|kinaesthetic|hands on|hands-on|doing|movement|practical|tactile)/.test(normalized)) {
+        return 'action';
+    }
+
+    if (/(read|reading|write|writing|text|notes|verbal|literacy)/.test(normalized)) {
+        return 'reading';
+    }
+
+    return 'visual';
+}
+
 interface RegistrationState {
     firstName: string;
     surname: string;

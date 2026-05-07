@@ -20,7 +20,7 @@ import {
   updateStudentLearningProfile,
   updateStudentSettings,
 } from "../api/student";
-import { useRegistrationStore } from "@/shared/store/useRegistrationStore";
+import { normalizeLearningMode, useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
 import { getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
 import { toast } from "@/shared/ui";
@@ -284,6 +284,7 @@ export function StudentDashboard({
   const clearRegistration = useRegistrationStore(
     (state) => state.clearRegistration,
   );
+  const setLearningMode = useRegistrationStore((state) => state.setLearningMode);
   const userIdentity =
     user?.id || user?.nevoId || user?.email || user?.name || null;
   const needsLessonData = view === "home" || view === "lessons";
@@ -358,6 +359,14 @@ export function StudentDashboard({
 
         if (profRes?.data) {
           setProfile(profRes.data);
+          const backendMode =
+            profRes.data?.learning_preference ||
+            profRes.data?.learning_style ||
+            profRes.data?.learning_profile?.learning_preference ||
+            profRes.data?.learning_profile?.learning_style ||
+            profRes.data?.how_you_learn?.learning_style ||
+            null;
+          setLearningMode(normalizeLearningMode(backendMode));
         } else if (!needsProfileData && view !== "home") {
           setProfile((prev: any) => prev);
         }
@@ -484,6 +493,7 @@ export function StudentDashboard({
   }, [
     userIdentity,
     clearRegistration,
+    setLearningMode,
     guardAuth,
     needsLessonData,
     needsProfileData,
