@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
-import { useLessonTts } from '../../api/useLessonTts';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { queueLessonTtsPreloadBatch, useLessonTts } from '../../api/useLessonTts';
 import { StageShell } from '../StageShell';
 import type { ActionStep, LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 
@@ -185,6 +185,27 @@ export function ActionMode({
             : toolbarState === 'expanded'
               ? stage.labelExpanded || stage.label
               : stage.label;
+
+    useEffect(() => {
+        const priorityEntries = hydratedSteps
+            .slice(resolvedIndex, Math.min(hydratedSteps.length, resolvedIndex + 2))
+            .map((step, offset) => ({
+                text: step.text,
+                cacheKey: `${stage.key}:action-step:${resolvedIndex + offset}:${toolbarState}`,
+                priority: 'high' as const,
+            }));
+
+        const backgroundEntries = hydratedSteps
+            .map((step, index) => ({ step, index }))
+            .filter(({ index }) => index < resolvedIndex || index > resolvedIndex + 1)
+            .map(({ step, index }) => ({
+                text: step.text,
+                cacheKey: `${stage.key}:action-step:${index}:${toolbarState}`,
+                priority: 'low' as const,
+            }));
+
+        void queueLessonTtsPreloadBatch([...priorityEntries, ...backgroundEntries]);
+    }, [hydratedSteps, resolvedIndex, stage.key, toolbarState]);
 
     return (
         <StageShell

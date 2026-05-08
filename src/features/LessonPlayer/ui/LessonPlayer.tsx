@@ -23,7 +23,7 @@ import { LessonReflectionOverlay } from './LessonReflectionOverlay';
 import { LessonReorientationOverlay } from './LessonReorientationOverlay';
 import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
 import type { LessonPaceDensity } from '../api/types';
-import { preloadLessonTts, stopAllLessonTts } from '../api/useLessonTts';
+import { preloadLessonTts, queueLessonTtsPreloadBatch, stopAllLessonTts } from '../api/useLessonTts';
 
 type LessonPlayerProps = {
     lessonId: string;
@@ -161,7 +161,6 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         if (!data || activeMode !== 'audio' || stageIndex < 0) return;
 
         const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
-        const nextStage = stageIndex < data.stageOrder.length - 1 ? data.stages[stageIndex + 1] : null;
         const currentCacheBaseKey = getAudioCacheBaseKey(lessonId, currentStage);
 
         void preloadLessonTts(
@@ -177,12 +176,39 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             `${currentCacheBaseKey}:expanded`,
         );
 
-        if (nextStage) {
-            void preloadLessonTts(
-                getAudioBodyForToolbar(nextStage, 'original'),
-                `${getAudioCacheBaseKey(lessonId, nextStage)}:original`,
-            );
-        }
+        const prioritizedEntries = data.stages
+            .slice(stageIndex, Math.min(data.stages.length, stageIndex + 2))
+            .flatMap((current, offset) => {
+                const cacheBaseKey = getAudioCacheBaseKey(lessonId, current);
+                const priority = offset === 0 ? ('high' as const) : ('low' as const);
+                return [
+                    {
+                        text: getAudioBodyForToolbar(current, 'original'),
+                        cacheKey: `${cacheBaseKey}:original`,
+                        priority,
+                    },
+                    {
+                        text: getAudioBodyForToolbar(current, 'simplified'),
+                        cacheKey: `${cacheBaseKey}:simplified`,
+                        priority,
+                    },
+                    {
+                        text: getAudioBodyForToolbar(current, 'expanded'),
+                        cacheKey: `${cacheBaseKey}:expanded`,
+                        priority,
+                    },
+                ];
+            });
+
+        const backgroundEntries = data.stages
+            .slice(Math.min(data.stages.length, stageIndex + 2))
+            .map((current) => ({
+                text: getAudioBodyForToolbar(current, 'original'),
+                cacheKey: `${getAudioCacheBaseKey(lessonId, current)}:original`,
+                priority: 'low' as const,
+            }));
+
+        void queueLessonTtsPreloadBatch([...prioritizedEntries, ...backgroundEntries]);
     }, [activeMode, data, lessonId, stage, stageIndex]);
 
     if (loading || !resolvedLearningMode) {

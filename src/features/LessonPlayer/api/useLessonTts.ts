@@ -26,6 +26,14 @@ let activeLessonAudio: HTMLAudioElement | null = null;
 const lessonTtsCache = new Map<string, { objectUrl: string; blob: Blob }>();
 const lessonTtsPending = new Map<string, Promise<string | null>>();
 const MAX_LESSON_TTS_CACHE_ENTRIES = 48;
+const MAX_LESSON_TTS_PRELOAD_CONCURRENCY = 2;
+let activeLessonTtsPreloads = 0;
+const lessonTtsPreloadQueue: Array<{
+    text: string;
+    cacheKey: string;
+    priority: 'high' | 'low';
+    resolve: (value: string | null) => void;
+}> = [];
 
 function hashText(value: string) {
     let hash = 5381;
@@ -70,6 +78,25 @@ function trimLessonTtsCache() {
         lessonTtsCache.delete(oldestKey);
         URL.revokeObjectURL(cachedEntry.objectUrl);
         guard += 1;
+    }
+}
+
+function flushLessonTtsPreloadQueue() {
+    while (
+        activeLessonTtsPreloads < MAX_LESSON_TTS_PRELOAD_CONCURRENCY &&
+        lessonTtsPreloadQueue.length > 0
+    ) {
+        const nextJob = lessonTtsPreloadQueue.shift();
+        if (!nextJob) return;
+
+        activeLessonTtsPreloads += 1;
+        fetchLessonTtsAudio(nextJob.text, nextJob.cacheKey)
+            .then((result) => nextJob.resolve(result))
+            .catch(() => nextJob.resolve(null))
+            .finally(() => {
+                activeLessonTtsPreloads = Math.max(0, activeLessonTtsPreloads - 1);
+                flushLessonTtsPreloadQueue();
+            });
     }
 }
 
@@ -160,6 +187,49 @@ export function preloadLessonTts(text: string, cacheKey?: string) {
     }
 
     return fetchLessonTtsAudio(cleanedText, getAudioCacheKey(cleanedText, cacheKey)).catch(() => null);
+}
+
+export function queueLessonTtsPreload(
+    text: string,
+    options: { cacheKey?: string; priority?: 'high' | 'low' } = {},
+) {
+    const cleanedText = text.trim();
+    if (!cleanedText || typeof window === 'undefined') {
+        return Promise.resolve(null);
+    }
+
+    const cacheKey = getAudioCacheKey(cleanedText, options.cacheKey);
+    if (lessonTtsCache.has(cacheKey) || lessonTtsPending.has(cacheKey)) {
+        return fetchLessonTtsAudio(cleanedText, cacheKey).catch(() => null);
+    }
+
+    return new Promise<string | null>((resolve) => {
+        lessonTtsPreloadQueue.push({
+            text: cleanedText,
+            cacheKey,
+            priority: options.priority ?? 'low',
+            resolve,
+        });
+
+        lessonTtsPreloadQueue.sort((a, b) => {
+            if (a.priority === b.priority) return 0;
+            return a.priority === 'high' ? -1 : 1;
+        });
+        flushLessonTtsPreloadQueue();
+    });
+}
+
+export function queueLessonTtsPreloadBatch(
+    entries: Array<{ text: string; cacheKey?: string; priority?: 'high' | 'low' }>,
+) {
+    return Promise.all(
+        entries.map((entry) =>
+            queueLessonTtsPreload(entry.text, {
+                cacheKey: entry.cacheKey,
+                priority: entry.priority,
+            }),
+        ),
+    );
 }
 
 export function useLessonTts(
