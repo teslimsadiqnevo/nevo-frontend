@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { signOut } from 'next-auth/react';
+import { clearClientSessionState } from '@/shared/lib';
 
 type StaleSessionBannerProps = {
     title?: string;
@@ -24,6 +25,7 @@ export function StaleSessionBanner({
         if (submitting) return;
         setSubmitting(true);
         try {
+            await clearClientSessionState();
             await signOut({ callbackUrl });
         } catch {
             setSubmitting(false);

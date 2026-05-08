@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { signOut } from 'next-auth/react';
+import { clearClientSessionState } from '@/shared/lib';
 import { toast } from '@/shared/ui';
 
 type LogoutDialogProps = {
@@ -45,6 +46,7 @@ export function LogoutDialog({
         if (submitting) return;
         setSubmitting(true);
         try {
+            await clearClientSessionState();
             await signOut({ callbackUrl });
         } catch (err: any) {
             setSubmitting(false);

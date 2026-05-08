@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/shared/ui";
-import { getDashboardPath } from "@/shared/lib";
+import { clearClientSessionState, getDashboardPath } from "@/shared/lib";
 import { loginTeacher } from "@/features/TeacherLogin/api/loginTeacher";
 
 export function TeacherLoginForm() {
@@ -43,6 +43,7 @@ export function TeacherLoginForm() {
         setError(null);
 
         try {
+            await clearClientSessionState();
             const result = await loginTeacher({
                 email,
                 password,

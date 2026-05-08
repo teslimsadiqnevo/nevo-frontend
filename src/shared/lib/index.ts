@@ -6,6 +6,7 @@ export { works } from "./lib";
 export { roles } from "./lib";
 export { getInitials } from "./getInitials";
 export { getApiTokenExpiryMs, isApiTokenExpired } from "./apiTokenExpiry";
+export { clearClientSessionState } from "./clearClientSessionState";
 export { useApiTokenExpiryRedirect } from "./useApiTokenExpiryRedirect";
 export { useAuthGuard } from "./useAuthGuard";
 export type { AuthRole } from "./useAuthGuard";

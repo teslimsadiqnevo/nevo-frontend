@@ -1,4 +1,4 @@
-const CACHE_VERSION = "nevo-pwa-v1";
+const CACHE_VERSION = "nevo-pwa-v0.2";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const MEDIA_CACHE = `${CACHE_VERSION}-media`;
@@ -89,6 +89,10 @@ async function staleWhileRevalidate(request, cacheName) {
   return Response.error();
 }
 
+async function networkOnly(request) {
+  return fetch(request);
+}
+
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   const url = new URL(request.url);
@@ -101,8 +105,13 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (url.pathname.startsWith("/api/")) {
+    event.respondWith(networkOnly(request));
+    return;
+  }
+
   if (request.mode === "navigate") {
-    event.respondWith(networkFirst(request, RUNTIME_CACHE));
+    event.respondWith(networkOnly(request));
     return;
   }
 
@@ -122,14 +131,6 @@ self.addEventListener("fetch", (event) => {
     /\.(?:png|jpg|jpeg|svg|webp|gif|mp3)$/i.test(url.pathname)
   ) {
     event.respondWith(staleWhileRevalidate(request, MEDIA_CACHE));
-    return;
-  }
-
-  if (
-    url.pathname.startsWith("/api/lessons/") ||
-    url.pathname.startsWith("/api/concepts/")
-  ) {
-    event.respondWith(networkFirst(request, RUNTIME_CACHE));
     return;
   }
 

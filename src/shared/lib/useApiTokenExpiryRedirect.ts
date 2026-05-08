@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { getApiTokenExpiryMs } from './apiTokenExpiry';
+import { clearClientSessionState } from './clearClientSessionState';
 
 export type ApiTokenRole = 'teacher' | 'student' | 'school';
 
@@ -39,6 +40,7 @@ export function useApiTokenExpiryRedirect(role: ApiTokenRole) {
         const redirectToLogin = async () => {
             if (redirectingRef.current || cancelled) return;
             redirectingRef.current = true;
+            await clearClientSessionState();
             await signOut({ redirect: false });
             if (!cancelled && typeof window !== 'undefined') {
                 window.location.replace(LOGIN_PATH[role]);

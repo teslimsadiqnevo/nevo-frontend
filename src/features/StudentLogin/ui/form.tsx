@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { loginStudent } from "@/features/StudentLogin/api/loginStudent";
+import { clearClientSessionState } from "@/shared/lib";
 
 export function StudentLoginForm() {
     const [firstName, setFirstName] = useState("");
@@ -37,6 +38,7 @@ export function StudentLoginForm() {
         setError(null);
 
         try {
+            await clearClientSessionState();
             const result = await loginStudent({
                 firstName: firstName.trim(),
                 nevoId: normalizedNevoId,

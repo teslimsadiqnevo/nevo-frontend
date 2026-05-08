@@ -22,7 +22,7 @@ import {
 } from "../api/student";
 import { normalizeLearningMode, useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
-import { getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import { clearClientSessionState, getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
 import { toast } from "@/shared/ui";
 import { getLessonArtwork } from "../lib/lessonArtwork";
 import {
@@ -502,7 +502,7 @@ export function StudentDashboard({
   ]);
 
   const handleStudentLogout = async () => {
-    clearRegistration();
+    await clearClientSessionState();
     await signOut({ callbackUrl: "/login/student" });
   };
 

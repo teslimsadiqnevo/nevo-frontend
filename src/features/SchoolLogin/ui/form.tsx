@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { loginSchool } from "../api/loginSchool";
+import { clearClientSessionState } from "@/shared/lib";
 
 export function SchoolLoginForm() {
     const router = useRouter();
@@ -19,6 +20,7 @@ export function SchoolLoginForm() {
         setError(null);
 
         try {
+            await clearClientSessionState();
             const result = await loginSchool({
                 email,
                 password,

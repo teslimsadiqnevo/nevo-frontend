@@ -3,6 +3,7 @@
 import { useCallback, useRef } from 'react';
 import { signOut } from 'next-auth/react';
 import { useToastStore } from '@/shared/ui/Toast';
+import { clearClientSessionState } from './clearClientSessionState';
 
 export type AuthRole = 'teacher' | 'student' | 'school';
 
@@ -51,11 +52,15 @@ export function useAuthGuard(role: AuthRole) {
                 durationMs: 5000,
             });
 
-            void signOut({ redirect: false }).finally(() => {
-                if (typeof window !== 'undefined') {
-                    window.location.replace(LOGIN_PATH[role]);
-                }
-            });
+            void clearClientSessionState()
+                .catch(() => undefined)
+                .finally(() => {
+                    void signOut({ redirect: false }).finally(() => {
+                        if (typeof window !== 'undefined') {
+                            window.location.replace(LOGIN_PATH[role]);
+                        }
+                    });
+                });
             return true;
         },
         [role, showToast],
