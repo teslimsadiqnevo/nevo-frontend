@@ -19,8 +19,8 @@ type ActionModeProps = {
     paceDensity: LessonPaceDensity;
 };
 
-function ActionAudioButton({ text }: { text: string }) {
-    const { isLoading, isPlaying, togglePlayback } = useLessonTts(text);
+function ActionAudioButton({ text, cacheKey }: { text: string; cacheKey: string }) {
+    const { isLoading, isPlaying, togglePlayback } = useLessonTts(text, null, { cacheKey });
 
     return (
         <button
@@ -69,12 +69,14 @@ function ActionInstructionRow({
     isPrimary,
     isCompleted,
     onSelect,
+    audioCacheKey,
 }: {
     index: number;
     step: ActionStep;
     isPrimary: boolean;
     isCompleted: boolean;
     onSelect: () => void;
+    audioCacheKey: string;
 }) {
     return (
         <div
@@ -99,7 +101,7 @@ function ActionInstructionRow({
             <div className={isPrimary ? 'pl-3' : ''}>
                 <StepBadge index={index} />
             </div>
-            <ActionAudioButton text={step.text} />
+            <ActionAudioButton text={step.text} cacheKey={audioCacheKey} />
             <p
                 className={[
                     'flex-1 pt-[2px] text-[15px] leading-[22px]',
@@ -240,6 +242,7 @@ export function ActionMode({
                                 step={step}
                                 isPrimary={index === resolvedIndex}
                                 isCompleted={index < resolvedIndex}
+                                audioCacheKey={`${stage.key}:action-step:${index}:${toolbarState}`}
                                 onSelect={() =>
                                     setStepSession({
                                         scopeKey: stepScopeKey,
