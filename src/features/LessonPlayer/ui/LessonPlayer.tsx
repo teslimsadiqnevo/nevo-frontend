@@ -211,6 +211,30 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         void queueLessonTtsPreloadBatch([...prioritizedEntries, ...backgroundEntries]);
     }, [activeMode, data, lessonId, stage, stageIndex]);
 
+    useEffect(() => {
+        if (!data || stageIndex < 0) return;
+
+        const previousStage = stageIndex > 0 ? stageOrder[stageIndex - 1] : null;
+        const nextStageKey = stageIndex < stageOrder.length - 1 ? stageOrder[stageIndex + 1] : null;
+        const completedStepNumber = stageIndex + 1;
+        const checkpointIndex = nextStageKey
+            ? data.microQuiz.findIndex((question) => question.continueToStageKey === nextStageKey)
+            : -1;
+        const finalCheckpointIndex = data.microQuiz.findIndex((question) => question.isFinalCheckpoint);
+
+        if (previousStage) {
+            router.prefetch(`/lesson/${lessonId}/${previousStage}`);
+        }
+
+        if (completedStepNumber % 4 === 0 && checkpointIndex >= 0) {
+            router.prefetch(`/lesson/${lessonId}/micro-quiz?index=${checkpointIndex}`);
+        } else if (nextStageKey) {
+            router.prefetch(`/lesson/${lessonId}/${nextStageKey}`);
+        } else if (finalCheckpointIndex >= 0) {
+            router.prefetch(`/lesson/${lessonId}/micro-quiz?index=${finalCheckpointIndex}`);
+        }
+    }, [data, lessonId, router, stageIndex, stageOrder]);
+
     if (loading || !resolvedLearningMode) {
         return <LessonPlayerSkeleton pillWidthClassName="w-24" />;
     }
