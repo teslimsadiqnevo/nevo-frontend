@@ -213,6 +213,7 @@ export function ActionMode({
         <StageShell
             pillText={stage.pillText}
             label={currentLabel}
+            hideLabel
             askContext={askContext}
             progress={progress}
             onExit={onExit}
@@ -226,7 +227,10 @@ export function ActionMode({
             canGoForward={canGoForward}
             bodyWidthClassName="max-w-[928px]"
             meta={
-                <div className="flex justify-end pt-[15px]">
+                <div className="flex items-center justify-between pt-[31px]">
+                    <h2 className="text-[13px] font-semibold uppercase leading-5 tracking-[0.325px] text-lavender">
+                        {currentLabel}
+                    </h2>
                     <span className="text-[13px] leading-5 text-indigo/60">
                         Step {resolvedIndex + 1} of {totalSteps}
                     </span>
