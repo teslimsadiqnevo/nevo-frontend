@@ -3,7 +3,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useLessonTts } from '../../api/useLessonTts';
 import { StageShell } from '../StageShell';
-import type { Stage, ActionStep, LessonPaceDensity, ToolbarState } from '../../api/types';
+import type { ActionStep, LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 
 type ActionModeProps = {
     stage: Stage;
@@ -19,50 +19,105 @@ type ActionModeProps = {
     paceDensity: LessonPaceDensity;
 };
 
-const STEP_BG = {
-    completed: 'bg-[rgba(45,106,79,0.08)]',
-    active: 'bg-[rgba(59,63,110,0.06)] border border-[rgba(59,63,110,0.2)]',
-    unread: 'bg-parchment border border-[rgba(59,63,110,0.08)]',
-} as const;
+function ActionAudioButton({ text }: { text: string }) {
+    const { isLoading, isPlaying, togglePlayback } = useLessonTts(text);
 
-const STEP_TEXT = {
-    completed: 'text-graphite-60 line-through',
-    active: 'text-graphite',
-    unread: 'text-graphite-40',
-} as const;
-
-function StepRow({ index, step }: { index: number; step: ActionStep }) {
     return (
-        <div className={`flex items-center gap-3 rounded-lg px-4 py-3 ${STEP_BG[step.state]}`}>
-            <div className="flex items-center justify-center w-6 h-6 rounded-full bg-white shrink-0 text-[12px] font-semibold text-indigo">
-                {index + 1}
-            </div>
-            <div className="flex items-center justify-center w-6 h-6 shrink-0">
-                {step.state === 'completed' ? (
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                        <circle cx="8" cy="8" r="7" fill="#2D6A4F" />
-                        <path
-                            d="M4.5 8L7 10.5L11.5 6"
-                            stroke="white"
-                            strokeWidth="1.5"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                        />
-                    </svg>
-                ) : (
-                    <div className="w-3 h-3 rounded-full border-[1.5px] border-graphite-40" />
-                )}
-            </div>
-            <span className={`flex-1 text-[14px] leading-5 ${STEP_TEXT[step.state]}`}>
-                {step.text}
-            </span>
-            {step.state === 'completed' ? (
-                <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-[#2D6A4F] shrink-0">
-                    Done
-                </span>
-            ) : null}
+        <button
+            type="button"
+            onClick={() => {
+                void togglePlayback();
+            }}
+            aria-label={isLoading ? 'Generating step audio' : isPlaying ? 'Pause step audio' : 'Play step audio'}
+            className="flex h-8 w-8 shrink-0 items-center justify-center border-none bg-transparent text-lavender-40 transition-opacity hover:opacity-80 cursor-pointer"
+        >
+            <svg width="32" height="32" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+                <path
+                    d="M14 10.5L10 13.75H7V18.25H10L14 21.5V10.5Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                />
+                <path
+                    d="M19 12.5C20.2667 13.6333 21 15.2 21 16.9C21 18.6 20.2667 20.1667 19 21.3"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                />
+                <path
+                    d="M21.75 9.5C23.7167 11.3 24.8 13.8333 24.8 16.5C24.8 19.1667 23.7167 21.7 21.75 23.5"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                />
+            </svg>
+        </button>
+    );
+}
+
+function StepBadge({ index }: { index: number }) {
+    return (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo text-[13px] font-bold leading-5 text-parchment">
+            {index + 1}
         </div>
     );
+}
+
+function ActionInstructionRow({
+    index,
+    step,
+    isPrimary,
+    isCompleted,
+    onSelect,
+}: {
+    index: number;
+    step: ActionStep;
+    isPrimary: boolean;
+    isCompleted: boolean;
+    onSelect: () => void;
+}) {
+    return (
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={onSelect}
+            onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    onSelect();
+                }
+            }}
+            className={[
+                'relative flex min-h-16 w-full items-start gap-4 rounded-xl px-4 py-4 text-left transition-colors cursor-pointer',
+                isPrimary
+                    ? 'border border-[#E0D9CE] bg-transparent'
+                    : 'border border-[#E0D9CE] bg-transparent hover:bg-[rgba(255,255,255,0.28)]',
+            ].join(' ')}
+        >
+            {isPrimary ? <div className="absolute bottom-0 left-0 top-0 w-[3px] rounded-l-xl bg-indigo" /> : null}
+
+            <div className={isPrimary ? 'pl-3' : ''}>
+                <StepBadge index={index} />
+            </div>
+            <ActionAudioButton text={step.text} />
+            <p
+                className={[
+                    'flex-1 pt-[2px] text-[15px] leading-[22px]',
+                    isCompleted ? 'text-graphite/60' : 'text-graphite',
+                ].join(' ')}
+            >
+                {step.text}
+            </p>
+        </div>
+    );
+}
+
+function getDisplayedSteps(stage: Stage, toolbarState: ToolbarState) {
+    const content = stage.modes.action;
+
+    if (toolbarState === 'simplified') return content.stepsSimplified;
+    if (toolbarState === 'expanded') return content.stepsExpanded;
+    return content.steps;
 }
 
 export function ActionMode({
@@ -77,176 +132,104 @@ export function ActionMode({
     onToolbarChange,
     headerAction,
 }: ActionModeProps) {
-    const content = stage.modes.action;
-    const steps =
-        toolbarState === 'simplified'
-            ? content.stepsSimplified
-            : toolbarState === 'expanded'
-              ? content.stepsExpanded
-              : content.steps;
-    const baseActiveIndex = Math.max(0, steps.findIndex((s) => s.state === 'active'));
+    const steps = getDisplayedSteps(stage, toolbarState);
+    const baseActiveIndex = Math.max(0, steps.findIndex((step) => step.state === 'active'));
     const stepScopeKey = `${stage.key}:${toolbarState}:${steps.length}`;
     const [stepSession, setStepSession] = useState({
         scopeKey: stepScopeKey,
-        index: baseActiveIndex >= 0 ? baseActiveIndex : 0,
+        index: baseActiveIndex,
     });
-    const label =
+    const currentIndex = stepSession.scopeKey === stepScopeKey ? stepSession.index : baseActiveIndex;
+    const totalSteps = Math.max(1, steps.length);
+    const resolvedIndex = Math.max(0, Math.min(currentIndex, totalSteps - 1));
+    const hydratedSteps = useMemo<ActionStep[]>(
+        () =>
+            steps.map((step, index) => ({
+                ...step,
+                state:
+                    index < resolvedIndex
+                        ? 'completed'
+                        : index === resolvedIndex
+                          ? 'active'
+                          : 'unread',
+            })),
+        [resolvedIndex, steps],
+    );
+    const goToPrevious = () => {
+        if (resolvedIndex > 0) {
+            setStepSession({
+                scopeKey: stepScopeKey,
+                index: resolvedIndex - 1,
+            });
+            return;
+        }
+
+        onBack();
+    };
+    const goToNext = () => {
+        if (resolvedIndex < totalSteps - 1) {
+            setStepSession({
+                scopeKey: stepScopeKey,
+                index: resolvedIndex + 1,
+            });
+            return;
+        }
+
+        onContinue();
+    };
+    const canGoBack = resolvedIndex > 0;
+    const canGoForward = resolvedIndex < totalSteps - 1 || Boolean(onContinue);
+    const currentLabel =
         toolbarState === 'simplified'
             ? stage.labelSimplified || stage.label
             : toolbarState === 'expanded'
               ? stage.labelExpanded || stage.label
               : stage.label;
-    const totalSteps = steps.length;
-
-    const currentStepIndex =
-        stepSession.scopeKey === stepScopeKey
-            ? stepSession.index
-            : baseActiveIndex >= 0
-                ? baseActiveIndex
-                : 0;
-
-    const hydratedSteps = useMemo<ActionStep[]>(() => (
-        steps.map((step, index) => ({
-            ...step,
-            state:
-                index < currentStepIndex
-                    ? 'completed'
-                    : index === currentStepIndex
-                        ? 'active'
-                        : 'unread',
-        }))
-    ), [currentStepIndex, steps]);
-
-    const currentStep = hydratedSteps[Math.min(currentStepIndex, hydratedSteps.length - 1)];
-    const stepNumber = Math.min(currentStepIndex + 1, totalSteps);
-    const stageCompletion = totalSteps > 0 ? Math.round((stepNumber / totalSteps) * 100) : 0;
-    const { isLoading, isPlaying, error, togglePlayback, replay } = useLessonTts(currentStep?.text || '');
-    const canMoveBackward = currentStepIndex > 0;
-    const isFinalStep = currentStepIndex >= totalSteps - 1;
-
-    const goToPreviousStep = () => {
-        setStepSession({
-            scopeKey: stepScopeKey,
-            index: Math.max(0, currentStepIndex - 1),
-        });
-    };
-
-    const completeCurrentStep = () => {
-        if (isFinalStep) {
-            onContinue();
-            return;
-        }
-
-        setStepSession({
-            scopeKey: stepScopeKey,
-            index: Math.min(totalSteps - 1, currentStepIndex + 1),
-        });
-    };
 
     return (
         <StageShell
             pillText={stage.pillText}
-            label={label}
+            label={currentLabel}
             askContext={askContext}
-            body={
-                <div className="flex flex-col gap-3">
-                    <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-lavender">
-                        Step {stepNumber} of {totalSteps}
-                    </span>
-                    <div className="h-2 w-full overflow-hidden rounded-full bg-[#E8E2D6]">
-                        <div
-                            className="h-full rounded-full bg-indigo transition-all duration-300"
-                            style={{ width: `${stageCompletion}%` }}
-                        />
-                    </div>
-                    <p className="text-[14px] leading-6 text-graphite-60">
-                        Work through one action at a time. Mark each step done before moving forward.
-                    </p>
-                </div>
-            }
             progress={progress}
             onExit={onExit}
-            onBack={onBack}
+            onBack={goToPrevious}
+            canGoBack={canGoBack}
             toolbarState={toolbarState}
             onToolbarChange={onToolbarChange}
             headerAction={headerAction}
-            media={
-                <div className="w-full flex flex-col gap-5">
-                    <div className="rounded-[20px] border border-[rgba(59,63,110,0.12)] bg-white p-5 shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
-                        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="min-w-0">
-                                <p className="text-[12px] font-semibold uppercase tracking-[0.06em] text-lavender">
-                                    Current action
-                                </p>
-                                <h3 className="mt-2 text-[20px] font-semibold leading-7 text-indigo">
-                                    Step {stepNumber}
-                                </h3>
-                            </div>
-                            <div className="rounded-full bg-lavender-10 px-3 py-2 text-[12px] font-medium text-indigo">
-                                {isFinalStep ? 'Final step' : `${totalSteps - stepNumber} step${totalSteps - stepNumber === 1 ? '' : 's'} left`}
-                            </div>
-                        </div>
-
-                        <p className="mt-4 text-[16px] leading-7 text-graphite">
-                            {currentStep?.text}
-                        </p>
-
-                        {error ? (
-                            <p className="mt-3 text-[12px] leading-5 text-[#B54708]">{error}</p>
-                        ) : null}
-
-                        <div className="mt-5 flex flex-wrap items-center gap-3">
-                            <button
-                                type="button"
-                                onClick={goToPreviousStep}
-                                disabled={!canMoveBackward}
-                                className={`flex h-11 items-center justify-center rounded-full px-5 text-[14px] font-medium border ${
-                                    canMoveBackward
-                                        ? 'cursor-pointer border-indigo text-indigo bg-transparent'
-                                        : 'cursor-not-allowed border-[#D9D2C5] text-graphite-40 bg-[#F7F3EC]'
-                                }`}
-                            >
-                                Previous step
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    void togglePlayback();
-                                }}
-                                className="flex h-11 items-center justify-center gap-2 rounded-full border border-indigo bg-white px-5 text-[14px] font-medium text-indigo cursor-pointer"
-                            >
-                                <span>{isLoading ? 'Generating audio...' : isPlaying ? 'Pause step audio' : 'Hear this step'}</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    void replay();
-                                }}
-                                className="flex h-11 items-center justify-center rounded-full border border-indigo bg-white px-5 text-[14px] font-medium text-indigo cursor-pointer"
-                            >
-                                Replay
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={completeCurrentStep}
-                                className="flex h-11 w-full items-center justify-center rounded-full border-none bg-indigo px-6 text-[14px] font-semibold text-parchment shadow-[0_12px_24px_rgba(59,63,110,0.18)] cursor-pointer sm:ml-auto sm:w-auto"
-                            >
-                                {isFinalStep ? continueLabel : 'Mark step done'}
-                            </button>
-                        </div>
-                    </div>
-
-                    <div className="w-full flex flex-col gap-4 overflow-y-auto">
-                        {hydratedSteps.map((step, idx) => (
-                            <StepRow key={`${step.text}:${idx}`} index={idx} step={step} />
+            continueLabel={continueLabel}
+            onContinue={goToNext}
+            canGoForward={canGoForward}
+            bodyWidthClassName="max-w-[928px]"
+            meta={
+                <div className="flex justify-end pt-[15px]">
+                    <span className="text-[13px] leading-5 text-indigo/60">
+                        Step {resolvedIndex + 1} of {totalSteps}
+                    </span>
+                </div>
+            }
+            body={
+                <div className="max-w-[928px] pt-4">
+                    <div className="flex flex-col gap-4">
+                        {hydratedSteps.map((step, index) => (
+                            <ActionInstructionRow
+                                key={`${step.text}:${index}`}
+                                index={index}
+                                step={step}
+                                isPrimary={index === resolvedIndex}
+                                isCompleted={index < resolvedIndex}
+                                onSelect={() =>
+                                    setStepSession({
+                                        scopeKey: stepScopeKey,
+                                        index,
+                                    })
+                                }
+                            />
                         ))}
                     </div>
                 </div>
             }
-            bodyWidthClassName="w-full"
         />
     );
 }
