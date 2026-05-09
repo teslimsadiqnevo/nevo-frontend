@@ -2,6 +2,8 @@
 
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
+import nevoLogoAsset from '@/shared/assets/default-logo.svg';
 import { useAuthGuard } from '@/shared/lib';
 import {
     getSchoolBoardSharePreview,
@@ -176,7 +178,7 @@ export function ReportsView() {
         }
 
         const exportPayload = 'data' in res ? res.data : null;
-        downloadReportPdf(exportPayload, {
+        await downloadReportPdf(exportPayload, {
             termSummary,
             boardPreview,
             subjectRows,
@@ -590,7 +592,7 @@ function getInitials(name: string) {
         .join('') || 'T';
 }
 
-function downloadReportPdf(
+async function downloadReportPdf(
     payload: any,
     fallback: {
         termSummary: SchoolTermSummary | null;
@@ -602,9 +604,10 @@ function downloadReportPdf(
 ) {
     if (typeof window === 'undefined' || !payload) return;
 
-    const pdf = buildBrandedReportPdf(payload, fallback);
-    const filename = String(payload.filename || 'school-term-report.pdf').replace(/\.json$/i, '.pdf');
-    const blob = new Blob([pdf], { type: 'application/pdf' });
+    const pdf = await buildBrandedReportPdf(payload, fallback);
+    const filename = buildReportPdfFilename(payload, fallback.termSummary);
+    const pdfBuffer = pdf.buffer.slice(pdf.byteOffset, pdf.byteOffset + pdf.byteLength) as ArrayBuffer;
+    const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -615,7 +618,39 @@ function downloadReportPdf(
     URL.revokeObjectURL(url);
 }
 
-function buildBrandedReportPdf(
+function buildReportPdfFilename(payload: any, termSummary: SchoolTermSummary | null) {
+    const schoolName = payload?.school_name || termSummary?.school_name || 'School';
+    const startDate = payload?.term_start_date || termSummary?.term_start_date;
+    const endDate = payload?.term_end_date || termSummary?.term_end_date;
+    const dateLabel = startDate || endDate
+        ? `${formatFilenameDate(startDate)} to ${formatFilenameDate(endDate)}`
+        : 'Latest';
+
+    return sanitizeFilename(`Nevo Report - ${schoolName} - ${dateLabel}.pdf`);
+}
+
+function formatFilenameDate(value?: string) {
+    if (!value) return 'Now';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleDateString('en-NG', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+}
+
+function sanitizeFilename(filename: string) {
+    return filename
+        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '-')
+        .replace(/\s+/g, ' ')
+        .replace(/\s+-\s+/g, ' - ')
+        .replace(/-+/g, '-')
+        .replace(/\.+$/g, '')
+        .trim();
+}
+
+async function buildBrandedReportPdf(
     payload: any,
     fallback: {
         termSummary: SchoolTermSummary | null;
@@ -651,14 +686,14 @@ function buildBrandedReportPdf(
             : []),
     ];
 
-    return createSimplePdf({
+    return createBrandedReportPdf({
         title: payload?.school_name || fallback.termSummary?.school_name || 'Nevo school report',
         generatedAt: payload?.generated_at || new Date().toISOString(),
         lines,
     });
 }
 
-function createSimplePdf({
+async function createBrandedReportPdf({
     title,
     generatedAt,
     lines,
@@ -667,78 +702,165 @@ function createSimplePdf({
     generatedAt: string;
     lines: string[];
 }) {
-    const objects: string[] = [];
-    const addObject = (body: string) => {
-        objects.push(body);
-        return objects.length;
-    };
-    const pages: number[] = [];
-    const maxLinesPerPage = 34;
-    const chunks = chunkLines(lines, maxLinesPerPage);
-    const fontRegular = 3;
-    const fontBold = 4;
-    const contentIds: number[] = [];
-    const catalogId = addObject('');
-    const pagesId = addObject('');
-    addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>');
-    addObject('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>');
+    const pdfDoc = await PDFDocument.create();
+    pdfDoc.setTitle(title);
+    pdfDoc.setProducer('Nevo');
+    pdfDoc.setCreator('Nevo');
+    pdfDoc.setCreationDate(new Date());
 
-    chunks.forEach((chunk, pageIndex) => {
-        const content = [
-            'q 0.95 0.94 0.90 rg 0 0 595 842 re f Q',
-            'q 0.23 0.25 0.43 rg 0 792 595 50 re f Q',
-            'BT /F2 20 Tf 48 812 Td 1 1 1 rg (Nevo) Tj ET',
-            `BT /F2 16 Tf 48 748 Td 0.23 0.25 0.43 rg (${escapePdfText(title)}) Tj ET`,
-            `BT /F1 9 Tf 48 730 Td 0.23 0.25 0.43 rg (${escapePdfText(`Generated ${formatDate(generatedAt)}`)}) Tj ET`,
-            'q 0.23 0.25 0.43 RG 48 708 m 547 708 l S Q',
-        ];
-        let y = 680;
-        chunk.forEach((line) => {
-            const isHeading = line && !line.startsWith('-') && line.length < 70;
-            const font = isHeading ? 'F2' : 'F1';
-            const size = isHeading ? 12 : 10;
-            const color = isHeading ? '0.23 0.25 0.43' : '0.17 0.17 0.18';
-            wrapPdfLine(line || ' ', isHeading ? 72 : 88).forEach((segment) => {
-                content.push(`BT /${font} ${size} Tf 48 ${y} Td ${color} rg (${escapePdfText(segment)}) Tj ET`);
-                y -= isHeading ? 18 : 14;
+    const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const logo = await embedNevoLogo(pdfDoc);
+    const pages: PDFPage[] = [];
+    let page = addReportPage(pdfDoc, pages, logo);
+    let y = 680;
+
+    page.drawText(title, {
+        x: 48,
+        y: 748,
+        size: 16,
+        font: boldFont,
+        color: pdfNavy(),
+    });
+    page.drawText(`Generated ${formatDate(generatedAt)}`, {
+        x: 48,
+        y: 730,
+        size: 9,
+        font: regularFont,
+        color: pdfNavy(),
+    });
+    page.drawLine({
+        start: { x: 48, y: 708 },
+        end: { x: 547, y: 708 },
+        thickness: 1,
+        color: pdfNavy(),
+    });
+
+    lines.forEach((line) => {
+        const isHeading = Boolean(line && !line.startsWith('-') && line.length < 70);
+        const font = isHeading ? boldFont : regularFont;
+        const size = isHeading ? 12 : 10;
+        const color = isHeading ? pdfNavy() : rgb(0.17, 0.17, 0.18);
+        const lineHeight = isHeading ? 18 : 14;
+        const wrapped = wrapPdfLine(line || ' ', isHeading ? 72 : 88);
+
+        wrapped.forEach((segment) => {
+            if (y < 72) {
+                page = addReportPage(pdfDoc, pages, logo);
+                y = 748;
+            }
+
+            page.drawText(segment, {
+                x: 48,
+                y,
+                size,
+                font,
+                color,
             });
-            y -= line ? 4 : 8;
+            y -= lineHeight;
         });
-        content.push(`BT /F1 9 Tf 500 36 Td 0.23 0.25 0.43 rg (${pageIndex + 1}) Tj ET`);
-        const stream = content.join('\n');
-        const contentId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-        contentIds.push(contentId);
+
+        y -= line ? 4 : 8;
     });
 
-    contentIds.forEach((contentId) => {
-        const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontRegular} 0 R /F2 ${fontBold} 0 R >> >> /Contents ${contentId} 0 R >>`);
-        pages.push(pageId);
+    pages.forEach((pdfPage, index) => {
+        pdfPage.drawText(String(index + 1), {
+            x: 500,
+            y: 36,
+            size: 9,
+            font: regularFont,
+            color: pdfNavy(),
+        });
     });
 
-    objects[catalogId - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
-    objects[pagesId - 1] = `<< /Type /Pages /Kids [${pages.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
-
-    let pdf = '%PDF-1.4\n';
-    const offsets = [0];
-    objects.forEach((body, index) => {
-        offsets.push(pdf.length);
-        pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
-    });
-    const xref = pdf.length;
-    pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-    offsets.slice(1).forEach((offset) => {
-        pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
-    });
-    pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xref}\n%%EOF`;
-    return pdf;
+    return pdfDoc.save();
 }
 
-function chunkLines(lines: string[], size: number) {
-    const chunks: string[][] = [];
-    for (let index = 0; index < lines.length; index += size) {
-        chunks.push(lines.slice(index, index + size));
+function addReportPage(pdfDoc: PDFDocument, pages: PDFPage[], logo: PDFImage | null) {
+    const page = pdfDoc.addPage([595, 842]);
+    page.drawRectangle({
+        x: 0,
+        y: 0,
+        width: 595,
+        height: 842,
+        color: rgb(0.95, 0.94, 0.9),
+    });
+    page.drawRectangle({
+        x: 0,
+        y: 792,
+        width: 595,
+        height: 50,
+        color: pdfNavy(),
+    });
+
+    if (logo) {
+        page.drawImage(logo, {
+            x: 48,
+            y: 806,
+            width: 80,
+            height: 24,
+        });
     }
-    return chunks.length ? chunks : [[]];
+
+    pages.push(page);
+    return page;
+}
+
+async function embedNevoLogo(pdfDoc: PDFDocument) {
+    const logoUrl = getStaticAssetUrl(nevoLogoAsset);
+    const svgText = await fetch(logoUrl).then((res) => {
+        if (!res.ok) throw new Error('Could not load Nevo logo.');
+        return res.text();
+    });
+    const pngBytes = await renderSvgToPngBytes(svgText, 240, 72);
+    return pdfDoc.embedPng(pngBytes);
+}
+
+function getStaticAssetUrl(asset: string | { src?: string }) {
+    if (typeof asset === 'string') return asset;
+    if (asset?.src) return asset.src;
+    return '/_next/static/media/default-logo.svg';
+}
+
+function renderSvgToPngBytes(svgText: string, width: number, height: number) {
+    return new Promise<Uint8Array>((resolve, reject) => {
+        const svgBlob = new Blob([svgText], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        const image = new Image();
+
+        image.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const context = canvas.getContext('2d');
+                if (!context) throw new Error('Could not prepare logo canvas.');
+                context.clearRect(0, 0, width, height);
+                context.filter = 'brightness(0) invert(1)';
+                context.drawImage(image, 0, 0, width, height);
+                canvas.toBlob((blob) => {
+                    URL.revokeObjectURL(svgUrl);
+                    if (!blob) {
+                        reject(new Error('Could not render Nevo logo.'));
+                        return;
+                    }
+                    blob.arrayBuffer().then((buffer) => resolve(new Uint8Array(buffer))).catch(reject);
+                }, 'image/png');
+            } catch (error) {
+                URL.revokeObjectURL(svgUrl);
+                reject(error);
+            }
+        };
+        image.onerror = () => {
+            URL.revokeObjectURL(svgUrl);
+            reject(new Error('Could not render Nevo logo.'));
+        };
+        image.src = svgUrl;
+    });
+}
+
+function pdfNavy() {
+    return rgb(0.23, 0.25, 0.43);
 }
 
 function wrapPdfLine(line: string, width: number) {
@@ -756,14 +878,6 @@ function wrapPdfLine(line: string, width: number) {
     });
     if (current) segments.push(current);
     return segments;
-}
-
-function escapePdfText(value: string) {
-    return String(value)
-        .replace(/[^\x20-\x7E]/g, ' ')
-        .replace(/\\/g, '\\\\')
-        .replace(/\(/g, '\\(')
-        .replace(/\)/g, '\\)');
 }
 
 function CalendarIcon() {

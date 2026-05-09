@@ -211,8 +211,12 @@ function AdminDashboardOverview({ user }: { user?: DashboardUser }) {
             accent: '#3B3F6E',
         },
         {
-            label: 'Topics where understanding is growing',
-            value: overview?.topics_unlabeled_and_growing ?? 0,
+            label: 'Concepts learned this week',
+            value:
+                overview?.concepts_learned_this_week ??
+                summary?.concepts_learned_this_week ??
+                overview?.topics_unlabeled_and_growing ??
+                0,
             accent: '#7AB87A',
         },
     ];
