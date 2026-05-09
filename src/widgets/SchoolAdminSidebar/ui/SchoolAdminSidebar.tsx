@@ -66,7 +66,7 @@ export function SchoolAdminSidebar({
     const buildHref = (view: SchoolDashboardView | null) => getDashboardPath('school', view || 'home');
 
     return (
-        <aside className="w-[240px] min-w-[240px] h-full bg-[#FCFCFC] border-r border-[#E0D9CE] flex flex-col">
+        <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[240px] min-w-[240px] flex-col overflow-hidden border-r border-[#E0D9CE] bg-[#FCFCFC]">
             <div className="px-6 pt-6 pb-8">
                 <NevoLogo className="h-6 w-auto" width={80} height={24} />
                 <p className="mt-3 max-w-[170px] text-[14px] font-semibold leading-[20px] text-[#3B3F6E]">
@@ -74,7 +74,7 @@ export function SchoolAdminSidebar({
                 </p>
             </div>
 
-            <nav className="flex-1 px-0">
+            <nav className="min-h-0 flex-1 overflow-y-auto px-0">
                 <div className="flex flex-col gap-1">
                     {navItems.map((item) => {
                         const isActive = (item.view || 'home') === (currentView || 'home');

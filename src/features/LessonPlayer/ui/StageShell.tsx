@@ -11,6 +11,7 @@ type StageShellProps = {
     media?: ReactNode;
     meta?: ReactNode;
     hideLabel?: boolean;
+    labelAside?: ReactNode;
     progress: number;
     onExit?: () => void;
     onBack: () => void;
@@ -38,6 +39,7 @@ export function StageShell({
     media,
     meta,
     hideLabel = false,
+    labelAside,
     progress,
     onExit,
     onBack,
@@ -85,9 +87,12 @@ export function StageShell({
 
             <div className="flex flex-1 flex-col px-6 pb-[133px] pt-6 lg:px-12 lg:pt-8">
                 {hideLabel ? null : (
-                    <h2 className="text-[13px] font-semibold leading-5 tracking-[0.325px] uppercase text-lavender">
-                        {label}
-                    </h2>
+                    <div className="flex items-center justify-between gap-4">
+                        <h2 className="text-[13px] font-semibold leading-5 tracking-[0.325px] uppercase text-lavender">
+                            {label}
+                        </h2>
+                        {labelAside ? <div className="shrink-0">{labelAside}</div> : null}
+                    </div>
                 )}
 
                 {meta ? <div className={hideLabel ? '' : 'mt-4'}>{meta}</div> : null}

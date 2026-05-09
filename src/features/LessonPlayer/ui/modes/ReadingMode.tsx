@@ -73,7 +73,7 @@ export function ReadingMode({
             media={
                 <div className="w-full bg-parchment overflow-y-auto">
                     <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-lavender">
-                        {content.keyTermLabel}
+                        KEY TERM
                     </span>
                     <h3 className="mt-2 mb-3 text-[20px] font-semibold leading-7 text-graphite">
                         {content.keyTerm}

@@ -496,7 +496,7 @@ function buildStage(blueprint: StageBlueprint): Stage {
                 stepsExpanded: expandActionSteps(actionSteps),
             },
             reading: {
-                keyTermLabel: labels.label,
+                keyTermLabel: 'KEY TERM',
                 keyTerm: concept.key_term || 'Key idea',
                 definition: blueprint.stepText,
                 definitionSimplified: simplified,

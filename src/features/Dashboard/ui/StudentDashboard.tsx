@@ -597,8 +597,10 @@ function StudentHomeView({
     : currentLesson || assignedLessons[0] || null;
   const progress = normalizeProgress(featuredLesson);
   const assignedCards = featuredLesson
-    ? assignedLessons.filter((lesson) => lesson.id !== featuredLesson.id)
+    ? assignedLessons.filter((lesson) => !lessonsShareIdentity(lesson, featuredLesson))
     : assignedLessons;
+  const visibleAssignedCards =
+    assignedCards.length > 0 ? assignedCards : assignedLessons;
   const topicImageUrl = featuredLesson ? getLessonVisualUrl(featuredLesson) : null;
 
   if (loading) {
@@ -695,17 +697,15 @@ function StudentHomeView({
         <h3 className="mb-4 text-[15px] font-semibold text-[#3B3F6E]">
           Assigned
         </h3>
-        {(assignedCards.length > 0 || (!currentLesson && assignedLessons.length > 0)) ? (
+        {visibleAssignedCards.length > 0 ? (
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {(assignedCards.length > 0 ? assignedCards : assignedLessons)
-              .slice(0, 4)
-              .map((lesson) => (
-                <LessonCard
-                  key={lesson.id}
-                  lesson={lesson}
-                  onClick={() => onSelectLesson(lesson)}
-                />
-              ))}
+            {visibleAssignedCards.slice(0, 4).map((lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                onClick={() => onSelectLesson(lesson)}
+              />
+            ))}
           </div>
         ) : (
           <DashboardEmptyState
@@ -805,6 +805,16 @@ function getUniqueLessonIdCandidates(...values: Array<unknown>) {
   );
 }
 
+function lessonsShareIdentity(
+  first: Pick<Lesson, "id" | "lessonId">,
+  second: Pick<Lesson, "id" | "lessonId">,
+) {
+  const secondIds = new Set(getUniqueLessonIdCandidates(second.id, second.lessonId));
+  return getUniqueLessonIdCandidates(first.id, first.lessonId).some((id) =>
+    secondIds.has(id),
+  );
+}
+
 function applyBackendCompletedLessonOverrides(
   currentLesson: Lesson | null,
   assignedLessons: Lesson[],
@@ -858,6 +868,15 @@ function applyBackendCompletedLessonOverrides(
     )
       ? currentLesson
       : null;
+
+  if (
+    visibleCurrentLesson &&
+    !visibleAssignedLessons.some((lesson) =>
+      lessonsShareIdentity(lesson, visibleCurrentLesson),
+    )
+  ) {
+    visibleAssignedLessons.unshift(visibleCurrentLesson);
+  }
 
   return {
     currentLesson: visibleCurrentLesson,
@@ -1109,8 +1128,10 @@ function StudentLessonsView({
     ? teacherLessons[0] ?? null
     : currentLesson ?? teacherLessons[0] ?? null;
   const teacherLessonList = featuredLesson
-    ? teacherLessons.filter((lesson) => lesson.id !== featuredLesson.id)
+    ? teacherLessons.filter((lesson) => !lessonsShareIdentity(lesson, featuredLesson))
     : teacherLessons;
+  const visibleTeacherLessonList =
+    teacherLessonList.length > 0 ? teacherLessonList : teacherLessons;
   const synthesizedCompletedCurrentLesson =
     currentLesson && isLessonEffectivelyCompleted(currentLesson)
       ? ({ ...currentLesson, status: "completed" } as Lesson)
@@ -1229,9 +1250,9 @@ function StudentLessonsView({
         <h3 className="mb-5 text-[20px] font-bold text-[#2B2B2F]">
           From your teacher
         </h3>
-        {teacherLessonList.length > 0 ? (
+        {visibleTeacherLessonList.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-            {teacherLessonList.map((lesson) => (
+            {visibleTeacherLessonList.map((lesson) => (
               <TeacherLessonCard
                 key={lesson.id}
                 lesson={lesson}

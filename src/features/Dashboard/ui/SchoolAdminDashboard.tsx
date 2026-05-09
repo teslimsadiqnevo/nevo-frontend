@@ -94,7 +94,7 @@ export function SchoolAdminDashboard({
     return (
         <div className="flex h-screen w-full overflow-hidden bg-[#F7F1E6] font-sans">
             <SchoolAdminSidebar user={user} currentView={currentView} />
-            <main className="relative flex-1 overflow-y-auto bg-[#F7F1E6] px-8 py-8">
+            <main className="relative ml-[240px] flex-1 overflow-y-auto bg-[#F7F1E6] px-8 py-8">
                 {renderView()}
             </main>
         </div>

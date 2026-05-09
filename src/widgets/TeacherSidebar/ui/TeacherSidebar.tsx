@@ -37,12 +37,13 @@ export function TeacherSidebar({
     const buildHref = (view: TeacherDashboardView | null) => getDashboardPath('teacher', view || 'home');
 
     return (
-        <aside className="w-[200px] min-w-[200px] bg-[#3B3F6E] flex flex-col h-full">
+        <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[200px] min-w-[200px] flex-col overflow-hidden bg-[#3B3F6E]">
             <div className="px-6 pt-6 pb-6">
                 <NevoLogo className="h-6 w-auto" width={80} height={24} variant="light" />
             </div>
 
-            <nav className="flex flex-col gap-1 px-3 flex-1">
+            <nav className="min-h-0 flex-1 overflow-y-auto px-3">
+                <div className="flex flex-col gap-1 pb-2">
                 {navItems.map((item) => {
                     const isActive = (item.view || 'home') === (currentView || 'home');
                     return (
@@ -60,6 +61,7 @@ export function TeacherSidebar({
                         </Link>
                     );
                 })}
+                </div>
             </nav>
 
             <div className="px-4 pb-6 pt-2">

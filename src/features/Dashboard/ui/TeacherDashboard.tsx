@@ -488,9 +488,9 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
     }, [view, router, effectiveUser, handleProfileSaved]);
 
     return (
-        <div className="flex bg-[#F7F1E6] font-sans h-screen w-full overflow-hidden">
+        <div className="flex h-screen w-full overflow-hidden bg-[#F7F1E6] font-sans">
             <TeacherSidebar user={effectiveUser} currentView={view} />
-            <main className="flex-1 px-[48px] py-[48px] overflow-y-auto">
+            <main className="ml-[200px] flex-1 overflow-y-auto px-[48px] py-[48px]">
                 {sessionIsStale ? (
                     <StaleSessionBanner
                         callbackUrl="/login/teacher"

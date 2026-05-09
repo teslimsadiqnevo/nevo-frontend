@@ -213,7 +213,6 @@ export function ActionMode({
         <StageShell
             pillText={stage.pillText}
             label={currentLabel}
-            hideLabel
             askContext={askContext}
             progress={progress}
             onExit={onExit}
@@ -226,18 +225,13 @@ export function ActionMode({
             onContinue={goToNext}
             canGoForward={canGoForward}
             bodyWidthClassName="max-w-[928px]"
-            meta={
-                <div className="flex items-center justify-between pt-[31px]">
-                    <h2 className="text-[13px] font-semibold uppercase leading-5 tracking-[0.325px] text-lavender">
-                        {currentLabel}
-                    </h2>
-                    <span className="text-[13px] leading-5 text-indigo/60">
-                        Step {resolvedIndex + 1} of {totalSteps}
-                    </span>
-                </div>
+            labelAside={
+                <span className="text-[13px] leading-5 text-indigo/60">
+                    Step {resolvedIndex + 1} of {totalSteps}
+                </span>
             }
             body={
-                <div className="max-w-[928px] pt-4">
+                <div className="max-w-[928px]">
                     <div className="flex flex-col gap-4">
                         {hydratedSteps.map((step, index) => (
                             <ActionInstructionRow
