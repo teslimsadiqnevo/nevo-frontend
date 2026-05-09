@@ -123,7 +123,7 @@ export function AssessmentFlow() {
     return (
         <div className="flex min-h-screen flex-col">
             <MiniFooter
-                speaker={!isConnect}
+                speaker={isQuestionStep}
                 onSpeakerClick={() => {
                     void toggleNarration();
                 }}
