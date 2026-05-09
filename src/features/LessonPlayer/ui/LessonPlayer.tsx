@@ -72,6 +72,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     useApiTokenExpiryRedirect('student');
     const router = useRouter();
     const { data, loading, error } = useLessonPlayer(lessonId);
+    const [activeStageKey, setActiveStageKey] = useState<StageKey>(stage);
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);
     const [showPaceOverlay, setShowPaceOverlay] = useState(false);
     const [showReflectionOverlay, setShowReflectionOverlay] = useState(false);
@@ -85,13 +86,13 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const progressSessionStartedAt = useRef(Date.now());
     const lastProgressKey = useRef<string | null>(null);
     const activeMode: LearningMode = resolvedLearningMode ?? learningMode;
-    const scopeKey = `${lessonId}:${stage}:${activeMode}`;
+    const scopeKey = `${lessonId}:${activeStageKey}:${activeMode}`;
     const [toolbarSession, setToolbarSession] = useState<{ scopeKey: string; state: ToolbarState }>({
         scopeKey,
         state: 'original',
     });
     const stageOrder = data?.stageOrder ?? [];
-    const stageIndex = stageOrder.indexOf(stage);
+    const stageIndex = stageOrder.indexOf(activeStageKey);
     const persistedLessonId = data?.originalLessonId || lessonId;
     const progressIdCandidates = getLessonProgressIdCandidates(
         lessonId,
@@ -99,6 +100,36 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         data?.originalLessonId,
         data?.adaptedLessonId,
     );
+
+    useEffect(() => {
+        setActiveStageKey(stage);
+    }, [stage]);
+
+    useEffect(() => {
+        const handlePopState = () => {
+            const match = window.location.pathname.match(
+                new RegExp(`/lesson/${lessonId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/([^/?#]+)$`),
+            );
+            const nextStage = match?.[1] as StageKey | undefined;
+            if (nextStage && (!data || data.stageOrder.includes(nextStage))) {
+                setActiveStageKey(nextStage);
+            }
+        };
+
+        window.addEventListener('popstate', handlePopState);
+        return () => window.removeEventListener('popstate', handlePopState);
+    }, [data, lessonId]);
+
+    const navigateToStage = (nextStage: StageKey) => {
+        setActiveStageKey(nextStage);
+
+        if (typeof window !== 'undefined') {
+            window.history.pushState(window.history.state, '', `/lesson/${lessonId}/${nextStage}`);
+            return;
+        }
+
+        router.push(`/lesson/${lessonId}/${nextStage}`);
+    };
 
     useEffect(() => {
         if (!data || stageIndex < 0) return;
@@ -125,7 +156,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         return () => {
             stopAllLessonTts();
         };
-    }, [lessonId, stage]);
+    }, [lessonId, activeStageKey]);
 
     useEffect(() => {
         let cancelled = false;
@@ -160,7 +191,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     useEffect(() => {
         if (!data || activeMode !== 'audio' || stageIndex < 0) return;
 
-        const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
+        const currentStage = data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex];
         const currentCacheBaseKey = getAudioCacheBaseKey(lessonId, currentStage);
 
         void preloadLessonTts(
@@ -209,7 +240,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             }));
 
         void queueLessonTtsPreloadBatch([...prioritizedEntries, ...backgroundEntries]);
-    }, [activeMode, data, lessonId, stage, stageIndex]);
+    }, [activeMode, activeStageKey, data, lessonId, stageIndex]);
 
     useEffect(() => {
         if (!data || stageIndex < 0) return;
@@ -257,7 +288,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         );
     }
 
-    const currentStage = data.stages.find((current) => current.key === stage) ?? data.stages[stageIndex];
+    const currentStage = data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex];
     const progress = ((stageIndex + 1) / Math.max(1, stageOrder.length)) * 100;
     const askContext = `You're on: ${data.title} · Section ${stageIndex + 1}`;
     const nextStage = stageIndex < stageOrder.length - 1 ? data.stages[stageIndex + 1] : null;
@@ -283,7 +314,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         }
 
         const previousStage = stageOrder[stageIndex - 1];
-        router.push(`/lesson/${lessonId}/${previousStage}`);
+        navigateToStage(previousStage);
     };
 
     const goToNextStage = () => {
@@ -308,7 +339,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         }
 
         if (stageIndex < stageOrder.length - 1) {
-            router.push(`/lesson/${lessonId}/${nextStageKey}`);
+            navigateToStage(nextStageKey);
             return;
         }
     };
@@ -468,7 +499,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
                 open={showAskNevoDrawer}
                 onClose={() => setShowAskNevoDrawer(false)}
                 context={askContext}
-                page={`lesson-${stage}`}
+                page={`lesson-${activeStageKey}`}
                 lessonId={lessonId}
             />
         </>

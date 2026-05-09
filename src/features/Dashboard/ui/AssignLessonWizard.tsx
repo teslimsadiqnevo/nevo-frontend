@@ -103,7 +103,13 @@ async function fetchTeacherClasses() {
         });
     }
 
-    const rawClasses = Array.isArray(data?.classes) ? data.classes : [];
+    const rawClasses = [
+        data?.classes,
+        data?.data?.classes,
+        data?.data?.data?.classes,
+        data?.results,
+        Array.isArray(data) ? data : null,
+    ].find(Array.isArray) || [];
     return rawClasses.map((item: any): ClassOption => ({
         id: String(item.id || item.class_id),
         name: item.name || item.class_name || 'Class',

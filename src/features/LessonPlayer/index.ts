@@ -4,5 +4,6 @@ export { LessonBreakRoute } from './ui/LessonBreakRoute';
 export { LessonCompletionRoute } from './ui/LessonCompletionRoute';
 export { LessonAssessmentRoute } from './ui/LessonAssessmentRoute';
 export { LessonMicroQuizRoute } from './ui/LessonMicroQuizRoute';
+export { LessonPlayerPreloader } from './ui/LessonPlayerPreloader';
 export { STAGE_ORDER } from './api/types';
 export type { StageKey, LessonPlayerData, ToolbarState } from './api/types';

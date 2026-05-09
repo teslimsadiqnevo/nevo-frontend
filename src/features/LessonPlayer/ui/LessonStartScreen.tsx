@@ -1,9 +1,10 @@
 'use client';
 
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useRegistrationStore, type LearningMode } from '@/shared/store/useRegistrationStore';
+import { useRegistrationStore, type LearningMode, normalizeLearningMode } from '@/shared/store/useRegistrationStore';
 import { getDashboardPath } from '@/shared/lib';
+import { getStudentProfile } from '@/features/Dashboard/api/student';
 import type { LessonPlayerData, LessonModeCard } from '../api/types';
 import { LeaveLessonDialog } from './LeaveLessonDialog';
 
@@ -79,9 +80,43 @@ export function LessonStartScreen({ lessonId, data }: LessonStartScreenProps) {
     const router = useRouter();
     const [showLeaveDialog, setShowLeaveDialog] = useState(false);
     const learningMode = useRegistrationStore((state) => state.learningMode);
+    const setLearningMode = useRegistrationStore((state) => state.setLearningMode);
+    const [resolvedLearningMode, setResolvedLearningMode] = useState<LearningMode>(data.recommendedMode);
 
-    const activeMode = learningMode;
-    const activeCard = data.start.cards[activeMode];
+    useEffect(() => {
+        let cancelled = false;
+
+        getStudentProfile()
+            .then((response) => {
+                if (cancelled) return;
+
+                const profile = response?.data;
+                const backendMode =
+                    profile?.learning_preference ||
+                    profile?.learning_style ||
+                    profile?.learning_profile?.learning_preference ||
+                    profile?.learning_profile?.learning_style ||
+                    profile?.how_you_learn?.learning_style ||
+                    null;
+                const normalizedMode = backendMode ? normalizeLearningMode(backendMode) : data.recommendedMode;
+
+                if (learningMode !== normalizedMode) {
+                    setLearningMode(normalizedMode);
+                }
+                setResolvedLearningMode(normalizedMode);
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setResolvedLearningMode(data.recommendedMode);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [data.recommendedMode, learningMode, setLearningMode]);
+
+    const activeMode = resolvedLearningMode;
+    const activeCard = data.start.cards[activeMode] ?? data.start.cards[data.recommendedMode] ?? data.start.cards.visual;
 
     const beginLesson = () => {
         router.push(`/lesson/${lessonId}/${data.stageOrder[0] || 'step-1'}`);

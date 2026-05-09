@@ -38,11 +38,20 @@ const STATUS_STYLE: Record<LessonConceptResultStatus, { dot: string; text: strin
 
 function SummaryMetricCard({ metric }: { metric: LessonCompletionMetric }) {
     const valueClass = metric.accent === 'indigo' ? 'text-lavender' : 'text-indigo';
+    const isLongValue = String(metric.value).trim().length > 3;
 
     return (
-        <div className="flex h-[98px] flex-1 flex-col items-center justify-center rounded-xl border border-[#E0D9CE] bg-white px-3">
-            <div className={`text-[32px] font-bold leading-[48px] ${valueClass}`}>{metric.value}</div>
-            <div className="mt-2 text-[12px] leading-4 text-indigo/55">{metric.label}</div>
+        <div className="flex min-h-[92px] min-w-0 flex-col items-center justify-center rounded-xl border border-[#E0D9CE] bg-white px-3 py-4 text-center">
+            <div
+                className={`max-w-full break-words font-bold ${
+                    isLongValue
+                        ? 'text-[15px] leading-5 sm:text-[18px] sm:leading-6'
+                        : 'text-[26px] leading-8 sm:text-[32px] sm:leading-[40px]'
+                } ${valueClass}`}
+            >
+                {metric.value}
+            </div>
+            <div className="mt-2 max-w-full break-words text-[12px] leading-4 text-indigo/55">{metric.label}</div>
         </div>
     );
 }
@@ -51,11 +60,11 @@ function ConceptResultRow({ result }: { result: LessonConceptResult }) {
     const style = STATUS_STYLE[result.status];
 
     return (
-        <div className="flex min-h-12 items-center justify-between gap-6 py-[14px]">
-            <span className="text-[14px] leading-5 text-graphite">{result.label}</span>
-            <div className="flex shrink-0 items-center gap-2">
+        <div className="flex min-h-12 items-start justify-between gap-3 py-[14px] sm:items-center sm:gap-6">
+            <span className="min-w-0 flex-1 break-words text-[14px] leading-5 text-graphite">{result.label}</span>
+            <div className="flex max-w-[46%] shrink-0 items-center justify-end gap-2 text-right sm:max-w-none">
                 <span className={`h-2 w-2 rounded-full ${style.dot}`} />
-                <span className={`text-[12px] leading-4 opacity-80 ${style.text}`}>
+                <span className={`break-words text-[12px] leading-4 opacity-80 ${style.text}`}>
                     {STATUS_COPY[result.status]}
                 </span>
             </div>
@@ -92,7 +101,7 @@ export function LessonCompletionScreen({
                     </button>
                 </div>
 
-                <div className="mx-auto flex w-full max-w-[640px] flex-col gap-8 px-0 pb-12 pt-14">
+                <div className="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-5 pb-12 pt-10 sm:px-8 sm:pt-14 lg:px-0">
                     <div className="flex flex-col gap-2">
                         <h1 className="text-[20px] font-bold leading-[30px] text-indigo">{completion.heading}</h1>
                         <div className="inline-flex w-fit rounded-2xl bg-lavender-20 px-3 py-2 text-[11px] font-medium leading-4 text-indigo">
@@ -101,7 +110,7 @@ export function LessonCompletionScreen({
                         <div className="text-[12px] leading-4 text-indigo/50">{completion.completedAtLabel}</div>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-[14px]">
+                    <div className="grid grid-cols-1 gap-3 min-[520px]:grid-cols-3 min-[520px]:gap-[14px]">
                         {completion.metrics.map((metric) => (
                             <SummaryMetricCard key={`${metric.label}:${metric.value}`} metric={metric} />
                         ))}

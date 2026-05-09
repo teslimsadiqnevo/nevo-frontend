@@ -40,6 +40,7 @@ type BackendConcept = {
     key_term?: string;
     difficulty_level?: number;
     estimated_read_time_seconds?: number;
+    estimated_listen_time_seconds?: number;
 };
 
 type BackendLessonPayload = {
@@ -47,6 +48,9 @@ type BackendLessonPayload = {
     adaptation_style: string;
     learning_mode_delivered?: string;
     adapt_automatically?: boolean;
+    estimated_duration_minutes?: number | null;
+    duration_minutes?: number | null;
+    estimated_duration_seconds?: number | null;
     concepts: BackendConcept[];
     adapted_lesson_id: string;
     original_lesson_id: string;
@@ -550,6 +554,48 @@ function buildModules(stageBlueprints: StageBlueprint[]) {
     })) as ModuleBlueprint[];
 }
 
+function toPositiveNumber(value: unknown) {
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
+function formatCount(count: number, singular: string, plural = `${singular}s`) {
+    return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatDurationLabel(minutes: number) {
+    return `${formatCount(Math.max(1, Math.round(minutes)), 'minute')}`;
+}
+
+function getEstimatedDurationMinutes(
+    payload: BackendLessonPayload,
+    concepts: BackendConcept[],
+    modules: ModuleBlueprint[],
+    stageBlueprints: StageBlueprint[],
+) {
+    const explicitMinutes =
+        toPositiveNumber(payload.estimated_duration_minutes) ??
+        toPositiveNumber(payload.duration_minutes);
+
+    if (explicitMinutes) {
+        return Math.max(1, Math.round(explicitMinutes));
+    }
+
+    const explicitSeconds = toPositiveNumber(payload.estimated_duration_seconds);
+    if (explicitSeconds) {
+        return Math.max(1, Math.ceil(explicitSeconds / 60));
+    }
+
+    const conceptSeconds = concepts.reduce((total, concept) => {
+        const readSeconds = toPositiveNumber(concept.estimated_read_time_seconds);
+        const listenSeconds = toPositiveNumber(concept.estimated_listen_time_seconds);
+        return total + Math.max(readSeconds ?? 0, listenSeconds ?? 0, 20);
+    }, 0);
+    const interactionSeconds = Math.max(stageBlueprints.length * 18, modules.length * 30);
+
+    return Math.max(1, Math.ceil((conceptSeconds + interactionSeconds) / 60));
+}
+
 function getModuleAnchorConcept(module: ModuleBlueprint) {
     return module.stages[module.stages.length - 1]?.concept ?? module.stages[0]?.concept;
 }
@@ -986,6 +1032,12 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
     const modules = buildModules(stageBlueprints);
     const stages = stageBlueprints.map((blueprint) => buildStage(blueprint));
     const stageOrder = stageBlueprints.map((blueprint) => blueprint.key);
+    const estimatedDurationMinutes = getEstimatedDurationMinutes(
+        payload,
+        sourceConcepts,
+        modules,
+        stageBlueprints,
+    );
 
     return {
         id: payload.adapted_lesson_id || payload.original_lesson_id,
@@ -1002,16 +1054,8 @@ function adaptLessonPayload(payload: BackendLessonPayload): LessonPlayerData {
             eyebrow: 'Lesson',
             title: payload.lesson_title,
             subtitle: payload.adaptation_style,
-            durationLabel: `${Math.max(
-                5,
-                Math.round(
-                    sourceConcepts.reduce(
-                        (total, concept) => total + Number(concept.estimated_read_time_seconds || 20),
-                        0,
-                    ) / 60,
-                ),
-            )} minutes`,
-            conceptsLabel: `${modules.length} modules · ${stageBlueprints.length} learning steps`,
+            durationLabel: formatDurationLabel(estimatedDurationMinutes),
+            conceptsLabel: `${formatCount(modules.length, 'module')} · ${formatCount(stageBlueprints.length, 'learning step')}`,
             modeLabel: `Best in ${recommendedMode}`,
             cards: {
                 visual: {
