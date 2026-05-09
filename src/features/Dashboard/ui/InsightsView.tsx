@@ -327,8 +327,8 @@ export function InsightsView() {
   const currentOverview = overview;
   return (
     <TabletFrame>
-      <div className="flex h-full w-[804px] flex-col gap-8 bg-[#F7F1E6] px-8 py-8">
-        <div className="flex h-9 w-[740px] items-center justify-between">
+      <div className="flex h-full w-full max-w-[1180px] flex-col gap-8 bg-[#F7F1E6] px-6 py-8 md:px-8 xl:px-12">
+        <div className="flex h-9 w-full items-center justify-between">
           <h1 className="text-[20px] font-bold leading-7 text-[#3B3F6E]">Insights</h1>
           <div className="flex items-center gap-3">
             <div className="relative">
@@ -368,14 +368,14 @@ export function InsightsView() {
           </div>
         </div>
 
-        <section className="flex h-[224px] w-[740px] flex-col gap-4">
+        <section className="flex min-h-[224px] w-full flex-col gap-4">
           <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Students who may need support</h2>
           {currentOverview?.supportStudents.length ? (
-            <div className="flex h-[185.5px] w-[740px] gap-3 overflow-x-auto pb-0">
+            <div className="grid min-h-[185.5px] w-full grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3 overflow-hidden pb-0">
               {currentOverview.supportStudents.slice(0, 10).map((student) => (
                 <article
                   key={student.id}
-                  className="flex h-[185.5px] w-[160px] shrink-0 flex-col items-start gap-2 rounded-[12px] border border-l-4 border-[#E0D9CE] border-l-[#F5A623] bg-[#F7F1E6] py-[17px] pl-5 pr-[17px]"
+                  className="flex h-[185.5px] min-w-[160px] flex-col items-start gap-2 rounded-[12px] border border-l-4 border-[#E0D9CE] border-l-[#F5A623] bg-[#F7F1E6] py-[17px] pl-5 pr-[17px]"
                 >
                   <Avatar initials={student.initials} size={36} />
                   <p className="w-[123px] truncate text-[14px] font-semibold leading-5 text-[#3B3F6E]">{student.name}</p>
@@ -393,13 +393,13 @@ export function InsightsView() {
               ))}
             </div>
           ) : (
-            <div className="flex h-[185.5px] w-[740px] items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6] text-[14px] font-normal text-[#2B2B2F]/60">
+            <div className="flex h-[185.5px] w-full items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6] text-[14px] font-normal text-[#2B2B2F]/60">
               No students need support right now.
             </div>
           )}
         </section>
 
-        <section className="flex min-h-[302.5px] w-[740px] flex-col gap-4">
+        <section className="flex min-h-[302.5px] w-full flex-col gap-4">
           <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Lessons with confusion signals</h2>
           {currentOverview?.confusionLessons.length ? (
             <div className="flex flex-col gap-3">
@@ -419,7 +419,7 @@ export function InsightsView() {
           )}
         </section>
 
-        <section className="flex min-h-[210.5px] w-[740px] flex-col gap-4">
+        <section className="flex min-h-[210.5px] w-full flex-col gap-4">
           <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Topics building well</h2>
           {currentOverview?.buildingTopics.length ? (
             <div className="flex flex-col gap-3">
@@ -444,7 +444,7 @@ export function InsightsView() {
 }
 
 function TabletFrame({ children }: { children: ReactNode }) {
-  return <div className="h-full min-h-[933px] w-[804px] bg-[#F7F1E6]">{children}</div>;
+  return <div className="h-full min-h-[933px] w-full bg-[#F7F1E6]">{children}</div>;
 }
 
 function SignalRow({
@@ -464,7 +464,7 @@ function SignalRow({
     <button
       type="button"
       onClick={onClick}
-      className="flex h-20 w-[740px] items-center justify-between rounded-[12px] border border-l-4 border-[#E0D9CE] bg-[#F7F1E6] py-[17px] pl-6 pr-[21px] text-left"
+      className="flex h-20 w-full items-center justify-between rounded-[12px] border border-l-4 border-[#E0D9CE] bg-[#F7F1E6] py-[17px] pl-6 pr-[21px] text-left"
       style={{ borderLeftColor: stripColor }}
     >
       <span className="flex min-w-0 flex-col gap-1">
@@ -481,7 +481,7 @@ function SignalRow({
 function SectionEmpty({ label, minHeight }: { label: string; minHeight: number }) {
   return (
     <div
-      className="flex w-[740px] items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6] text-[14px] font-normal leading-5 text-[#2B2B2F]/60"
+      className="flex w-full items-center justify-center rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6] text-[14px] font-normal leading-5 text-[#2B2B2F]/60"
       style={{ minHeight }}
     >
       {label}
@@ -525,19 +525,19 @@ function LessonInsightDetail({
 
   return (
     <TabletFrame>
-      <div className="relative h-full min-h-[900px] w-[804px] bg-[#F7F1E6] px-8 pt-8">
+      <div className="relative h-full min-h-[900px] w-full max-w-[1180px] bg-[#F7F1E6] px-6 pt-8 md:px-8 xl:px-12">
         <BackButton label="Insights" onBack={onBack} />
-        <h1 className="mt-7 w-[740px] text-center text-[17px] font-semibold leading-[26px] text-[#3B3F6E]">
+        <h1 className="mt-7 w-full text-center text-[17px] font-semibold leading-[26px] text-[#3B3F6E]">
           {data.title}
         </h1>
-        <div className="mt-10 flex w-[740px] flex-col gap-3">
+        <div className="mt-10 flex w-full flex-col gap-3">
           {data.sections.map((section, index) => {
             const expanded = expandedIndex === index;
             const pct = section.total > 0 ? Math.min(100, (section.understood / section.total) * 100) : 0;
             return (
               <article
                 key={`${section.title}-${index}`}
-                className="w-[740px] rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]"
+                className="w-full rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]"
               >
                 <button
                   type="button"
@@ -632,15 +632,15 @@ function TopicInsightDetail({
 
   return (
     <TabletFrame>
-      <div className="relative min-h-[900px] w-[804px] bg-[#F7F1E6] px-8 pt-8">
+      <div className="relative min-h-[900px] w-full max-w-[1180px] bg-[#F7F1E6] px-6 pt-8 md:px-8 xl:px-12">
         <BackButton label="Insights" onBack={onBack} />
-        <h1 className="mt-7 w-[740px] text-center text-[17px] font-semibold leading-[26px] text-[#3B3F6E]">
+        <h1 className="mt-7 w-full text-center text-[17px] font-semibold leading-[26px] text-[#3B3F6E]">
           {data.title}
         </h1>
 
-        <section className="mt-10 flex w-[740px] flex-col gap-4">
+        <section className="mt-10 flex w-full flex-col gap-4">
           <h2 className="text-[15px] font-medium leading-[22px] text-[#3B3F6E]">Class performance on this topic</h2>
-          <div className="flex h-60 w-[740px] items-end justify-center rounded-[12px] bg-[#FAF9F6] px-6 py-6">
+          <div className="flex h-60 w-full items-end justify-center rounded-[12px] bg-[#FAF9F6] px-6 py-6">
             {data.bars.length > 0 ? (
               <div className="flex h-[192px] items-end justify-center gap-6">
                 {data.bars.map((bar, index) => (
@@ -666,7 +666,7 @@ function TopicInsightDetail({
           </p>
         </section>
 
-        <section className="mt-9 flex w-[740px] flex-col gap-4 pb-10">
+        <section className="mt-9 flex w-full flex-col gap-4 pb-10">
           <h2 className="text-[15px] font-medium leading-[22px] text-[#3B3F6E]">Students</h2>
           <div className="flex flex-col gap-2">
             {data.students.map((student) => (
@@ -674,7 +674,7 @@ function TopicInsightDetail({
                 key={student.id}
                 type="button"
                 onClick={() => router.push(`${getDashboardPath('teacher', 'students')}?student=${encodeURIComponent(student.id)}`)}
-                className="flex h-14 w-[740px] items-center gap-3 rounded-[8px] px-3 text-left hover:bg-[#F2EADB]"
+                className="flex h-14 w-full items-center gap-3 rounded-[8px] px-3 text-left hover:bg-[#F2EADB]"
               >
                 <Avatar initials={student.initials} size={32} />
                 <span className="min-w-[140px] text-[14px] font-medium leading-5 text-[#3B3F6E]">{student.name}</span>
@@ -691,7 +691,7 @@ function TopicInsightDetail({
 function InsightsEmpty() {
   return (
     <TabletFrame>
-      <div className="flex h-[933px] w-[804px] items-center justify-center bg-[#F7F1E6]">
+      <div className="flex h-[933px] w-full items-center justify-center bg-[#F7F1E6]">
         <div className="flex w-[380px] flex-col items-center">
           <ClassroomIllustration />
           <h2 className="mt-6 text-center text-[16px] font-semibold leading-6 text-[#3B3F6E]">
@@ -709,33 +709,33 @@ function InsightsEmpty() {
 function InsightsSkeleton({ backLabel }: { backLabel?: string }) {
   return (
     <TabletFrame>
-      <div className="flex h-[933px] w-[804px] flex-col gap-8 bg-[#F7F1E6] px-8 py-8">
+      <div className="flex h-[933px] w-full max-w-[1180px] flex-col gap-8 bg-[#F7F1E6] px-6 py-8 md:px-8 xl:px-12">
         {backLabel ? <div className="h-5 w-[96px] rounded-[6px] bg-[#E8E2D4]" /> : null}
-        <div className="flex h-9 w-[740px] items-center justify-between">
+        <div className="flex h-9 w-full items-center justify-between">
           <div className="h-[18px] w-[100px] rounded-[8px] bg-[#E8E2D4]" />
           <div className="flex gap-3">
             <div className="h-9 w-[120px] rounded-[8px] bg-[#E8E2D4]" />
             <div className="h-9 w-[120px] rounded-[8px] bg-[#E8E2D4]" />
           </div>
         </div>
-        <div className="flex h-[224px] w-[740px] flex-col gap-4">
+        <div className="flex h-[224px] w-full flex-col gap-4">
           <div className="h-[18px] w-[220px] rounded-[6px] bg-[#E8E2D4]" />
-          <div className="flex h-[185.5px] gap-3">
+          <div className="grid h-[185.5px] grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-3 overflow-hidden">
             {Array.from({ length: 4 }).map((_, index) => (
-              <div key={index} className="h-[185.5px] w-[160px] rounded-[12px] bg-[#E8E2D4]" />
+              <div key={index} className="h-[185.5px] min-w-[160px] rounded-[12px] bg-[#E8E2D4]" />
             ))}
           </div>
         </div>
-        <div className="flex h-[302.5px] w-[740px] flex-col gap-4">
+        <div className="flex h-[302.5px] w-full flex-col gap-4">
           <div className="h-[18px] w-[240px] rounded-[6px] bg-[#E8E2D4]" />
           {Array.from({ length: 3 }).map((_, index) => (
-            <div key={index} className="h-20 w-[740px] rounded-[12px] bg-[#E8E2D4]" />
+            <div key={index} className="h-20 w-full rounded-[12px] bg-[#E8E2D4]" />
           ))}
         </div>
-        <div className="flex h-[210.5px] w-[740px] flex-col gap-4">
+        <div className="flex h-[210.5px] w-full flex-col gap-4">
           <div className="h-[18px] w-[180px] rounded-[6px] bg-[#E8E2D4]" />
           {Array.from({ length: 2 }).map((_, index) => (
-            <div key={index} className="h-20 w-[740px] rounded-[12px] bg-[#E8E2D4]" />
+            <div key={index} className="h-20 w-full rounded-[12px] bg-[#E8E2D4]" />
           ))}
         </div>
       </div>
