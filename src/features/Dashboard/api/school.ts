@@ -361,6 +361,25 @@ export async function getSchoolBoardSharePreview(params?: {
   }
 }
 
+export async function getSchoolTermReportExport(params?: {
+  startDate?: string;
+  endDate?: string;
+}) {
+  try {
+    const { headers } = await schoolContext();
+    const query = new URLSearchParams();
+    if (params?.startDate) query.set("start_date", params.startDate);
+    if (params?.endDate) query.set("end_date", params.endDate);
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const res = await apiFetch(`/schools/me/reports/term-export${suffix}`, {
+      headers,
+    });
+    return unwrap(res, "Failed to export term report");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 export async function getSchoolSettings() {
   try {
     const { headers } = await schoolContext();

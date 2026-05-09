@@ -3,46 +3,72 @@
 import type { ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useAuthGuard } from '@/shared/lib';
-import { getSchoolBoardSharePreview, getSchoolTermSummary } from '../api/school';
+import {
+    getSchoolBoardSharePreview,
+    getSchoolTermReportExport,
+    getSchoolTermSummary,
+} from '../api/school';
 import { DashboardViewSkeleton } from './DashboardSkeletons';
 
 type ReportState = {
     loading: boolean;
+    exporting: boolean;
     error: string | null;
     warning: string | null;
-    termSummary: any | null;
-    boardPreview: any | null;
+    termSummary: SchoolTermSummary | null;
+    boardPreview: SchoolBoardPreview | null;
 };
 
-type EngagementPoint = {
-    label: string;
-    value: number;
+type SchoolTermSummary = {
+    school_id?: string;
+    school_name?: string;
+    term_start_date?: string;
+    term_end_date?: string;
+    active_weeks?: number;
+    students_used_nevo_this_term?: number;
+    enrolled_students?: number;
+    concepts_covered_this_term?: number;
+    subject_breakdown?: SubjectBreakdown[];
+    teachers_uploaded_this_term?: number;
+    total_classes?: number;
+    teacher_avatars?: TeacherAvatar[];
+    additional_teacher_count?: number;
+    whats_working_well?: string[];
+    where_support_is_needed?: string[];
+    show_empty_state?: boolean;
+    empty_state?: {
+        title?: string;
+        description?: string;
+        primary_action_label?: string;
+        secondary_action_label?: string;
+    } | null;
 };
 
-type CompletionRow = {
-    label: string;
-    completed: number;
-    total: number;
-    percentage: number;
+type SchoolBoardPreview = {
+    title?: string;
+    summary?: string;
+    highlights?: string[];
+    call_to_action?: string;
+    generated_at?: string;
 };
 
-type TeacherRow = {
-    name: string;
-    uploaded: string;
-    assigned: string;
-    lastActive: string;
+type SubjectBreakdown = {
+    subject_name?: string;
+    concept_count?: number;
+    progress_percentage?: number;
 };
 
-type CoverageRow = {
-    label: string;
-    percentage: number;
-    tag: string;
+type TeacherAvatar = {
+    teacher_id?: string;
+    teacher_name?: string;
+    avatar_url?: string | null;
 };
 
 export function ReportsView() {
     const guardAuth = useAuthGuard('school');
     const [state, setState] = useState<ReportState>({
         loading: true,
+        exporting: false,
         error: null,
         warning: null,
         termSummary: null,
@@ -53,6 +79,8 @@ export function ReportsView() {
         let mounted = true;
 
         void (async () => {
+            setState((current) => ({ ...current, loading: true, error: null, warning: null }));
+
             const [termRes, previewRes] = await Promise.all([
                 getSchoolTermSummary(),
                 getSchoolBoardSharePreview(),
@@ -61,23 +89,24 @@ export function ReportsView() {
             if (!mounted) return;
             if (guardAuth([termRes, previewRes])) return;
 
-            const termSummary = 'data' in termRes ? termRes.data : null;
-            const boardPreview = 'data' in previewRes ? previewRes.data : null;
+            const termSummary = ('data' in termRes ? termRes.data : null) as SchoolTermSummary | null;
+            const boardPreview = ('data' in previewRes ? previewRes.data : null) as SchoolBoardPreview | null;
             const termError = 'error' in termRes ? termRes.error : null;
             const previewError = 'error' in previewRes ? previewRes.error : null;
             const termMissing = isMissingEndpointError(termError);
             const previewMissing = isMissingEndpointError(previewError);
             const error =
-                (termError && !termMissing && !boardPreview ? termError : null) ||
+                (termError && !termMissing && !termSummary ? termError : null) ||
                 (previewError && !previewMissing && !termSummary ? previewError : null) ||
                 null;
             const warning =
                 !error && (termError || previewError)
-                    ? 'Some report sections are not available yet. Showing the data the backend returned.'
+                    ? 'Some report sections are unavailable from the backend right now. Showing the data we could fetch.'
                     : null;
 
             setState({
                 loading: false,
+                exporting: false,
                 error,
                 warning,
                 termSummary,
@@ -90,22 +119,41 @@ export function ReportsView() {
         };
     }, [guardAuth]);
 
-    const engagementSeries = useMemo(
-        () => getEngagementSeries(state.termSummary, state.boardPreview),
-        [state.termSummary, state.boardPreview],
+    const termSummary = state.termSummary;
+    const boardPreview = state.boardPreview;
+    const subjectRows = useMemo(
+        () => normalizeSubjectRows(termSummary?.subject_breakdown),
+        [termSummary?.subject_breakdown],
     );
-    const completionRows = useMemo(
-        () => getCompletionRows(state.termSummary, state.boardPreview),
-        [state.termSummary, state.boardPreview],
+    const termRange = formatDateRange(termSummary?.term_start_date, termSummary?.term_end_date);
+    const activeLearnerPercentage = getPercentage(
+        termSummary?.students_used_nevo_this_term,
+        termSummary?.enrolled_students,
     );
-    const teacherRows = useMemo(
-        () => getTeacherRows(state.termSummary, state.boardPreview),
-        [state.termSummary, state.boardPreview],
-    );
-    const coverageRows = useMemo(
-        () => getCoverageRows(state.termSummary, state.boardPreview),
-        [state.termSummary, state.boardPreview],
-    );
+
+    const handleExport = async () => {
+        setState((current) => ({ ...current, exporting: true, warning: null }));
+
+        const res = await getSchoolTermReportExport({
+            startDate: termSummary?.term_start_date,
+            endDate: termSummary?.term_end_date,
+        });
+
+        if (guardAuth(res)) return;
+
+        if ('error' in res && res.error) {
+            setState((current) => ({
+                ...current,
+                exporting: false,
+                warning: res.error,
+            }));
+            return;
+        }
+
+        const exportPayload = 'data' in res ? res.data : null;
+        downloadReportPayload(exportPayload);
+        setState((current) => ({ ...current, exporting: false }));
+    };
 
     if (state.loading) return <DashboardViewSkeleton titleWidth="w-36" cardCount={4} rowCount={4} />;
 
@@ -118,22 +166,44 @@ export function ReportsView() {
         );
     }
 
+    if (termSummary?.show_empty_state) {
+        return (
+            <div className="mx-auto flex w-full max-w-[760px] flex-col items-center justify-center rounded-[16px] border border-[#E0D9CE] bg-white px-8 py-16 text-center">
+                <div className="h-16 w-16 rounded-[18px] bg-[#9A9CCB]/20" />
+                <h1 className="mt-6 text-[22px] font-bold text-[#3B3F6E]">
+                    {termSummary.empty_state?.title || 'No report data yet'}
+                </h1>
+                <p className="mt-3 max-w-[460px] text-[15px] leading-6 text-[#2B2B2F]/60">
+                    {termSummary.empty_state?.description ||
+                        'Reports will appear once students and teachers start using Nevo this term.'}
+                </p>
+            </div>
+        );
+    }
+
     return (
         <div className="mx-auto flex w-full max-w-[1136px] flex-col gap-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <h1 className="text-[22px] font-bold leading-[33px] text-[#3B3F6E]">Reports</h1>
+                <div>
+                    <h1 className="text-[22px] font-bold leading-[33px] text-[#3B3F6E]">Reports</h1>
+                    <p className="mt-1 text-[14px] text-[#2B2B2F]/55">
+                        {termSummary?.school_name ? `${termSummary.school_name} - ` : ''}
+                        {termRange}
+                    </p>
+                </div>
                 <div className="flex flex-wrap items-center gap-3">
-                    <button className="flex h-[40px] items-center gap-2 rounded-[12px] border border-[#3B3F6E] bg-white px-4 text-[14px] font-medium text-[#3B3F6E]">
+                    <div className="flex h-[40px] items-center gap-2 rounded-[12px] border border-[#3B3F6E] bg-white px-4 text-[14px] font-medium text-[#3B3F6E]">
                         <CalendarIcon />
-                        <span>This month</span>
-                        <ChevronDownIcon />
-                    </button>
+                        <span>{termSummary?.active_weeks || 0} active weeks</span>
+                    </div>
                     <button
-                        disabled
-                        className="flex h-[40px] items-center gap-2 rounded-[12px] border border-[#3B3F6E]/30 bg-white px-4 text-[14px] font-medium text-[#3B3F6E]/40"
+                        type="button"
+                        onClick={() => void handleExport()}
+                        disabled={state.exporting || !termSummary}
+                        className="flex h-[40px] items-center gap-2 rounded-[12px] border border-[#3B3F6E] bg-white px-4 text-[14px] font-medium text-[#3B3F6E] disabled:cursor-not-allowed disabled:opacity-45"
                     >
                         <ExportIcon />
-                        <span>Export PDF</span>
+                        <span>{state.exporting ? 'Exporting...' : 'Export report'}</span>
                     </button>
                 </div>
             </div>
@@ -144,100 +214,110 @@ export function ReportsView() {
                 </div>
             ) : null}
 
-            <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-                <ReportCard title="Student engagement">
-                    {engagementSeries.length > 0 ? (
-                        <>
-                            <EngagementChart points={engagementSeries} />
-                            <p className="mt-4 text-[12px] leading-4 text-[#2B2B2F]/55">Daily active learners.</p>
-                        </>
-                    ) : (
-                        <CardEmptyState />
-                    )}
-                </ReportCard>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <MetricCard
+                    label="Students used Nevo"
+                    value={`${formatNumber(termSummary?.students_used_nevo_this_term)} / ${formatNumber(termSummary?.enrolled_students)}`}
+                    helper={`${Math.round(activeLearnerPercentage)}% of enrolled students`}
+                />
+                <MetricCard
+                    label="Concepts covered"
+                    value={formatNumber(termSummary?.concepts_covered_this_term)}
+                    helper="This term"
+                />
+                <MetricCard
+                    label="Teachers uploaded"
+                    value={formatNumber(termSummary?.teachers_uploaded_this_term)}
+                    helper="Uploaded at least one lesson"
+                />
+                <MetricCard
+                    label="Classes tracked"
+                    value={formatNumber(termSummary?.total_classes)}
+                    helper="Active school classes"
+                />
+            </div>
 
-                <ReportCard title="Lesson completion">
-                    {completionRows.length > 0 ? (
-                        <div className="mt-2 flex flex-col gap-4">
-                            {completionRows.map((row) => (
+            <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+                <ReportCard title="Subject coverage">
+                    {subjectRows.length > 0 ? (
+                        <div className="flex flex-col gap-4">
+                            {subjectRows.map((row) => (
                                 <div
-                                    key={row.label}
-                                    className="grid grid-cols-1 gap-2 md:grid-cols-[60px_minmax(0,1fr)_175px] md:items-center md:gap-4"
+                                    key={row.subject_name}
+                                    className="grid grid-cols-1 gap-2 md:grid-cols-[150px_minmax(0,1fr)_90px] md:items-center md:gap-4"
                                 >
-                                    <span className="text-[13px] font-medium leading-5 text-[#2B2B2F]">{row.label}</span>
+                                    <span className="text-[13px] font-medium leading-5 text-[#2B2B2F]">
+                                        {row.subject_name}
+                                    </span>
                                     <div className="h-[8px] overflow-hidden rounded-full bg-[#F7F1E6]">
                                         <div
                                             className="h-full rounded-full bg-[#3B3F6E]"
-                                            style={{ width: `${Math.max(0, Math.min(row.percentage, 100))}%` }}
+                                            style={{ width: `${row.progress_percentage}%` }}
                                         />
                                     </div>
                                     <span className="text-[12px] leading-4 text-[#2B2B2F]/55">
-                                        {row.completed} of {row.total} lessons completed
+                                        {row.concept_count} concepts
                                     </span>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <CardEmptyState />
+                        <CardEmptyState label="No subject coverage has been recorded for this term." />
                     )}
                 </ReportCard>
 
                 <ReportCard title="Teacher activity">
-                    {teacherRows.length > 0 ? (
-                        <div className="mt-2 overflow-x-auto">
-                            <div className="min-w-[520px]">
-                            <div className="grid grid-cols-[1.4fr_1fr_1fr_1fr] border-b border-[#E0D9CE] pb-3 text-[12px] font-medium uppercase tracking-[0.03em] text-[#2B2B2F]/65">
-                                <span>Teacher</span>
-                                <span>Uploaded</span>
-                                <span>Assigned</span>
-                                <span>Last active</span>
-                            </div>
-                            <div className="flex flex-col">
-                                {teacherRows.map((row, index) => (
-                                    <div
-                                        key={`${row.name}-${index}`}
-                                        className="grid grid-cols-[1.4fr_1fr_1fr_1fr] items-center border-b border-[#E0D9CE] py-4 last:border-b-0"
-                                    >
-                                        <span className="text-[13px] leading-5 text-[#2B2B2F]">{row.name}</span>
-                                        <span className="text-[13px] leading-5 text-[#2B2B2F]">{row.uploaded}</span>
-                                        <span className="text-[13px] leading-5 text-[#2B2B2F]">{row.assigned}</span>
-                                        <span className="text-[13px] leading-5 text-[#2B2B2F]">{row.lastActive}</span>
-                                    </div>
-                                ))}
-                            </div>
-                            </div>
+                    <div className="flex flex-col gap-5">
+                        <div>
+                            <p className="text-[34px] font-bold leading-[44px] text-[#3B3F6E]">
+                                {formatNumber(termSummary?.teachers_uploaded_this_term)}
+                            </p>
+                            <p className="text-[13px] leading-5 text-[#2B2B2F]/55">
+                                teachers uploaded lessons this term
+                            </p>
                         </div>
-                    ) : (
-                        <CardEmptyState />
-                    )}
+                        <TeacherAvatarStack
+                            teachers={termSummary?.teacher_avatars || []}
+                            additionalCount={termSummary?.additional_teacher_count || 0}
+                        />
+                    </div>
                 </ReportCard>
 
-                <ReportCard title="Curriculum coverage">
-                    {coverageRows.length > 0 ? (
-                        <div className="mt-2 flex flex-col gap-4">
-                            {coverageRows.map((row) => (
-                                <div
-                                    key={row.label}
-                                    className="grid grid-cols-1 gap-2 md:grid-cols-[120px_minmax(0,1fr)_auto] md:items-center md:gap-4"
-                                >
-                                    <span className="text-[13px] font-medium leading-5 text-[#2B2B2F]">{row.label}</span>
-                                    <div className="h-[8px] overflow-hidden rounded-full bg-[#F7F1E6]">
-                                        <div
-                                            className="h-full rounded-full bg-[#3B3F6E]"
-                                            style={{ width: `${Math.max(0, Math.min(row.percentage, 100))}%` }}
-                                        />
-                                    </div>
-                                    <span className="rounded-[6px] bg-[#9A9CCB]/20 px-[10px] py-[6px] text-[11px] leading-4 text-[#3B3F6E]">
-                                        {row.tag}
-                                    </span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <CardEmptyState />
-                    )}
+                <ReportCard title="What's working well">
+                    <BulletList
+                        items={termSummary?.whats_working_well || []}
+                        emptyLabel="The backend has not reported strengths for this term yet."
+                    />
+                </ReportCard>
+
+                <ReportCard title="Where support is needed">
+                    <BulletList
+                        items={termSummary?.where_support_is_needed || []}
+                        emptyLabel="The backend has not reported support needs for this term yet."
+                    />
                 </ReportCard>
             </div>
+
+            <ReportCard title={boardPreview?.title || 'Board share preview'}>
+                {boardPreview ? (
+                    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_320px]">
+                        <div>
+                            <p className="text-[15px] leading-6 text-[#2B2B2F]/70">{boardPreview.summary}</p>
+                            {boardPreview.call_to_action ? (
+                                <p className="mt-4 rounded-[12px] bg-[#F7F1E6] px-4 py-3 text-[13px] font-medium leading-5 text-[#3B3F6E]">
+                                    {boardPreview.call_to_action}
+                                </p>
+                            ) : null}
+                        </div>
+                        <BulletList
+                            items={boardPreview.highlights || []}
+                            emptyLabel="No share highlights are available yet."
+                        />
+                    </div>
+                ) : (
+                    <CardEmptyState label="Board share preview is not available yet." />
+                )}
+            </ReportCard>
         </div>
     );
 }
@@ -250,197 +330,168 @@ function ReportCard({
     children: ReactNode;
 }) {
     return (
-        <section className="min-h-[352px] rounded-[12px] border border-[#E0D9CE] bg-white px-6 py-6">
+        <section className="rounded-[12px] border border-[#E0D9CE] bg-white px-6 py-6 shadow-[0_1px_2px_rgba(0,0,0,0.03)]">
             <h2 className="text-[16px] font-semibold leading-6 text-[#3B3F6E]">{title}</h2>
             <div className="mt-4">{children}</div>
         </section>
     );
 }
 
-function CardEmptyState() {
-    return (
-        <div className="flex min-h-[244px] flex-col items-center justify-center gap-4">
-            <div className="h-20 w-20 rounded-[8px] bg-[#9A9CCB]/18" />
-            <p className="text-center text-[14px] leading-5 text-[#2B2B2F]/55">No data for selected period.</p>
-        </div>
-    );
-}
-
-function EngagementChart({
-    points,
+function MetricCard({
+    label,
+    value,
+    helper,
 }: {
-    points: EngagementPoint[];
+    label: string;
+    value: string;
+    helper: string;
 }) {
-    const width = 468;
-    const height = 180;
-    const chartHeight = 130;
-    const max = Math.max(...points.map((point) => point.value), 1);
-    const min = Math.min(...points.map((point) => point.value), 0);
-    const range = Math.max(max - min, 1);
-
-    const coordinates = points.map((point, index) => {
-        const x = (index / Math.max(points.length - 1, 1)) * width;
-        const normalized = (point.value - min) / range;
-        const y = chartHeight - normalized * (chartHeight - 12) + 6;
-        return { ...point, x, y };
-    });
-
-    const linePath = coordinates
-        .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-        .join(' ');
-    const areaPath = `${linePath} L ${width} ${chartHeight + 10} L 0 ${chartHeight + 10} Z`;
-
     return (
-        <div className="rounded-[10px] bg-[#F7F1E6] px-2 py-3">
-            <svg viewBox={`0 0 ${width} ${height}`} className="h-[160px] w-full sm:h-[180px] lg:h-[200px]">
-                <defs>
-                    <linearGradient id="engagement-fill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="rgba(154, 156, 203, 0.24)" />
-                        <stop offset="100%" stopColor="rgba(154, 156, 203, 0)" />
-                    </linearGradient>
-                </defs>
-                <path d={areaPath} fill="url(#engagement-fill)" />
-                <path d={linePath} fill="none" stroke="#3B3F6E" strokeWidth="2" />
-                {coordinates.map((point) => (
-                    <text
-                        key={point.label}
-                        x={point.x}
-                        y={170}
-                        textAnchor="middle"
-                        className="fill-[#2B2B2F] text-[11px]"
-                    >
-                        {point.label}
-                    </text>
-                ))}
-            </svg>
+        <div className="rounded-[12px] border border-[#E0D9CE] bg-white px-5 py-5">
+            <p className="text-[12px] font-semibold uppercase tracking-[0.05em] text-[#3B3F6E]/55">{label}</p>
+            <p className="mt-3 text-[28px] font-bold leading-[36px] text-[#3B3F6E]">{value}</p>
+            <p className="mt-1 text-[12px] leading-4 text-[#2B2B2F]/50">{helper}</p>
         </div>
     );
 }
 
-function getEngagementSeries(termSummary: any, boardPreview: any): EngagementPoint[] {
-    const sources = [
-        termSummary?.engagement_over_time?.data_points,
-        termSummary?.student_engagement?.data_points,
-        termSummary?.daily_active_learners,
-        boardPreview?.engagement_over_time?.data_points,
-        boardPreview?.daily_active_learners,
-    ];
+function CardEmptyState({ label }: { label: string }) {
+    return (
+        <div className="flex min-h-[120px] flex-col items-center justify-center gap-4 rounded-[12px] bg-[#F7F1E6] px-4 py-6">
+            <div className="h-12 w-12 rounded-[12px] bg-[#9A9CCB]/18" />
+            <p className="text-center text-[14px] leading-5 text-[#2B2B2F]/55">{label}</p>
+        </div>
+    );
+}
 
-    const firstValid = sources.find((source) => Array.isArray(source) && source.length > 0) || [];
+function BulletList({
+    items,
+    emptyLabel,
+}: {
+    items: string[];
+    emptyLabel: string;
+}) {
+    if (items.length === 0) {
+        return <CardEmptyState label={emptyLabel} />;
+    }
 
-    return firstValid
-        .map((point: any, index: number) => ({
-            label: formatShortDate(
-                point?.label ||
-                    point?.date ||
-                    point?.day ||
-                    point?.x ||
-                    `Day ${index + 1}`,
-            ),
-            value: Number(point?.value ?? point?.count ?? point?.active_learners ?? point?.y ?? 0),
+    return (
+        <ul className="flex flex-col gap-3">
+            {items.map((item, index) => (
+                <li key={`${item}-${index}`} className="flex gap-3 text-[14px] leading-6 text-[#2B2B2F]/70">
+                    <span className="mt-[9px] h-2 w-2 shrink-0 rounded-full bg-[#3B3F6E]" />
+                    <span>{item}</span>
+                </li>
+            ))}
+        </ul>
+    );
+}
+
+function TeacherAvatarStack({
+    teachers,
+    additionalCount,
+}: {
+    teachers: TeacherAvatar[];
+    additionalCount: number;
+}) {
+    if (teachers.length === 0 && additionalCount === 0) {
+        return <p className="text-[13px] leading-5 text-[#2B2B2F]/55">No teacher upload activity recorded yet.</p>;
+    }
+
+    return (
+        <div className="flex items-center">
+            {teachers.slice(0, 5).map((teacher, index) => (
+                <div
+                    key={teacher.teacher_id || `${teacher.teacher_name}-${index}`}
+                    className="-ml-2 flex h-10 w-10 first:ml-0 items-center justify-center overflow-hidden rounded-full border-2 border-white bg-[#9A9CCB]/25 text-[12px] font-bold text-[#3B3F6E]"
+                    title={teacher.teacher_name}
+                >
+                    {teacher.avatar_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={teacher.avatar_url} alt="" className="h-full w-full object-cover" />
+                    ) : (
+                        getInitials(teacher.teacher_name || 'Teacher')
+                    )}
+                </div>
+            ))}
+            {additionalCount > 0 ? (
+                <div className="-ml-2 flex h-10 min-w-10 items-center justify-center rounded-full border-2 border-white bg-[#3B3F6E] px-3 text-[12px] font-bold text-white">
+                    +{additionalCount}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function normalizeSubjectRows(rows?: SubjectBreakdown[]) {
+    if (!Array.isArray(rows)) return [];
+
+    return rows
+        .map((row) => ({
+            subject_name: row.subject_name || 'Subject',
+            concept_count: Number(row.concept_count || 0),
+            progress_percentage: clampPercentage(Number(row.progress_percentage || 0)),
         }))
-        .filter((point: EngagementPoint) => !Number.isNaN(point.value))
-        .slice(0, 6);
+        .filter((row) => row.concept_count > 0 || row.progress_percentage > 0)
+        .slice(0, 8);
 }
 
-function getCompletionRows(termSummary: any, boardPreview: any): CompletionRow[] {
-    const candidates = [
-        termSummary?.lesson_completion?.classes,
-        termSummary?.completion_rates?.classes,
-        termSummary?.class_completion,
-        boardPreview?.lesson_completion?.classes,
-    ];
-    const directRows = candidates.find((source) => Array.isArray(source) && source.length > 0) || [];
-
-    if (directRows.length > 0) {
-        return directRows.slice(0, 6).map((row: any) => {
-            const completed = Number(row?.completed_lessons ?? row?.completed ?? row?.done ?? 0);
-            const total = Math.max(Number(row?.total_lessons ?? row?.total ?? row?.lessons ?? 0), 1);
-            return {
-                label: String(row?.class_name ?? row?.name ?? row?.label ?? 'Class'),
-                completed,
-                total,
-                percentage: (completed / total) * 100,
-            };
-        });
-    }
-
-    const subjectRows = Array.isArray(termSummary?.subject_breakdown) ? termSummary.subject_breakdown : [];
-    return subjectRows.slice(0, 6).map((row: any) => {
-        const completed = Number(row?.units_active ?? row?.concept_count ?? 0);
-        const totalBase = row?.total_units ?? row?.target_units ?? completed ?? 1;
-        const total = Math.max(Number(totalBase), 1);
-        return {
-            label: String(row?.class_name ?? row?.subject_name ?? row?.name ?? 'Class'),
-            completed,
-            total,
-            percentage: (completed / total) * 100,
-        };
-    });
+function getPercentage(value?: number, total?: number) {
+    const numerator = Number(value || 0);
+    const denominator = Number(total || 0);
+    if (denominator <= 0) return 0;
+    return clampPercentage((numerator / denominator) * 100);
 }
 
-function getTeacherRows(termSummary: any, boardPreview: any): TeacherRow[] {
-    const candidates = [
-        termSummary?.teacher_activity,
-        termSummary?.teacher_rows,
-        boardPreview?.teacher_activity,
-    ];
-    const rows = candidates.find((source) => Array.isArray(source) && source.length > 0) || [];
-
-    if (rows.length > 0) {
-        return rows.slice(0, 5).map((row: any) => ({
-            name: String(row?.teacher_name ?? row?.name ?? 'Teacher'),
-            uploaded: String(row?.lessons_uploaded ?? row?.uploaded ?? row?.created ?? 0),
-            assigned: String(row?.lessons_assigned ?? row?.assigned ?? row?.published ?? 0),
-            lastActive: formatRelative(row?.last_active ?? row?.lastActive ?? row?.activity_date),
-        }));
-    }
-
-    return [];
+function clampPercentage(value: number) {
+    if (Number.isNaN(value)) return 0;
+    return Math.max(0, Math.min(value, 100));
 }
 
-function getCoverageRows(termSummary: any, boardPreview: any): CoverageRow[] {
-    const candidates = [
-        termSummary?.curriculum_coverage?.subjects,
-        termSummary?.subject_breakdown,
-        boardPreview?.curriculum_coverage?.subjects,
-    ];
-    const rows = candidates.find((source) => Array.isArray(source) && source.length > 0) || [];
-
-    return rows.slice(0, 6).map((row: any) => {
-        const activeLessons = Number(row?.active_lessons ?? row?.concept_count ?? row?.units_active ?? 0);
-        const totalBase = row?.total_units ?? row?.target_units ?? row?.total_lessons ?? activeLessons ?? 1;
-        const total = Math.max(Number(totalBase), 1);
-        return {
-            label: String(row?.subject_name ?? row?.name ?? 'Subject'),
-            percentage: (activeLessons / total) * 100,
-            tag: `${activeLessons} active lessons`,
-        };
-    });
+function formatNumber(value?: number) {
+    return Number(value || 0).toLocaleString('en-NG');
 }
 
-function formatShortDate(value: string) {
+function formatDateRange(start?: string, end?: string) {
+    if (!start && !end) return 'Most recent reporting window';
+    if (!start) return `Until ${formatDate(end)}`;
+    if (!end) return `From ${formatDate(start)}`;
+    return `${formatDate(start)} - ${formatDate(end)}`;
+}
+
+function formatDate(value?: string) {
+    if (!value) return 'now';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleDateString('en-NG', { month: 'short', day: 'numeric' });
+    return date.toLocaleDateString('en-NG', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
 }
 
-function formatRelative(value?: string) {
-    if (!value) return 'Not recorded';
-    const lower = String(value).toLowerCase();
-    if (lower.includes('ago') || lower === 'today' || lower === 'yesterday') {
-        return value;
-    }
+function getInitials(name: string) {
+    return name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((part) => part[0]?.toUpperCase())
+        .join('') || 'T';
+}
 
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return String(value);
+function downloadReportPayload(payload: any) {
+    if (typeof window === 'undefined' || !payload) return;
 
-    const diffHours = Math.round((Date.now() - date.getTime()) / (1000 * 60 * 60));
-    if (diffHours <= 0) return 'Today';
-    if (diffHours < 24) return `${diffHours} hours ago`;
-    if (diffHours < 48) return 'Yesterday';
-    const diffDays = Math.round(diffHours / 24);
-    return `${diffDays} days ago`;
+    const filename = String(payload.filename || 'school-term-report.json').replace(/\.pdf$/i, '.json');
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
 }
 
 function CalendarIcon() {
@@ -450,14 +501,6 @@ function CalendarIcon() {
             <path d="M5 2.667V5" stroke="#3B3F6E" strokeWidth="1.2" strokeLinecap="round" />
             <path d="M11 2.667V5" stroke="#3B3F6E" strokeWidth="1.2" strokeLinecap="round" />
             <path d="M2.667 7.333H13.333" stroke="#3B3F6E" strokeWidth="1.2" />
-        </svg>
-    );
-}
-
-function ChevronDownIcon() {
-    return (
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-            <path d="M3 4.5L6 7.5L9 4.5" stroke="#3B3F6E" strokeWidth="1.125" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
     );
 }
