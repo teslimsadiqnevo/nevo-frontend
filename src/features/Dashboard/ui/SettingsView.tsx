@@ -34,6 +34,7 @@ export function SettingsView() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [savingFeature, setSavingFeature] = useState<keyof FeatureState | null>(null);
+    const [uploadingLogo, setUploadingLogo] = useState(false);
     const [deletingSchool, setDeletingSchool] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
@@ -51,6 +52,7 @@ export function SettingsView() {
         messaging: true,
         offlineAccess: false,
     });
+    const logoInputRef = useRef<HTMLInputElement>(null);
 
     const sectionRefs: Record<SectionId, RefObject<HTMLElement | null>> = {
         'school-profile': useRef<HTMLElement>(null),
@@ -178,6 +180,52 @@ export function SettingsView() {
         setSuccess('Feature settings updated.');
     }
 
+    async function handleLogoUpload(file: File | null | undefined) {
+        if (!file) return;
+        setUploadingLogo(true);
+        setError(null);
+        setSuccess(null);
+
+        const uploadBody = new FormData();
+        uploadBody.append('file', file);
+
+        const uploadRes = await fetch('/api/school/logo-upload', {
+            method: 'POST',
+            body: uploadBody,
+        });
+        const uploadJson = await uploadRes.json().catch(() => ({}));
+
+        if (!uploadRes.ok || !uploadJson?.public_url) {
+            if (guardAuth({ error: buildRouteError(uploadRes.status, uploadJson) })) {
+                setUploadingLogo(false);
+                return;
+            }
+            setUploadingLogo(false);
+            setError(uploadJson?.detail || 'Could not upload school logo. Please try again.');
+            return;
+        }
+
+        const updateRes = await updateSchoolSettings({
+            logo_url: String(uploadJson.public_url),
+        });
+
+        setUploadingLogo(false);
+        if (guardAuth(updateRes)) return;
+
+        if ('error' in updateRes && updateRes.error) {
+            setError(updateRes.error);
+            return;
+        }
+
+        const nextData = 'data' in updateRes ? updateRes.data : null;
+        if (nextData) {
+            setSettings(nextData);
+        } else {
+            setSettings((current: any) => ({ ...current, logo_url: String(uploadJson.public_url) }));
+        }
+        setSuccess('School logo updated.');
+    }
+
     async function handleDeleteSchool() {
         if (!settings?.school_name) {
             setError('School details are unavailable.');
@@ -254,9 +302,40 @@ export function SettingsView() {
                                 onChange={(value) => setForm((current) => ({ ...current, schoolName: value }))}
                             />
 
-                            <div className="flex h-20 w-20 flex-col items-center justify-center gap-1 rounded-full bg-[#3B3F6E]/10 text-center text-[13px] leading-5 text-[#3B3F6E]/60">
-                                <UploadLogoIcon />
-                                <span>Upload logo</span>
+                            <div>
+                                <input
+                                    ref={logoInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(event) => void handleLogoUpload(event.target.files?.[0])}
+                                />
+                                <button
+                                    type="button"
+                                    disabled={uploadingLogo}
+                                    onClick={() => logoInputRef.current?.click()}
+                                    className="flex h-24 w-24 flex-col items-center justify-center gap-1 overflow-hidden rounded-full bg-[#3B3F6E]/10 text-center text-[13px] leading-5 text-[#3B3F6E]/60 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                    {settings?.logo_url ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img src={settings.logo_url} alt="School logo" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <>
+                                            <UploadLogoIcon />
+                                            <span>{uploadingLogo ? 'Uploading...' : 'Upload logo'}</span>
+                                        </>
+                                    )}
+                                </button>
+                                {settings?.logo_url ? (
+                                    <button
+                                        type="button"
+                                        disabled={uploadingLogo}
+                                        onClick={() => logoInputRef.current?.click()}
+                                        className="mt-2 text-[13px] font-medium text-[#3B3F6E] disabled:opacity-60"
+                                    >
+                                        {uploadingLogo ? 'Uploading...' : 'Change logo'}
+                                    </button>
+                                ) : null}
                             </div>
 
                             <SelectLikeInput
@@ -531,9 +610,14 @@ function inferSchoolType(settings: any) {
 }
 
 function formatConsentDate(settings: any) {
-    const value = settings?.consent_acknowledgment_date || settings?.dpa_accepted_at || settings?.created_at;
-    if (!value) return 'January 15, 2024';
+    const value = settings?.dpa_accepted_at || settings?.consent_acknowledgment_date;
+    if (!settings?.dpa_accepted && !settings?.data_protection_consent) return 'Not accepted yet';
+    if (!value) return 'Accepted, date not available';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return String(value);
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+function buildRouteError(status: number, payload: any) {
+    return `${status}: ${payload?.detail || payload?.message || payload?.error || 'Request failed'}`;
 }
