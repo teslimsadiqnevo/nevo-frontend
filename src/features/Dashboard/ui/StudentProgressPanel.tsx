@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getStudentSubjectDetail } from '../api/student';
 import { normalizeStudentProgress, type StudentProgressSubject } from '../api/studentProgress';
 
@@ -11,6 +12,7 @@ type StudentProgressPanelProps = {
 type SubjectDetail = StudentProgressSubject;
 
 export function StudentProgressPanel({ progressData }: StudentProgressPanelProps) {
+    const router = useRouter();
     const [selectedSubject, setSelectedSubject] = useState<SubjectDetail | null>(null);
     const progress = useMemo(() => normalizeStudentProgress(progressData), [progressData]);
 
@@ -56,7 +58,11 @@ export function StudentProgressPanel({ progressData }: StudentProgressPanelProps
                 <p className="mt-3 max-w-[400px] text-center text-[14px] leading-[22px] text-graphite/65">
                     Your progress will show here as you learn. Complete lessons to track your achievements and see how far you&apos;ve come.
                 </p>
-                <button className="mt-8 flex h-14 items-center justify-center rounded-xl border border-indigo px-10 text-[16px] font-semibold text-indigo cursor-pointer bg-transparent">
+                <button
+                    type="button"
+                    onClick={() => router.push('/student/dashboard/lessons')}
+                    className="mt-8 flex h-14 items-center justify-center rounded-xl border border-indigo px-10 text-[16px] font-semibold text-indigo cursor-pointer bg-transparent"
+                >
                     Start a lesson
                 </button>
             </div>
@@ -84,25 +90,32 @@ export function StudentProgressPanel({ progressData }: StudentProgressPanelProps
                 </h3>
                 <div className="flex flex-col gap-4">
                     {progress.subjects.map((subject) => {
-                        const pct = Math.max(0, Math.min(100, (subject.concepts / Math.max(subject.maxConcepts, 1)) * 100));
+                        const pct = Math.max(0, Math.min(100, subject.progressPercentage));
                         return (
                             <button
                                 key={subject.name}
                                 type="button"
                                 onClick={() => setSelectedSubject(subject)}
-                                className="flex items-center gap-4 bg-transparent text-left cursor-pointer border-none p-0 hover:opacity-85"
+                                className="flex items-center gap-4 rounded-xl border border-[#E0D9CE] bg-transparent px-5 py-4 text-left cursor-pointer hover:bg-white/35"
                             >
-                                <span className="w-[90px] shrink-0 text-[15px] font-medium leading-[22px] text-black">
-                                    {subject.name}
-                                </span>
-                                <div className="h-[6px] w-[120px] shrink-0 rounded-full bg-[#E8E2D4]">
-                                    <div
-                                        className="h-full rounded-full"
-                                        style={{ width: `${pct}%`, backgroundColor: subject.color }}
-                                    />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <span className="text-[15px] font-medium leading-[22px] text-black">
+                                            {subject.name}
+                                        </span>
+                                        <span className="shrink-0 text-[12px] leading-4 text-black/55">
+                                            {subject.conceptsUnderstood}/{subject.maxConcepts} concepts
+                                        </span>
+                                    </div>
+                                    <div className="mt-3 h-[6px] w-full rounded-full bg-[#E8E2D4]">
+                                        <div
+                                            className="h-full rounded-full"
+                                            style={{ width: `${pct}%`, backgroundColor: subject.color }}
+                                        />
+                                    </div>
                                 </div>
-                                <span className="text-[12px] leading-4 text-black/55">
-                                    {subject.concepts} concepts
+                                <span className="shrink-0 text-[13px] font-medium leading-5 text-indigo/65">
+                                    {Math.round(pct)}%
                                 </span>
                             </button>
                         );
@@ -114,22 +127,35 @@ export function StudentProgressPanel({ progressData }: StudentProgressPanelProps
                 <h3 className="mb-5 text-[15px] font-semibold uppercase tracking-[0.02em] text-indigo">
                     Recent
                 </h3>
-                <div className="flex flex-col gap-5">
-                    {progress.recentActivity.map((item, index) => (
-                        <div key={`${item.text}:${index}`} className="flex items-start gap-4">
-                            <div className="flex w-2 flex-col items-center self-stretch">
-                                <div className="h-2 w-2 rounded-full bg-indigo" />
-                                {index < progress.recentActivity.length - 1 ? (
-                                    <div className="mt-1 flex-1 w-px bg-indigo/30" />
-                                ) : null}
+                {progress.recentActivity.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-[#E0D9CE] px-5 py-6 text-[14px] leading-5 text-graphite/60">
+                        No recent progress yet. Once lessons are started or completed, activity will appear here.
+                    </div>
+                ) : (
+                    <div className="flex flex-col gap-5">
+                        {progress.recentActivity.map((item, index) => (
+                            <div key={`${item.text}:${index}`} className="flex items-start gap-4">
+                                <div className="flex w-2 flex-col items-center self-stretch">
+                                    <div className="h-2 w-2 rounded-full bg-indigo" />
+                                    {index < progress.recentActivity.length - 1 ? (
+                                        <div className="mt-1 flex-1 w-px bg-indigo/30" />
+                                    ) : null}
+                                </div>
+                                <div className="flex min-w-0 flex-1 items-start justify-between gap-6">
+                                    <div className="min-w-0">
+                                        <span className="block text-[14px] leading-5 text-black">{item.text}</span>
+                                        {item.activityType ? (
+                                            <span className="mt-1 block text-[11px] uppercase tracking-[0.04em] text-indigo/45">
+                                                {item.activityType}
+                                            </span>
+                                        ) : null}
+                                    </div>
+                                    <span className="shrink-0 text-[12px] leading-4 text-black/50">{item.time}</span>
+                                </div>
                             </div>
-                            <div className="flex min-w-0 flex-1 items-start justify-between gap-6">
-                                <span className="text-[14px] leading-5 text-black">{item.text}</span>
-                                <span className="shrink-0 text-[12px] leading-4 text-black/50">{item.time}</span>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                )}
             </section>
         </div>
     );
@@ -154,28 +180,39 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                 }
 
                 const data = (res as any)?.data || {};
+                const mappedConcepts = Array.isArray(data.concepts)
+                    ? data.concepts.map((concept: Record<string, unknown>) => ({
+                          name:
+                              (typeof concept.name === 'string' && concept.name) ||
+                              (typeof concept.title === 'string' && concept.title) ||
+                              'Concept',
+                          understood: ['completed', 'reinforced', 'mastered'].includes(
+                              String(concept.status ?? concept.state ?? '').toLowerCase()
+                          ) || Boolean(concept.understood ?? concept.complete ?? concept.completed),
+                          status: typeof concept.status === 'string' ? concept.status : undefined,
+                      }))
+                    : [];
+
                 setDetail({
                     ...subject,
-                    conceptsAttempted: Number(data.concepts_learned ?? subject.conceptsAttempted ?? 0),
+                    conceptsAttempted: mappedConcepts.length || Number(data.concepts_learned ?? subject.conceptsAttempted ?? 0),
                     conceptsUnderstood: Number(data.concepts_reinforced ?? subject.conceptsUnderstood ?? 0),
-                    conceptList: Array.isArray(data.concepts)
-                        ? data.concepts.map((concept: Record<string, unknown>) => ({
-                              name:
-                                  (typeof concept.name === 'string' && concept.name) ||
-                                  (typeof concept.title === 'string' && concept.title) ||
-                                  'Concept',
-                              understood: Boolean(concept.understood ?? concept.complete ?? concept.completed),
-                          }))
-                        : [],
+                    progressPercentage: subject.progressPercentage,
+                    conceptList: mappedConcepts,
                     lessons: Array.isArray(data.lessons)
                         ? data.lessons.map((lesson: Record<string, unknown>) => ({
+                              lessonId:
+                                  (typeof lesson.lesson_id === 'string' && lesson.lesson_id) ||
+                                  undefined,
                               name:
                                   (typeof lesson.name === 'string' && lesson.name) ||
                                   (typeof lesson.title === 'string' && lesson.title) ||
                                   'Lesson',
-                              progress: Number(lesson.progress ?? lesson.completed ?? 0),
-                              total: Math.max(Number(lesson.total ?? lesson.total_steps ?? 1), 1),
-                              complete: Boolean(lesson.complete ?? lesson.completed),
+                              progress: Number(lesson.progress_percentage ?? lesson.progress ?? 0),
+                              total: 100,
+                              complete: String(lesson.status ?? '').toLowerCase() === 'completed' || Boolean(lesson.complete ?? lesson.completed),
+                              status: typeof lesson.status === 'string' ? lesson.status : undefined,
+                              timeSpentMinutes: Number(lesson.time_spent_minutes ?? 0),
                           }))
                         : [],
                 });
@@ -258,15 +295,22 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                                 {detail.conceptList.map((concept) => (
                                     <div key={concept.name} className="flex items-center justify-between border-b border-[#F0EDE7] py-4 last:border-b-0">
                                         <span className="text-[14px] font-medium text-black">{concept.name}</span>
-                                        {concept.understood ? (
-                                            <div className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#4CAF50]">
-                                                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                                                    <path d="M3 7L6 10L11 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                                </svg>
-                                            </div>
-                                        ) : (
-                                            <div className="h-[22px] w-[22px] rounded-full border-2 border-[#D5D3CE]" />
-                                        )}
+                                        <div className="flex items-center gap-3">
+                                            {concept.status ? (
+                                                <span className="text-[12px] leading-4 capitalize text-graphite/55">
+                                                    {concept.status.replace(/_/g, ' ')}
+                                                </span>
+                                            ) : null}
+                                            {concept.understood ? (
+                                                <div className="flex h-[22px] w-[22px] items-center justify-center rounded-full bg-[#4CAF50]">
+                                                    <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                                                        <path d="M3 7L6 10L11 4" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                </div>
+                                            ) : (
+                                                <div className="h-[22px] w-[22px] rounded-full border-2 border-[#D5D3CE]" />
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -278,7 +322,7 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                             <h3 className="mb-5 text-[12px] font-bold uppercase tracking-[0.08em] text-indigo">Lessons</h3>
                             <div className="flex flex-col gap-4">
                                 {detail.lessons.map((lesson) => {
-                                    const pct = (lesson.progress / Math.max(lesson.total, 1)) * 100;
+                                    const pct = Math.max(0, Math.min(100, lesson.progress));
                                     return (
                                         <div key={lesson.name} className="rounded-2xl border border-[#E9E7E2] bg-white px-5 py-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)]">
                                             <div className="mb-2 flex items-center gap-3">
@@ -288,9 +332,20 @@ function SubjectDetailPanel({ subject, onBack }: { subject: SubjectDetail; onBac
                                                     <line x1="7" y1="10" x2="13" y2="10" stroke="#3B3F6E" strokeWidth="1" strokeLinecap="round" />
                                                 </svg>
                                                 <span className="flex-1 text-[14px] font-semibold text-black">{lesson.name}</span>
-                                                <span className="shrink-0 text-[12px] font-medium text-graphite/60">
-                                                    {lesson.complete ? 'Complete' : `${lesson.progress}/${lesson.total} activities`}
-                                                </span>
+                                                <div className="shrink-0 text-right">
+                                                    <span className="block text-[12px] font-medium text-graphite/60">
+                                                        {lesson.complete
+                                                            ? 'Complete'
+                                                            : lesson.status
+                                                              ? lesson.status.replace(/_/g, ' ')
+                                                              : `${Math.round(pct)}%`}
+                                                    </span>
+                                                    {lesson.timeSpentMinutes ? (
+                                                        <span className="block text-[11px] leading-4 text-graphite/45">
+                                                            {lesson.timeSpentMinutes} min
+                                                        </span>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                             <div className="h-[5px] w-full rounded-full bg-[#E9E7E2] overflow-hidden">
                                                 <div className="h-full rounded-full bg-indigo" style={{ width: `${pct}%` }} />

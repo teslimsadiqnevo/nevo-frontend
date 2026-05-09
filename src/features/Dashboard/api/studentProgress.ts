@@ -4,26 +4,31 @@ export type StudentProgressMetric = {
 };
 
 export type StudentProgressSubjectLesson = {
+    lessonId?: string;
     name: string;
     progress: number;
     total: number;
     complete: boolean;
+    status?: string;
+    timeSpentMinutes?: number;
 };
 
 export type StudentProgressSubject = {
     name: string;
     concepts: number;
     maxConcepts: number;
+    progressPercentage: number;
     color: string;
     conceptsAttempted: number;
     conceptsUnderstood: number;
-    conceptList: { name: string; understood: boolean }[];
+    conceptList: { name: string; understood: boolean; status?: string }[];
     lessons: StudentProgressSubjectLesson[];
 };
 
 export type StudentProgressRecentItem = {
     text: string;
     time: string;
+    activityType?: string;
 };
 
 export type StudentProgressViewModel = {
@@ -55,8 +60,7 @@ function toTitle(value: string) {
 function normalizeRecentActivity(raw: unknown): StudentProgressRecentItem[] {
     if (!Array.isArray(raw)) return [];
 
-    return raw
-        .map((item) => {
+    const normalized = raw.map((item): StudentProgressRecentItem | null => {
             if (!item || typeof item !== 'object') return null;
             const typed = item as Record<string, unknown>;
             const text =
@@ -64,16 +68,45 @@ function normalizeRecentActivity(raw: unknown): StudentProgressRecentItem[] {
                 (typeof typed.title === 'string' && typed.title) ||
                 (typeof typed.description === 'string' && typed.description) ||
                 null;
-            const time =
+            const time = formatRecentTime(
                 (typeof typed.time === 'string' && typed.time) ||
-                (typeof typed.relative_time === 'string' && typed.relative_time) ||
-                (typeof typed.created_at_human === 'string' && typed.created_at_human) ||
-                '';
+                    (typeof typed.relative_time === 'string' && typed.relative_time) ||
+                    (typeof typed.created_at_human === 'string' && typed.created_at_human) ||
+                    (typeof typed.timestamp === 'string' && typed.timestamp) ||
+                    ''
+            );
+            const activityType = typeof typed.activity_type === 'string' ? typed.activity_type : undefined;
 
             if (!text) return null;
-            return { text, time };
-        })
-        .filter((item): item is StudentProgressRecentItem => item !== null);
+            return { text, time, activityType };
+        });
+
+    return normalized.filter((item): item is StudentProgressRecentItem => item !== null);
+}
+
+function formatRecentTime(value: string) {
+    if (!value) return '';
+
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return value;
+    }
+
+    const diffMs = Date.now() - parsed.getTime();
+    const diffMinutes = Math.max(0, Math.round(diffMs / 60000));
+    if (diffMinutes < 1) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes} min ago`;
+
+    const diffHours = Math.round(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours} hr ago`;
+
+    const diffDays = Math.round(diffHours / 24);
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+
+    return parsed.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+    });
 }
 
 function normalizeSubjectFromObject(name: string, value: unknown): StudentProgressSubject | null {
@@ -88,11 +121,13 @@ function normalizeSubjectFromObject(name: string, value: unknown): StudentProgre
         toNumber(subject.concepts_attempted, NaN) ||
         Math.max(conceptsUnderstood, lessonsCompleted, 1);
     const maxConcepts = Math.max(conceptsAttempted, conceptsUnderstood, 1);
+    const progressPercentage = toNumber(subject.progress_percentage, (conceptsUnderstood / maxConcepts) * 100);
 
     return {
         name: toTitle(name),
         concepts: conceptsUnderstood,
         maxConcepts,
+        progressPercentage,
         color: DEFAULT_BAR_COLOR,
         conceptsAttempted,
         conceptsUnderstood,
@@ -111,18 +146,23 @@ function normalizeSubjectFromArrayItem(value: unknown): StudentProgressSubject |
         'Subject';
 
     const conceptsUnderstood = toNumber(subject.concepts_understood ?? subject.concepts, 0);
-    const conceptsAttempted = Math.max(
-        toNumber(subject.concepts_attempted ?? subject.maxConcepts, 0),
+    const totalConcepts = Math.max(
+        toNumber(subject.total_concepts ?? subject.concepts_attempted ?? subject.maxConcepts, 0),
         conceptsUnderstood,
         1
+    );
+    const progressPercentage = toNumber(
+        subject.progress_percentage,
+        (conceptsUnderstood / Math.max(totalConcepts, 1)) * 100
     );
 
     return {
         name,
         concepts: conceptsUnderstood,
-        maxConcepts: conceptsAttempted,
+        maxConcepts: totalConcepts,
+        progressPercentage,
         color: typeof subject.color === 'string' ? subject.color : DEFAULT_BAR_COLOR,
-        conceptsAttempted,
+        conceptsAttempted: totalConcepts,
         conceptsUnderstood,
         conceptList: Array.isArray(subject.conceptList)
             ? (subject.conceptList as Array<Record<string, unknown>>).map((concept) => ({
@@ -131,17 +171,28 @@ function normalizeSubjectFromArrayItem(value: unknown): StudentProgressSubject |
                       (typeof concept.title === 'string' && concept.title) ||
                       'Concept',
                   understood: Boolean(concept.understood ?? concept.complete ?? concept.completed),
+                  status: typeof concept.status === 'string' ? concept.status : undefined,
               }))
             : [],
         lessons: Array.isArray(subject.lessons)
             ? (subject.lessons as Array<Record<string, unknown>>).map((lesson) => ({
+                  lessonId:
+                      (typeof lesson.lesson_id === 'string' && lesson.lesson_id) ||
+                      (typeof lesson.lessonId === 'string' && lesson.lessonId) ||
+                      undefined,
                   name:
                       (typeof lesson.name === 'string' && lesson.name) ||
                       (typeof lesson.title === 'string' && lesson.title) ||
                       'Lesson',
-                  progress: toNumber(lesson.progress, 0),
-                  total: Math.max(toNumber(lesson.total, 1), 1),
-                  complete: Boolean(lesson.complete),
+                  progress: toNumber(lesson.progress ?? lesson.progress_percentage, 0),
+                  total: Math.max(toNumber(lesson.total ?? 100, 100), 1),
+                  complete: Boolean(
+                      lesson.complete ??
+                          lesson.completed ??
+                          (typeof lesson.status === 'string' && lesson.status.toLowerCase() === 'completed')
+                  ),
+                  status: typeof lesson.status === 'string' ? lesson.status : undefined,
+                  timeSpentMinutes: toNumber(lesson.time_spent_minutes, 0),
               }))
             : [],
     };
@@ -163,6 +214,7 @@ export function normalizeStudentProgress(progressData?: unknown): StudentProgres
 
     const recentActivity = normalizeRecentActivity(raw?.recent_activity);
     const totalConcepts =
+        toNumber(raw?.total_concepts, NaN) ||
         toNumber(raw?.total_lessons_completed, NaN) ||
         toNumber(raw?.total_lessons_started, NaN) ||
         subjects.reduce((sum, subject) => sum + subject.conceptsUnderstood, 0);
