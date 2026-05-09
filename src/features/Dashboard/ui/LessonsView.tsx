@@ -33,9 +33,9 @@ function buildErrorMessage(data: any, fallback: string) {
 }
 
 function formatUpdatedDate(value?: string | null) {
-  if (!value) return 'Updated recently';
+  if (!value) return 'Update date unavailable';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Updated recently';
+  if (Number.isNaN(date.getTime())) return 'Update date unavailable';
   return `Updated ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
 }
 
@@ -50,9 +50,9 @@ function mapLesson(lesson: any): TeacherLessonListItem {
   return {
     id: String(lesson.id),
     title: lesson.title || 'Untitled lesson',
-    subject: lesson.subject || 'General',
+    subject: lesson.subject || 'Not set',
     topic: lesson.topic || '',
-    level: lesson.education_level || 'Secondary',
+    level: lesson.education_level || 'Not set',
     targetGradeLevel: Number(lesson.target_grade_level || 0),
     duration: Number(lesson.estimated_duration_minutes || 0),
     status: normalizeStatus(String(lesson.status || 'published')),

@@ -23,6 +23,12 @@ interface ClassOption {
     label: string;
 }
 
+interface ActionMenuState {
+    studentId: string;
+    top: number;
+    left: number;
+}
+
 export function StudentsView() {
     const guardAuth = useAuthGuard('school');
     const [loading, setLoading] = useState(true);
@@ -34,7 +40,7 @@ export function StudentsView() {
     const [selectedStudentAction, setSelectedStudentAction] = useState<'view' | 'move-class'>('view');
     const [showClassFilter, setShowClassFilter] = useState(false);
     const [showEnrollModal, setShowEnrollModal] = useState(false);
-    const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+    const [actionMenu, setActionMenu] = useState<ActionMenuState | null>(null);
     const [page, setPage] = useState(1);
     const [pagination, setPagination] = useState({
         totalCount: 0,
@@ -119,9 +125,33 @@ export function StudentsView() {
         };
     }, [page, selectedClassId]);
 
+    useEffect(() => {
+        if (!actionMenu) return;
+
+        const closeMenu = () => setActionMenu(null);
+        const closeOnEscape = (event: KeyboardEvent) => {
+            if (event.key === 'Escape') closeMenu();
+        };
+
+        window.addEventListener('resize', closeMenu);
+        window.addEventListener('scroll', closeMenu, true);
+        window.addEventListener('keydown', closeOnEscape);
+
+        return () => {
+            window.removeEventListener('resize', closeMenu);
+            window.removeEventListener('scroll', closeMenu, true);
+            window.removeEventListener('keydown', closeOnEscape);
+        };
+    }, [actionMenu]);
+
     const selectedStudent = useMemo(
         () => students.find((student) => student.id === selectedStudentId) || null,
         [selectedStudentId, students],
+    );
+
+    const activeActionStudent = useMemo(
+        () => students.find((student) => student.id === actionMenu?.studentId) || null,
+        [actionMenu?.studentId, students],
     );
 
     if (selectedStudentId) {
@@ -289,39 +319,34 @@ export function StudentsView() {
                                 <div className="relative flex items-center justify-end text-[13px] text-[#3B3F6E]">
                                     <button
                                         type="button"
-                                        onClick={() => setOpenActionMenuId((current) => (current === student.id ? null : student.id))}
-                                        className="rounded-full p-2 opacity-90"
+                                        onClick={(event) => {
+                                            const rect = event.currentTarget.getBoundingClientRect();
+                                            const menuWidth = 168;
+                                            const menuHeight = 96;
+                                            const gap = 8;
+                                            const top =
+                                                window.innerHeight - rect.bottom >= menuHeight + gap
+                                                    ? rect.bottom + gap
+                                                    : Math.max(12, rect.top - menuHeight - gap);
+                                            const left = Math.min(
+                                                window.innerWidth - menuWidth - 12,
+                                                Math.max(12, rect.right - menuWidth),
+                                            );
+
+                                            setActionMenu((current) =>
+                                                current?.studentId === student.id
+                                                    ? null
+                                                    : { studentId: student.id, top, left },
+                                            );
+                                        }}
+                                        className={`rounded-full p-2 opacity-90 transition-colors ${
+                                            actionMenu?.studentId === student.id ? 'bg-[#F0EDE8]' : 'hover:bg-[#F7F1E6]'
+                                        }`}
                                         aria-label="More actions"
+                                        aria-expanded={actionMenu?.studentId === student.id}
                                     >
                                         <DotsIcon />
                                     </button>
-
-                                    {openActionMenuId === student.id ? (
-                                        <div className="absolute right-0 top-[38px] z-20 w-[148px] overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-white shadow-[0_12px_24px_rgba(0,0,0,0.08)]">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setSelectedStudentAction('view');
-                                                    setSelectedStudentId(student.id);
-                                                    setOpenActionMenuId(null);
-                                                }}
-                                                className="flex w-full items-center px-4 py-3 text-left text-[14px] text-[#3B3F6E] hover:bg-[#F7F1E6]"
-                                            >
-                                                View
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    setSelectedStudentAction('move-class');
-                                                    setSelectedStudentId(student.id);
-                                                    setOpenActionMenuId(null);
-                                                }}
-                                                className="flex w-full items-center px-4 py-3 text-left text-[14px] text-[#3B3F6E] hover:bg-[#F7F1E6]"
-                                            >
-                                                Move class
-                                            </button>
-                                        </div>
-                                    ) : null}
                                 </div>
                             </div>
                         ))}
@@ -360,6 +385,44 @@ export function StudentsView() {
                     </div>
                 ) : null}
             </div>
+
+            {actionMenu && activeActionStudent ? (
+                <>
+                    <button
+                        type="button"
+                        aria-label="Close actions menu"
+                        className="fixed inset-0 z-40 cursor-default bg-transparent"
+                        onClick={() => setActionMenu(null)}
+                    />
+                    <div
+                        className="fixed z-50 w-[168px] overflow-hidden rounded-[14px] border border-[#E0D9CE] bg-white py-1 shadow-[0_18px_40px_rgba(31,37,71,0.16)]"
+                        style={{ top: actionMenu.top, left: actionMenu.left }}
+                    >
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedStudentAction('view');
+                                setSelectedStudentId(activeActionStudent.id);
+                                setActionMenu(null);
+                            }}
+                            className="flex w-full items-center px-4 py-3 text-left text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#F7F1E6]"
+                        >
+                            View
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setSelectedStudentAction('move-class');
+                                setSelectedStudentId(activeActionStudent.id);
+                                setActionMenu(null);
+                            }}
+                            className="flex w-full items-center px-4 py-3 text-left text-[14px] font-medium text-[#3B3F6E] transition-colors hover:bg-[#F7F1E6]"
+                        >
+                            Move class
+                        </button>
+                    </div>
+                </>
+            ) : null}
 
             {showEnrollModal ? (
                 <EnrollStudentModal

@@ -79,8 +79,8 @@ async function fetchTeacherLessons() {
             return {
                 id: String(lesson.id),
                 title: lesson.title || 'Untitled lesson',
-                subject: lesson.subject || lesson.topic || 'General',
-                level: lesson.education_level || 'Secondary',
+                subject: lesson.subject || lesson.topic || 'Not set',
+                level: lesson.education_level || 'Not set',
                 duration: Number(lesson.estimated_duration_minutes || 0),
                 status: 'Published',
                 lastUpdated: formatUpdatedDate(lesson.last_updated || lesson.created_at),

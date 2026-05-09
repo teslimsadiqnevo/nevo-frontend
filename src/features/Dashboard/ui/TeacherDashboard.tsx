@@ -746,16 +746,11 @@ function TeacherHomeView({
                 <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Recent activity</h2>
                 <div className="overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#FAF9F6] p-[1px]">
                     {activity.length === 0 && (
-                        <div className="bg-[#FAF9F6] px-4 py-5">
-                            <div className="flex items-center gap-4">
-                                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#E9E0D6] text-[12px] font-semibold text-[#3B3F6E]">
-                                    0
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-[14px] leading-5 text-black">No recent activity yet</p>
-                                </div>
-                                <span className="text-[12px] leading-4 text-black/50">Now</span>
-                            </div>
+                        <div className="bg-[#FAF9F6] px-4 py-6">
+                            <p className="text-[14px] leading-5 text-black">No recent activity yet</p>
+                            <p className="mt-1 text-[12px] leading-4 text-black/50">
+                                Student and lesson activity will appear here once the backend records it.
+                            </p>
                         </div>
                     )}
                     {activity.map((item, idx: number) => (

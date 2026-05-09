@@ -50,9 +50,9 @@ function normalizeStatus(status: string) {
 }
 
 function formatDate(value?: string | null) {
-  if (!value) return 'Recently';
+  if (!value) return 'Date unavailable';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return 'Recently';
+  if (Number.isNaN(date.getTime())) return 'Date unavailable';
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -156,7 +156,7 @@ export function LessonDetailsView({
     if (!lesson) return null;
     return {
       status: normalizeStatus(lesson.status),
-      subject: lesson.subject || 'General',
+      subject: lesson.subject || 'Not set',
       topic: lesson.topic || lesson.title,
       level: gradeLabel(Number(lesson.target_grade_level || 0)),
       duration: Number(lesson.estimated_duration_minutes || 0),

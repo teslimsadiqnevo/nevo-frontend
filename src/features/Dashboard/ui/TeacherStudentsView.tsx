@@ -521,7 +521,7 @@ function getNameInitials(name: string) {
 }
 
 function formatTeacherLastActive(value: string | null) {
-  if (!value) return 'Recently';
+  if (!value) return 'No activity yet';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
   const now = new Date();
@@ -539,7 +539,7 @@ function humanizeValue(value: unknown) {
 }
 
 function formatSessionDate(value: string | null | undefined) {
-  if (!value) return 'Recently';
+  if (!value) return 'No date recorded';
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
   return parsed.toLocaleDateString('en-NG', {

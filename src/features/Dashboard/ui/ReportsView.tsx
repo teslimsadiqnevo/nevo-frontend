@@ -396,13 +396,7 @@ function getTeacherRows(termSummary: any, boardPreview: any): TeacherRow[] {
         }));
     }
 
-    const avatars = Array.isArray(termSummary?.teacher_avatars) ? termSummary.teacher_avatars : [];
-    return avatars.slice(0, 5).map((teacher: any, index: number) => ({
-        name: String(teacher?.teacher_name ?? teacher?.name ?? 'Teacher'),
-        uploaded: String(Math.max(1, Number(termSummary?.teachers_uploaded_this_term ?? 0) - index)),
-        assigned: String(Math.max(3, Number(termSummary?.concepts_covered_this_term ?? 0) - index * 2)),
-        lastActive: ['Today', '2 hours ago', 'Yesterday', '3 days ago', 'Today'][index] || 'Recently',
-    }));
+    return [];
 }
 
 function getCoverageRows(termSummary: any, boardPreview: any): CoverageRow[] {
@@ -432,7 +426,7 @@ function formatShortDate(value: string) {
 }
 
 function formatRelative(value?: string) {
-    if (!value) return 'Recently';
+    if (!value) return 'Not recorded';
     const lower = String(value).toLowerCase();
     if (lower.includes('ago') || lower === 'today' || lower === 'yesterday') {
         return value;

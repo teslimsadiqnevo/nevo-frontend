@@ -36,24 +36,7 @@ interface SectionDetail {
     suggestion?: string;
 }
 
-/* ─── Mock Data ─── */
-const supportStudents: SupportStudent[] = [
-    { id: 'ec', initials: 'EC', avatarBg: '#6A7DB5', name: 'Emma Chen', issues: ['Missed 3 assignments', 'Low participation'] },
-    { id: 'lt', initials: 'LT', avatarBg: '#5B8A6E', name: 'Liam Torres', issues: ['Struggling with fractions', 'Requested 4 hints'] },
-    { id: 'aj', initials: 'AJ', avatarBg: '#7B6DAA', name: 'Ava Johnson', issues: ['Below grade level', 'Needs extra support'] },
-    { id: 'nk', initials: 'NK', avatarBg: '#4A8B9D', name: 'Noah Kim', issues: ['Missed 2 lessons', 'Low engagement'] },
-];
-
-const confusionLessons: ConfusionLesson[] = [
-    { id: 'solving-linear', title: 'Solving Linear Equations', detail: 'Section 3 — 8 simplify requests' },
-    { id: 'multiplying-fractions', title: 'Multiplying Fractions', detail: 'Section 2 — 12 hint requests' },
-    { id: 'area-perimeter', title: 'Area and Perimeter', detail: 'Section 4 — 6 simplify requests' },
-];
-
-const topicsBuilding: TopicProgress[] = [
-    { id: 'fractions-decimals', title: 'Fractions and Decimals', description: 'Understanding improving across Grade 6' },
-    { id: 'number-sense', title: 'Number Sense', description: 'Strong progress in all sections' },
-];
+// Insights are rendered only from backend signals. Keep this file free of fixture rows.
 
 interface TopicStudent {
     initials: string;
@@ -67,6 +50,44 @@ interface TopicDetail {
     lessonBars: { label: string; value: number }[]; // value 0–100
     summary: string;
     students: TopicStudent[];
+}
+
+function getInitials(name: string) {
+    return (
+        name
+            .split(' ')
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() || '')
+            .join('') || 'ST'
+    );
+}
+
+function getAvatarColor(seed: string) {
+    const colors = ['#6A7DB5', '#5B8A6E', '#7B6DAA', '#4A8B9D'];
+    const total = seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return colors[total % colors.length];
+}
+
+function normalizeInsightStudent(entry: any, index: number): TopicStudent & { id?: string; issues?: string[] } {
+    const name = entry?.name || `${entry?.first_name || ''} ${entry?.last_name || ''}`.trim() || 'Student';
+    const status =
+        entry?.status === 'on-track' || entry?.status === 'building' || entry?.status === 'may-need-support'
+            ? entry.status
+            : 'building';
+
+    return {
+        id: String(entry?.id ?? entry?.student_id ?? entry?.student_uuid ?? index),
+        initials: getInitials(name),
+        avatarBg: getAvatarColor(`${name}:${index}`),
+        name,
+        status,
+        issues: Array.isArray(entry?.issues)
+            ? entry.issues.filter((issue: unknown): issue is string => typeof issue === 'string' && issue.trim().length > 0)
+            : [entry?.signal_reason, entry?.support_note].filter(
+                  (issue): issue is string => typeof issue === 'string' && issue.trim().length > 0,
+              ),
+    };
 }
 
 /* ─── Main Component ─── */
@@ -105,18 +126,18 @@ export function InsightsView() {
             .filter((s: any) => Number(s.signal_score ?? s.attention_score ?? 0) > 0 || Array.isArray(s.issues))
             .slice(0, 4)
             .map((s: any, idx: number) => {
-                const name = s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student';
-                const initials = name
-                    .split(' ')
-                    .filter(Boolean)
-                    .slice(0, 2)
-                    .map((p: string) => p[0]?.toUpperCase() || '')
-                    .join('') || 'ST';
-                const issues = Array.isArray(s.issues)
-                    ? s.issues
-                    : [s.signal_reason || s.support_note || 'May need additional support'].filter(Boolean);
-                const colors = ['#6A7DB5', '#5B8A6E', '#7B6DAA', '#4A8B9D'];
-                return { id: String(s.id ?? idx), initials, avatarBg: colors[idx % colors.length], name, issues };
+                const student = normalizeInsightStudent(s, idx);
+                const issues =
+                    student.issues && student.issues.length > 0
+                        ? student.issues
+                        : ['Support signal detected'];
+                return {
+                    id: student.id ?? String(idx),
+                    initials: student.initials,
+                    avatarBg: student.avatarBg,
+                    name: student.name,
+                    issues,
+                };
             });
     }, [filteredStudentsData]);
 
@@ -137,24 +158,10 @@ export function InsightsView() {
         return topics.map((t: any, idx: number) => ({
             id: String(t.id ?? `topic-${idx}`),
             title: t.title || t.topic || 'Topic',
-            description: t.description || t.summary || 'Understanding is improving.',
+            description: t.description || t.summary || 'No summary available yet.',
             bars: Array.isArray(t.lesson_bars) ? t.lesson_bars.map((b: any, i: number) => ({ label: b.label || `Lesson ${i + 1}`, value: Number(b.value ?? 0) })) : [],
             students: Array.isArray(t.students)
-                ? t.students.map((s: any) => {
-                      const n = s.name || `${s.first_name || ''} ${s.last_name || ''}`.trim() || 'Student';
-                      const initials = n
-                          .split(' ')
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((p: string) => p[0]?.toUpperCase() || '')
-                          .join('') || 'ST';
-                      return {
-                          initials,
-                          avatarBg: '#6A7DB5',
-                          name: n,
-                          status: (s.status === 'on-track' || s.status === 'building' || s.status === 'may-need-support') ? s.status : 'building',
-                      } as TopicStudent;
-                  })
+                ? t.students.map((s: any, studentIndex: number) => normalizeInsightStudent(s, studentIndex))
                 : [],
         }));
     }, [dashboardData]);
@@ -170,6 +177,19 @@ export function InsightsView() {
                       checkpoints: Number(sec.checkpoints ?? 0),
                       understood: Number(sec.understood ?? 0),
                       total: Number(sec.total ?? 0),
+                      students: Array.isArray(sec.students)
+                          ? sec.students.map((student: any, studentIndex: number) => {
+                                const normalized = normalizeInsightStudent(student, studentIndex);
+                                const tag = student.tag || student.status_label || 'Needs review';
+                                return {
+                                    initials: normalized.initials,
+                                    avatarBg: normalized.avatarBg,
+                                    name: normalized.name,
+                                    tag,
+                                    tagColor: student.tag_color || (normalized.status === 'may-need-support' ? '#FEEFC3' : '#E0DDD8'),
+                                };
+                            })
+                          : undefined,
                       suggestion: sec.suggestion || undefined,
                   }))
                 : [];
@@ -183,7 +203,7 @@ export function InsightsView() {
         topicsBuilding.forEach((topic) => {
             map[topic.id] = {
                 title: topic.title,
-                lessonBars: topic.bars && topic.bars.length > 0 ? topic.bars : [{ label: 'Lesson 1', value: 0 }],
+                lessonBars: topic.bars && topic.bars.length > 0 ? topic.bars : [],
                 summary: topic.description,
                 students: topic.students && topic.students.length > 0 ? topic.students : [],
             };
@@ -328,7 +348,8 @@ function LessonInsightDetail({
             <div className="flex flex-col gap-3">
                 {sections.map((section, idx) => {
                     const isExpanded = expandedIdx === idx;
-                    const progressPct = (section.understood / section.total) * 100;
+                    const progressPct =
+                        section.total > 0 ? (section.understood / section.total) * 100 : 0;
 
                     return (
                         <div key={section.title}>
@@ -376,9 +397,9 @@ function LessonInsightDetail({
                                         ))}
                                     </div>
 
-                                    <button className="text-[12.5px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer flex items-center gap-1 mb-4">
-                                        View all 8 students <span>→</span>
-                                    </button>
+                                    <p className="mb-4 text-[12.5px] font-semibold text-[#3B3F6E]">
+                                        {section.students.length} {section.students.length === 1 ? 'student' : 'students'} flagged
+                                    </p>
 
                                     {section.suggestion && (
                                         <div className="bg-[#FEF9EE] border border-[#F5E6C8] rounded-xl px-5 py-4">
@@ -409,7 +430,7 @@ const STATUS_CONFIG: Record<TopicStudent['status'], { label: string; bg: string;
 };
 
 function TopicDetailView({ topic, onBack }: { topic: TopicDetail; onBack: () => void }) {
-    const maxBar = Math.max(...topic.lessonBars.map(b => b.value));
+    const maxBar = Math.max(...topic.lessonBars.map(b => b.value), 1);
 
     return (
         <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
@@ -429,17 +450,23 @@ function TopicDetailView({ topic, onBack }: { topic: TopicDetail; onBack: () => 
             <section className="mb-6">
                 <p className="text-[13px] text-graphite-60 font-medium mb-4">Class performance on this topic</p>
                 <div className="bg-white rounded-2xl border border-[#E9E7E2] px-8 py-6">
-                    <div className="flex items-end justify-center gap-6 h-[120px]">
-                        {topic.lessonBars.map((bar) => (
-                            <div key={bar.label} className="flex flex-col items-center gap-2">
-                                <div
-                                    className="w-[50px] rounded-md bg-[#3B3F6E] transition-all"
-                                    style={{ height: `${(bar.value / maxBar) * 100}px` }}
-                                />
-                                <span className="text-[11px] text-graphite-40 font-medium">{bar.label}</span>
-                            </div>
-                        ))}
-                    </div>
+                    {topic.lessonBars.length > 0 ? (
+                        <div className="flex items-end justify-center gap-6 h-[120px]">
+                            {topic.lessonBars.map((bar) => (
+                                <div key={bar.label} className="flex flex-col items-center gap-2">
+                                    <div
+                                        className="w-[50px] rounded-md bg-[#3B3F6E] transition-all"
+                                        style={{ height: `${(bar.value / maxBar) * 100}px` }}
+                                    />
+                                    <span className="text-[11px] text-graphite-40 font-medium">{bar.label}</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="py-10 text-center text-[13px] text-graphite-40">
+                            No performance data returned for this topic yet.
+                        </p>
+                    )}
                 </div>
             </section>
 
@@ -448,31 +475,37 @@ function TopicDetailView({ topic, onBack }: { topic: TopicDetail; onBack: () => 
             {/* Students list */}
             <section>
                 <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Students</h3>
-                <div className="flex flex-col">
-                    {topic.students.map((student, i) => {
-                        const cfg = STATUS_CONFIG[student.status];
-                        return (
-                            <div
-                                key={`${student.initials}-${i}`}
-                                className={`flex items-center gap-3 py-3 px-1 ${i < topic.students.length - 1 ? 'border-b border-[#EEECEA]' : ''}`}
-                            >
+                {topic.students.length > 0 ? (
+                    <div className="flex flex-col">
+                        {topic.students.map((student, i) => {
+                            const cfg = STATUS_CONFIG[student.status];
+                            return (
                                 <div
-                                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                    style={{ backgroundColor: student.avatarBg }}
+                                    key={`${student.initials}-${i}`}
+                                    className={`flex items-center gap-3 py-3 px-1 ${i < topic.students.length - 1 ? 'border-b border-[#EEECEA]' : ''}`}
                                 >
-                                    {student.initials}
+                                    <div
+                                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                                        style={{ backgroundColor: student.avatarBg }}
+                                    >
+                                        {student.initials}
+                                    </div>
+                                    <span className="text-[13px] font-medium text-[#2B2B2F] min-w-[160px]">{student.name}</span>
+                                    <span
+                                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md"
+                                        style={{ backgroundColor: cfg.bg, color: cfg.color }}
+                                    >
+                                        {cfg.label}
+                                    </span>
                                 </div>
-                                <span className="text-[13px] font-medium text-[#2B2B2F] min-w-[160px]">{student.name}</span>
-                                <span
-                                    className="text-[11px] font-semibold px-2.5 py-1 rounded-md"
-                                    style={{ backgroundColor: cfg.bg, color: cfg.color }}
-                                >
-                                    {cfg.label}
-                                </span>
-                            </div>
-                        );
-                    })}
-                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <p className="text-[13px] text-graphite-40">
+                        No student-level topic data returned yet.
+                    </p>
+                )}
             </section>
         </div>
     );
