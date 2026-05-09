@@ -82,7 +82,7 @@ async function unwrap(res: Response, label: string) {
 export async function getSchoolDashboardOverview() {
   try {
     const { headers } = await schoolContext();
-    const res = await apiFetch("/schools/me/overview", { headers });
+    const res = await apiFetch(`/schools/me/overview?_=${Date.now()}`, { headers, cache: "no-store" });
     return unwrap(res, "Failed to fetch school overview");
   } catch (e: any) {
     return { error: e.message };
