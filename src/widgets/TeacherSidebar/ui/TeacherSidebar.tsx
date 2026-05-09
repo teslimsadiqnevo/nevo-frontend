@@ -37,12 +37,12 @@ export function TeacherSidebar({
     const buildHref = (view: TeacherDashboardView | null) => getDashboardPath('teacher', view || 'home');
 
     return (
-        <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[200px] min-w-[200px] flex-col overflow-hidden bg-[#3B3F6E]">
+        <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[220px] min-w-[220px] flex-col overflow-hidden bg-[#3B3F6E]">
             <div className="px-6 pt-6 pb-6">
                 <NevoLogo className="h-6 w-auto" width={80} height={24} variant="light" />
             </div>
 
-            <nav className="min-h-0 flex-1 overflow-y-auto px-3">
+            <nav className="min-h-0 flex-1 overflow-y-auto px-0">
                 <div className="flex flex-col gap-1 pb-2">
                 {navItems.map((item) => {
                     const isActive = (item.view || 'home') === (currentView || 'home');
@@ -50,12 +50,13 @@ export function TeacherSidebar({
                         <Link
                             key={item.name}
                             href={buildHref(item.view)}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-[13px] ${
+                            className={`relative flex h-12 w-[220px] items-center gap-[10px] px-0 pl-5 text-[14px] transition-all ${
                                 isActive
-                                    ? 'bg-white/15 text-white font-semibold'
-                                    : 'text-white/70 font-medium hover:bg-white/8 hover:text-white/90'
+                                    ? 'bg-[#4A5080] text-[#F7F1E6] font-medium'
+                                    : 'text-[#F7F1E6]/50 font-medium hover:bg-white/8 hover:text-[#F7F1E6]/80'
                             }`}
                         >
+                            {isActive ? <span className="absolute left-0 top-0 h-12 w-[3px] bg-[#F7F1E6]" /> : null}
                             <SidebarIcon name={item.name} active={isActive} />
                             <span>{item.name}</span>
                         </Link>
@@ -64,7 +65,7 @@ export function TeacherSidebar({
                 </div>
             </nav>
 
-            <div className="px-4 pb-6 pt-2">
+            <div className="px-4 pb-3 pt-2">
                 <button
                     type="button"
                     onClick={() => setShowAskNevo(true)}
@@ -75,10 +76,10 @@ export function TeacherSidebar({
                 </button>
             </div>
 
-            <div className="px-4 pb-6 pt-2">
+            <div className="px-5 pb-4 pt-0">
                 <Link
                     href={buildHref('profile')}
-                    className={`flex items-center gap-3 px-2 py-2 -mx-2 rounded-xl transition-colors cursor-pointer ${
+                    className={`flex items-center gap-[10px] rounded-xl py-2 transition-colors cursor-pointer ${
                         isProfileActive ? 'bg-white/15' : 'hover:bg-white/8'
                     }`}
                 >
@@ -99,7 +100,7 @@ export function TeacherSidebar({
             <AskNevoDrawer
                 open={showAskNevo}
                 onClose={() => setShowAskNevo(false)}
-                leftInset={200}
+                leftInset={220}
                 page={askPage}
                 context={askContext}
             />
@@ -108,13 +109,13 @@ export function TeacherSidebar({
 }
 
 function SidebarIcon({ name, active }: { name: string; active: boolean }) {
-    const opacity = active ? 1 : 0.7;
-    const color = "white";
+    const opacity = active ? 1 : 0.5;
+    const color = "#F7F1E6";
 
     switch (name) {
         case 'Dashboard':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
                     <rect x="2" y="2" width="7" height="7" rx="2" stroke={color} strokeWidth="1.5" fill={active ? "white" : "none"} fillOpacity={active ? 0.3 : 0}/>
                     <rect x="11" y="2" width="7" height="7" rx="2" stroke={color} strokeWidth="1.5" fill={active ? "white" : "none"} fillOpacity={active ? 0.3 : 0}/>
                     <rect x="2" y="11" width="7" height="7" rx="2" stroke={color} strokeWidth="1.5" fill={active ? "white" : "none"} fillOpacity={active ? 0.3 : 0}/>
@@ -123,7 +124,7 @@ function SidebarIcon({ name, active }: { name: string; active: boolean }) {
             );
         case 'Lessons':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
                     <rect x="3" y="2" width="14" height="16" rx="2" stroke={color} strokeWidth="1.5"/>
                     <line x1="7" y1="6" x2="13" y2="6" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
                     <line x1="7" y1="10" x2="13" y2="10" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
@@ -132,7 +133,7 @@ function SidebarIcon({ name, active }: { name: string; active: boolean }) {
             );
         case 'Students':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
                     <circle cx="7" cy="7" r="3" stroke={color} strokeWidth="1.5"/>
                     <path d="M2 17C2 14.2386 4.23858 12 7 12C9.76142 12 12 14.2386 12 17" stroke={color} strokeWidth="1.5" strokeLinecap="round"/>
                     <circle cx="14" cy="8" r="2.5" stroke={color} strokeWidth="1.5"/>
@@ -141,13 +142,13 @@ function SidebarIcon({ name, active }: { name: string; active: boolean }) {
             );
         case 'Insights':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
                     <path d="M3 17L8 10L12 13L17 3" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
             );
         case 'Connect':
             return (
-                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" opacity={opacity}>
                     <path d="M3 15V5C3 3.89543 3.89543 3 5 3H15C16.1046 3 17 3.89543 17 5V12C17 13.1046 16.1046 14 15 14H7L3 17Z" stroke={color} strokeWidth="1.5" strokeLinejoin="round"/>
                     <circle cx="7" cy="8.5" r="1" fill={color}/>
                     <circle cx="10" cy="8.5" r="1" fill={color}/>
@@ -158,3 +159,4 @@ function SidebarIcon({ name, active }: { name: string; active: boolean }) {
             return null;
     }
 }
+

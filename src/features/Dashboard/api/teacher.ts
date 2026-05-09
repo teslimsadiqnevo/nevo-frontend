@@ -107,6 +107,50 @@ export async function getTeacherDashboard() {
   }
 }
 
+export async function getTeacherInsightsOverview(params?: {
+  subject?: string;
+  grade?: number;
+  daysBack?: number;
+}) {
+  try {
+    const { headers, teacherId } = await teacherContext();
+    const query = new URLSearchParams();
+
+    if (params?.subject) query.set("subject_filter", params.subject);
+    if (typeof params?.grade === "number") query.set("grade_filter", String(params.grade));
+    if (typeof params?.daysBack === "number") query.set("days_back", String(params.daysBack));
+
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    const res = await apiFetch(`/insights/teacher/${teacherId}${suffix}`, { headers });
+    return unwrap(res, "Failed to fetch teacher insights");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function getTeacherLessonInsights(lessonId: string) {
+  try {
+    const { headers } = await teacherContext();
+    const res = await apiFetch(`/insights/lesson/${encodeURIComponent(lessonId)}`, { headers });
+    return unwrap(res, "Failed to fetch lesson insights");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+export async function getTeacherTopicInsights(topicName: string) {
+  try {
+    const { headers, teacherId } = await teacherContext();
+    const res = await apiFetch(
+      `/insights/teacher/${teacherId}/topic/${encodeURIComponent(topicName)}`,
+      { headers },
+    );
+    return unwrap(res, "Failed to fetch topic insights");
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 export async function getTeacherLessons(params?: {
   search?: string;
   status?: string;

@@ -490,7 +490,13 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
     return (
         <div className="flex h-screen w-full overflow-hidden bg-[#F7F1E6] font-sans">
             <TeacherSidebar user={effectiveUser} currentView={view} />
-            <main className="ml-[200px] flex-1 overflow-y-auto px-[48px] py-[48px]">
+            <main
+                className={
+                    view === 'insights'
+                        ? 'ml-[220px] flex-1 overflow-y-auto p-0'
+                        : 'ml-[220px] flex-1 overflow-y-auto px-[48px] py-[48px]'
+                }
+            >
                 {sessionIsStale ? (
                     <StaleSessionBanner
                         callbackUrl="/login/teacher"

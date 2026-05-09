@@ -1,7 +1,7 @@
 'use client';
 
 import { type ReactNode, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { getDashboardPath, useAuthGuard } from '@/shared/lib';
 import {
   getTeacherStudentProfile,
@@ -23,6 +23,7 @@ type TeacherStudentRow = {
 
 export function TeacherStudentsView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const guardAuth = useAuthGuard('teacher');
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,7 +31,7 @@ export function TeacherStudentsView() {
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState('All classes');
   const [showClassFilter, setShowClassFilter] = useState(false);
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(() => searchParams.get('student'));
 
   useEffect(() => {
     let mounted = true;

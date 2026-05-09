@@ -1,623 +1,841 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { getTeacherDashboard, getTeacherStudents } from '../api/teacher';
-import { useAuthGuard } from '@/shared/lib';
+import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { getDashboardPath, useAuthGuard } from '@/shared/lib';
+import {
+  getTeacherInsightsOverview,
+  getTeacherLessonInsights,
+  getTeacherStudents,
+  getTeacherTopicInsights,
+} from '../api/teacher';
 
-/* ─── Types ─── */
-interface SupportStudent {
-    id: string;
-    initials: string;
-    avatarBg: string;
-    name: string;
-    issues: string[];
-}
+const VIOLET = '#9A9CCB';
+const AMBER = '#F5A623';
+const GREEN = '#28A745';
 
-interface ConfusionLesson {
-    id: string;
-    title: string;
-    detail: string;
-}
-
-interface TopicProgress {
-    id: string;
-    title: string;
-    description: string;
-    bars?: { label: string; value: number }[];
-    students?: TopicStudent[];
-}
-
-interface SectionDetail {
-    title: string;
-    checkpoints: number;
-    understood: number;
-    total: number;
-    students?: { initials: string; avatarBg: string; name: string; tag: string; tagColor: string }[];
-    suggestion?: string;
-}
-
-// Insights are rendered only from backend signals. Keep this file free of fixture rows.
-
-interface TopicStudent {
-    initials: string;
-    avatarBg: string;
-    name: string;
-    status: 'on-track' | 'building' | 'may-need-support';
-}
-
-interface TopicDetail {
-    title: string;
-    lessonBars: { label: string; value: number }[]; // value 0–100
-    summary: string;
-    students: TopicStudent[];
-}
-
-function getInitials(name: string) {
-    return (
-        name
-            .split(' ')
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((part) => part[0]?.toUpperCase() || '')
-            .join('') || 'ST'
-    );
-}
-
-function getAvatarColor(seed: string) {
-    const colors = ['#6A7DB5', '#5B8A6E', '#7B6DAA', '#4A8B9D'];
-    const total = seed.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0);
-    return colors[total % colors.length];
-}
-
-function normalizeInsightStudent(entry: any, index: number): TopicStudent & { id?: string; issues?: string[] } {
-    const name = entry?.name || `${entry?.first_name || ''} ${entry?.last_name || ''}`.trim() || 'Student';
-    const status =
-        entry?.status === 'on-track' || entry?.status === 'building' || entry?.status === 'may-need-support'
-            ? entry.status
-            : 'building';
-
-    return {
-        id: String(entry?.id ?? entry?.student_id ?? entry?.student_uuid ?? index),
-        initials: getInitials(name),
-        avatarBg: getAvatarColor(`${name}:${index}`),
-        name,
-        status,
-        issues: Array.isArray(entry?.issues)
-            ? entry.issues.filter((issue: unknown): issue is string => typeof issue === 'string' && issue.trim().length > 0)
-            : [entry?.signal_reason, entry?.support_note].filter(
-                  (issue): issue is string => typeof issue === 'string' && issue.trim().length > 0,
-              ),
-    };
-}
-
-/* ─── Main Component ─── */
-export function InsightsView() {
-    const guardAuth = useAuthGuard('teacher');
-    const [isLoading, setIsLoading] = useState(true);
-    const [dashboardData, setDashboardData] = useState<any>(null);
-    const [studentsData, setStudentsData] = useState<any[]>([]);
-    const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
-    const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-    const [selectedGrade, setSelectedGrade] = useState('All classes');
-
-    useEffect(() => {
-        let mounted = true;
-        (async () => {
-            const [dashboardRes, studentsRes] = await Promise.all([getTeacherDashboard(), getTeacherStudents()]);
-            if (!mounted) return;
-            if (guardAuth([dashboardRes as any, studentsRes as any])) return;
-            setDashboardData('data' in dashboardRes ? dashboardRes.data || null : null);
-            const studentPayload = 'data' in studentsRes ? studentsRes.data : null;
-            setStudentsData(Array.isArray(studentPayload) ? studentPayload : Array.isArray(studentPayload?.students) ? studentPayload.students : []);
-            setIsLoading(false);
-        })();
-        return () => {
-            mounted = false;
-        };
-    }, []);
-
-    const filteredStudentsData = useMemo(() => {
-        if (selectedGrade === 'All classes') return studentsData;
-        return studentsData.filter((s: any) => (s.class_name || s.class) === selectedGrade);
-    }, [studentsData, selectedGrade]);
-
-    const supportStudents = useMemo<SupportStudent[]>(() => {
-        return filteredStudentsData
-            .filter((s: any) => Number(s.signal_score ?? s.attention_score ?? 0) > 0 || Array.isArray(s.issues))
-            .slice(0, 4)
-            .map((s: any, idx: number) => {
-                const student = normalizeInsightStudent(s, idx);
-                const issues =
-                    student.issues && student.issues.length > 0
-                        ? student.issues
-                        : ['Support signal detected'];
-                return {
-                    id: student.id ?? String(idx),
-                    initials: student.initials,
-                    avatarBg: student.avatarBg,
-                    name: student.name,
-                    issues,
-                };
-            });
-    }, [filteredStudentsData]);
-
-    const confusionLessons = useMemo<ConfusionLesson[]>(() => {
-        const lessons = Array.isArray(dashboardData?.lessons) ? dashboardData.lessons : [];
-        return lessons
-            .filter((l: any) => Number(l.confusion_signals ?? l.confusion_count ?? 0) > 0)
-            .map((l: any, idx: number) => ({
-                id: String(l.id ?? `lesson-${idx}`),
-                title: l.title || l.name || 'Lesson',
-                detail: l.confusion_detail || l.detail || `Confusion signals: ${Number(l.confusion_signals ?? l.confusion_count ?? 0)}`,
-            }))
-            .slice(0, 6);
-    }, [dashboardData]);
-
-    const topicsBuilding = useMemo<TopicProgress[]>(() => {
-        const topics = Array.isArray(dashboardData?.topics_building) ? dashboardData.topics_building : [];
-        return topics.map((t: any, idx: number) => ({
-            id: String(t.id ?? `topic-${idx}`),
-            title: t.title || t.topic || 'Topic',
-            description: t.description || t.summary || 'No summary available yet.',
-            bars: Array.isArray(t.lesson_bars) ? t.lesson_bars.map((b: any, i: number) => ({ label: b.label || `Lesson ${i + 1}`, value: Number(b.value ?? 0) })) : [],
-            students: Array.isArray(t.students)
-                ? t.students.map((s: any, studentIndex: number) => normalizeInsightStudent(s, studentIndex))
-                : [],
-        }));
-    }, [dashboardData]);
-
-    const lessonSections = useMemo<Record<string, { title: string; sections: SectionDetail[] }>>(() => {
-        const lessons = Array.isArray(dashboardData?.lessons) ? dashboardData.lessons : [];
-        const mapped: Record<string, { title: string; sections: SectionDetail[] }> = {};
-        lessons.forEach((lesson: any, idx: number) => {
-            const id = String(lesson.id ?? `lesson-${idx}`);
-            const sections = Array.isArray(lesson.sections)
-                ? lesson.sections.map((sec: any, i: number) => ({
-                      title: sec.title || `Section ${i + 1}`,
-                      checkpoints: Number(sec.checkpoints ?? 0),
-                      understood: Number(sec.understood ?? 0),
-                      total: Number(sec.total ?? 0),
-                      students: Array.isArray(sec.students)
-                          ? sec.students.map((student: any, studentIndex: number) => {
-                                const normalized = normalizeInsightStudent(student, studentIndex);
-                                const tag = student.tag || student.status_label || 'Needs review';
-                                return {
-                                    initials: normalized.initials,
-                                    avatarBg: normalized.avatarBg,
-                                    name: normalized.name,
-                                    tag,
-                                    tagColor: student.tag_color || (normalized.status === 'may-need-support' ? '#FEEFC3' : '#E0DDD8'),
-                                };
-                            })
-                          : undefined,
-                      suggestion: sec.suggestion || undefined,
-                  }))
-                : [];
-            mapped[id] = { title: lesson.title || lesson.name || 'Lesson', sections };
-        });
-        return mapped;
-    }, [dashboardData]);
-
-    const topicDetails = useMemo<Record<string, TopicDetail>>(() => {
-        const map: Record<string, TopicDetail> = {};
-        topicsBuilding.forEach((topic) => {
-            map[topic.id] = {
-                title: topic.title,
-                lessonBars: topic.bars && topic.bars.length > 0 ? topic.bars : [],
-                summary: topic.description,
-                students: topic.students && topic.students.length > 0 ? topic.students : [],
-            };
-        });
-        return map;
-    }, [topicsBuilding]);
-
-    const hasData = supportStudents.length > 0 || confusionLessons.length > 0 || topicsBuilding.length > 0;
-    const gradeOptions = useMemo(() => {
-        const classes = studentsData.map((s: any) => s.class_name || s.class).filter(Boolean);
-        return ['All classes', ...Array.from(new Set(classes))];
-    }, [studentsData]);
-
-    if (selectedLesson) {
-        const data = lessonSections[selectedLesson];
-        if (data) {
-            return <LessonInsightDetail title={data.title} sections={data.sections} onBack={() => setSelectedLesson(null)} />;
-        }
-    }
-
-    if (selectedTopic) {
-        const data = topicDetails[selectedTopic];
-        if (data) {
-            return <TopicDetailView topic={data} onBack={() => setSelectedTopic(null)} />;
-        }
-    }
-
-    if (isLoading) return <InsightsSkeleton />;
-    if (!hasData) return <InsightsEmpty />;
-
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            {/* Header */}
-            <div className="flex justify-between items-center mb-8">
-                <h2 className="text-2xl font-semibold text-[#3B3F6E] leading-tight">Insights</h2>
-                <div className="flex gap-3">
-                    <FilterDropdown label={selectedGrade} options={gradeOptions} onSelect={setSelectedGrade} />
-                    <button className="flex items-center gap-2 px-4 py-2 border border-[#D4D0CA] rounded-xl text-[13px] font-semibold text-[#3B3F6E] bg-white hover:bg-gray-50 transition-colors cursor-pointer">
-                        <CalendarIcon />
-                        Last 7 days
-                    </button>
-                </div>
-            </div>
-
-            {/* Students who may need support */}
-            <section className="mb-8">
-                <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Students who may need support</h3>
-                <div className="grid grid-cols-4 gap-3">
-                    {supportStudents.map((student) => (
-                        <div key={student.name} className="bg-white rounded-2xl border border-[#E9E7E2] p-5 flex flex-col">
-                            <div
-                                className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[12px] font-bold mb-3"
-                                style={{ backgroundColor: student.avatarBg }}
-                            >
-                                {student.initials}
-                            </div>
-                            <p className="text-[14px] font-semibold text-[#2B2B2F] mb-1.5">{student.name}</p>
-                            <div className="flex flex-col gap-0.5 mb-3 flex-1">
-                                {student.issues.map((issue) => (
-                                    <p key={issue} className="text-[12px] text-graphite-40 leading-snug">{issue}</p>
-                                ))}
-                            </div>
-                            <button className="text-[12.5px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer text-left w-fit">
-                                View student
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* Lessons with confusion signals */}
-            <section className="mb-8">
-                <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Lessons with confusion signals</h3>
-                <div className="flex flex-col gap-3">
-                    {confusionLessons.map((lesson) => (
-                        <div key={lesson.id} className="bg-white rounded-2xl border border-[#E9E7E2] px-6 py-5 flex items-center justify-between">
-                            <div>
-                                <p className="text-[14px] font-semibold text-[#2B2B2F] mb-0.5">{lesson.title}</p>
-                                <p className="text-[12px] text-graphite-40">{lesson.detail}</p>
-                            </div>
-                            <button
-                                onClick={() => setSelectedLesson(lesson.id)}
-                                className="text-[12.5px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer shrink-0 flex items-center gap-1"
-                            >
-                                View lesson <span>→</span>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </section>
-
-            {/* Topics building well */}
-            <section>
-                <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Topics building well</h3>
-                <div className="flex flex-col gap-3">
-                    {topicsBuilding.map((topic) => (
-                        <div key={topic.id} className="bg-white rounded-2xl border border-[#E9E7E2] px-6 py-5 flex items-center justify-between">
-                            <div>
-                                <p className="text-[14px] font-semibold text-[#2B2B2F] mb-0.5">{topic.title}</p>
-                                <p className="text-[12px] text-graphite-40">{topic.description}</p>
-                            </div>
-                            <button
-                                onClick={() => setSelectedTopic(topic.id)}
-                                className="text-[12.5px] font-semibold text-[#3B3F6E] hover:underline cursor-pointer shrink-0 flex items-center gap-1"
-                            >
-                                View progress <span>→</span>
-                            </button>
-                        </div>
-                    ))}
-                </div>
-            </section>
-        </div>
-    );
-}
-
-/* ─── Lesson Insight Detail ─── */
-function LessonInsightDetail({
-    title,
-    sections,
-    onBack,
-}: {
-    title: string;
-    sections: SectionDetail[];
-    onBack: () => void;
-}) {
-    const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            <button
-                onClick={onBack}
-                className="flex items-center gap-2 text-[14px] text-graphite-60 font-medium mb-4 hover:text-[#3B3F6E] transition-colors cursor-pointer w-fit"
-            >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M10 3L5 8L10 13" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Insights
-            </button>
-
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] text-center mb-6">{title}</h2>
-
-            <div className="flex flex-col gap-3">
-                {sections.map((section, idx) => {
-                    const isExpanded = expandedIdx === idx;
-                    const progressPct =
-                        section.total > 0 ? (section.understood / section.total) * 100 : 0;
-
-                    return (
-                        <div key={section.title}>
-                            <button
-                                onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                                className="w-full bg-white rounded-2xl border border-[#E9E7E2] px-6 py-5 flex items-center justify-between cursor-pointer hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-shadow text-left"
-                            >
-                                <div>
-                                    <p className="text-[14px] font-semibold text-[#2B2B2F] mb-0.5">{section.title}</p>
-                                    <p className="text-[12px] text-graphite-40">{section.checkpoints} checkpoints</p>
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <div className="w-[60px] h-[6px] bg-[#EEECEA] rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-[#3B3F6E] rounded-full"
-                                            style={{ width: `${progressPct}%` }}
-                                        />
-                                    </div>
-                                    <span className="text-[12px] text-graphite-40 min-w-[110px] text-right">
-                                        {section.understood} of {section.total} understood
-                                    </span>
-                                </div>
-                            </button>
-
-                            {/* Expanded content */}
-                            {isExpanded && section.students && (
-                                <div className="bg-white border-x border-b border-[#E9E7E2] rounded-b-2xl -mt-2 pt-4 px-6 pb-5">
-                                    <div className="flex flex-col gap-3 mb-4">
-                                        {section.students.map((s) => (
-                                            <div key={s.name} className="flex items-center gap-3">
-                                                <div
-                                                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                                    style={{ backgroundColor: s.avatarBg }}
-                                                >
-                                                    {s.initials}
-                                                </div>
-                                                <span className="text-[13px] font-medium text-[#2B2B2F] min-w-[120px]">{s.name}</span>
-                                                <span
-                                                    className="text-[11px] font-medium px-2.5 py-1 rounded-md"
-                                                    style={{ backgroundColor: s.tagColor, color: s.tagColor === '#FEEFC3' ? '#92400E' : '#4A4A4A' }}
-                                                >
-                                                    {s.tag}
-                                                </span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <p className="mb-4 text-[12.5px] font-semibold text-[#3B3F6E]">
-                                        {section.students.length} {section.students.length === 1 ? 'student' : 'students'} flagged
-                                    </p>
-
-                                    {section.suggestion && (
-                                        <div className="bg-[#FEF9EE] border border-[#F5E6C8] rounded-xl px-5 py-4">
-                                            <p className="text-[10px] font-bold text-[#92400E] tracking-wider uppercase mb-1.5">Suggestion</p>
-                                            <div className="flex items-start justify-between gap-4">
-                                                <p className="text-[13px] text-[#2B2B2F] leading-relaxed">{section.suggestion}</p>
-                                                <button className="shrink-0 px-4 py-2 border border-[#3B3F6E] text-[#3B3F6E] rounded-xl text-[12px] font-semibold hover:bg-indigo-5 transition-colors cursor-pointer">
-                                                    Revise section
-                                                </button>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
-        </div>
-    );
-}
-
-/* ─── Topic Detail View ─── */
-const STATUS_CONFIG: Record<TopicStudent['status'], { label: string; bg: string; color: string }> = {
-    'on-track': { label: 'On track', bg: '#D1FAE5', color: '#065F46' },
-    'building': { label: 'Building', bg: '#E0DDD8', color: '#4A4A4A' },
-    'may-need-support': { label: 'May need support', bg: '#FEEFC3', color: '#92400E' },
+type SupportStudent = {
+  id: string;
+  name: string;
+  initials: string;
+  signals: string[];
 };
 
-function TopicDetailView({ topic, onBack }: { topic: TopicDetail; onBack: () => void }) {
-    const maxBar = Math.max(...topic.lessonBars.map(b => b.value), 1);
+type ConfusionLesson = {
+  id: string;
+  title: string;
+  detail: string;
+};
 
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            <button
-                onClick={onBack}
-                className="flex items-center gap-2 text-[14px] text-graphite-60 font-medium mb-4 hover:text-[#3B3F6E] transition-colors cursor-pointer w-fit"
-            >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M10 3L5 8L10 13" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-                Insights
-            </button>
+type BuildingTopic = {
+  id: string;
+  title: string;
+  subject?: string | null;
+  description: string;
+};
 
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] text-center mb-6">{topic.title}</h2>
+type OverviewData = {
+  supportStudents: SupportStudent[];
+  confusionLessons: ConfusionLesson[];
+  buildingTopics: BuildingTopic[];
+};
 
-            {/* Class performance chart */}
-            <section className="mb-6">
-                <p className="text-[13px] text-graphite-60 font-medium mb-4">Class performance on this topic</p>
-                <div className="bg-white rounded-2xl border border-[#E9E7E2] px-8 py-6">
-                    {topic.lessonBars.length > 0 ? (
-                        <div className="flex items-end justify-center gap-6 h-[120px]">
-                            {topic.lessonBars.map((bar) => (
-                                <div key={bar.label} className="flex flex-col items-center gap-2">
-                                    <div
-                                        className="w-[50px] rounded-md bg-[#3B3F6E] transition-all"
-                                        style={{ height: `${(bar.value / maxBar) * 100}px` }}
-                                    />
-                                    <span className="text-[11px] text-graphite-40 font-medium">{bar.label}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <p className="py-10 text-center text-[13px] text-graphite-40">
-                            No performance data returned for this topic yet.
-                        </p>
-                    )}
-                </div>
-            </section>
+type StudentLookup = Record<string, { id: string; name: string; initials: string; className?: string }>;
 
-            <p className="text-[12px] text-graphite-40 mb-6">{topic.summary}</p>
+type LessonSection = {
+  title: string;
+  checkpoints: number;
+  understood: number;
+  total: number;
+  studentStatuses: { studentId: string; name: string; initials: string; status: string }[];
+  suggestion?: string | null;
+};
 
-            {/* Students list */}
-            <section>
-                <h3 className="text-[15px] font-semibold text-[#3B3F6E] mb-4">Students</h3>
-                {topic.students.length > 0 ? (
-                    <div className="flex flex-col">
-                        {topic.students.map((student, i) => {
-                            const cfg = STATUS_CONFIG[student.status];
-                            return (
-                                <div
-                                    key={`${student.initials}-${i}`}
-                                    className={`flex items-center gap-3 py-3 px-1 ${i < topic.students.length - 1 ? 'border-b border-[#EEECEA]' : ''}`}
-                                >
-                                    <div
-                                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                                        style={{ backgroundColor: student.avatarBg }}
-                                    >
-                                        {student.initials}
-                                    </div>
-                                    <span className="text-[13px] font-medium text-[#2B2B2F] min-w-[160px]">{student.name}</span>
-                                    <span
-                                        className="text-[11px] font-semibold px-2.5 py-1 rounded-md"
-                                        style={{ backgroundColor: cfg.bg, color: cfg.color }}
-                                    >
-                                        {cfg.label}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                ) : (
-                    <p className="text-[13px] text-graphite-40">
-                        No student-level topic data returned yet.
-                    </p>
-                )}
-            </section>
-        </div>
-    );
+type LessonDetail = {
+  title: string;
+  sections: LessonSection[];
+};
+
+type TopicStudent = {
+  id: string;
+  name: string;
+  initials: string;
+  status: 'on_track' | 'building' | 'may_need_support';
+};
+
+type TopicDetail = {
+  title: string;
+  bars: { label: string; value: number }[];
+  summary: string;
+  students: TopicStudent[];
+};
+
+type Drilldown =
+  | { type: 'lesson'; id: string; title: string }
+  | { type: 'topic'; id: string; title: string }
+  | null;
+
+function initialsFromName(name: string) {
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+  return initials || 'ST';
 }
 
-/* ─── Empty State ─── */
-function InsightsEmpty() {
-    return (
-        <div className="flex flex-col items-center justify-center flex-1 py-20">
-            <div className="w-[180px] h-[130px] bg-[#E8E4DC] rounded-2xl flex items-center justify-center mb-5 overflow-hidden">
-                <svg width="100" height="70" viewBox="0 0 100 70" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    {/* Simplified classroom illustration */}
-                    <rect x="10" y="5" width="80" height="45" rx="3" stroke="#3B3F6E" strokeWidth="1.2" fill="#F5ECD8"/>
-                    <rect x="30" y="10" width="40" height="25" rx="2" stroke="#3B3F6E" strokeWidth="1" fill="white"/>
-                    {/* Desks */}
-                    <rect x="15" y="55" width="15" height="8" rx="1" stroke="#3B3F6E" strokeWidth="0.8" fill="#E8DCC8"/>
-                    <rect x="35" y="55" width="15" height="8" rx="1" stroke="#3B3F6E" strokeWidth="0.8" fill="#E8DCC8"/>
-                    <rect x="55" y="55" width="15" height="8" rx="1" stroke="#3B3F6E" strokeWidth="0.8" fill="#E8DCC8"/>
-                    <rect x="75" y="55" width="15" height="8" rx="1" stroke="#3B3F6E" strokeWidth="0.8" fill="#E8DCC8"/>
-                </svg>
-            </div>
-            <p className="text-[15px] font-semibold text-[#3B3F6E] mb-1.5">No signals to review right now</p>
-            <p className="text-[13px] text-graphite-40">Check back as students progress through their lessons.</p>
-        </div>
-    );
+function fullName(entry: any) {
+  return (
+    entry?.name ||
+    `${entry?.first_name || ''} ${entry?.last_name || ''}`.trim() ||
+    entry?.student_name ||
+    'Student'
+  );
 }
 
-/* ─── Skeleton Loader ─── */
-function InsightsSkeleton() {
-    return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            <div className="flex justify-between items-center mb-8">
-                <div className="h-6 w-[72px] bg-[#E8E2D4] rounded-md animate-pulse" />
-                <div className="flex gap-3">
-                    <div className="h-9 w-[128px] bg-[#E8E2D4] rounded-xl animate-pulse" />
-                    <div className="h-9 w-[128px] bg-[#E8E2D4] rounded-xl animate-pulse" />
-                </div>
-            </div>
-
-            <div className="h-4 w-[160px] bg-[#E8E2D4] rounded-md animate-pulse mb-4" />
-
-            <div className="grid grid-cols-4 gap-3 mb-8">
-                {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="bg-[#E8E2D4] rounded-2xl h-[96px] animate-pulse" />
-                ))}
-            </div>
-
-            <div className="h-4 w-[180px] bg-[#E8E2D4] rounded-md animate-pulse mb-4" />
-            {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-[#E8E2D4] rounded-2xl h-[68px] animate-pulse mb-3" />
-            ))}
-
-            <div className="h-4 w-[130px] bg-[#E8E2D4] rounded-md animate-pulse mb-4 mt-5" />
-            {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="bg-[#E8E2D4] rounded-2xl h-[68px] animate-pulse mb-3" />
-            ))}
-        </div>
-    );
+function splitSignalText(text: string) {
+  const normalized = text.trim();
+  if (!normalized) return ['Support signal detected'];
+  const parts = normalized
+    .split(/(?<=\.)\s+/)
+    .map((part) => part.replace(/\.$/, '').trim())
+    .filter(Boolean);
+  if (parts.length >= 2) return parts.slice(0, 2);
+  if (normalized.length <= 34) return [normalized];
+  return [normalized.slice(0, 34).trim(), normalized.slice(34, 70).trim()].filter(Boolean);
 }
 
-/* ─── Filter Dropdown ─── */
-function FilterDropdown({
+function buildStudentLookup(students: any[]): StudentLookup {
+  return students.reduce<StudentLookup>((acc, student) => {
+    const name = fullName(student);
+    const initials = initialsFromName(name);
+    const ids = [
+      student?.student_uuid,
+      student?.student_id,
+      student?.uuid,
+      student?.id,
+      student?.nevo_id,
+    ].filter((value) => value != null && String(value).trim());
+
+    ids.forEach((value) => {
+      acc[String(value)] = {
+        id: String(value),
+        name,
+        initials,
+        className: student?.class_name || student?.class || student?.group_name || undefined,
+      };
+    });
+    return acc;
+  }, {});
+}
+
+function normalizeOverview(payload: any): OverviewData {
+  const supportStudents = Array.isArray(payload?.students_needing_support)
+    ? payload.students_needing_support.map((student: any, index: number) => {
+        const name = fullName(student);
+        return {
+          id: String(student?.student_id ?? student?.id ?? index),
+          name,
+          initials: student?.avatar_initials || initialsFromName(name),
+          signals: splitSignalText(student?.description || student?.status || 'Support signal detected'),
+        };
+      })
+    : [];
+
+  const confusionLessons = Array.isArray(payload?.lessons_with_confusion_signals)
+    ? payload.lessons_with_confusion_signals.map((lesson: any, index: number) => ({
+        id: String(lesson?.lesson_id ?? lesson?.id ?? index),
+        title: lesson?.lesson_title || lesson?.title || 'Lesson',
+        detail:
+          lesson?.section_or_summary ||
+          `Section ${index + 1} - ${Number(lesson?.confusion_count ?? 0)} simplify requests`,
+      }))
+    : [];
+
+  const buildingTopics = Array.isArray(payload?.topics_building_well)
+    ? payload.topics_building_well.map((topic: any, index: number) => {
+        const title = topic?.topic_name || topic?.subject || topic?.title || 'Topic';
+        return {
+          id: title,
+          title,
+          subject: topic?.subject,
+          description:
+            topic?.description ||
+            `Understanding improving across ${topic?.subject || 'this class'}`,
+        };
+      })
+    : [];
+
+  return {
+    supportStudents,
+    confusionLessons,
+    buildingTopics,
+  };
+}
+
+function normalizeLessonDetail(payload: any, lookup: StudentLookup): LessonDetail {
+  const sections = Array.isArray(payload?.sections)
+    ? payload.sections.map((section: any, index: number) => ({
+        title: section?.section_name || `Section ${index + 1}`,
+        checkpoints: Number(section?.checkpoint_count ?? 0),
+        understood: Number(section?.students_understood ?? 0),
+        total: Number(section?.total_students ?? 0),
+        studentStatuses: Array.isArray(section?.student_statuses)
+          ? section.student_statuses.slice(0, 5).map((item: any) => {
+              const id = String(item?.student_id ?? item?.id ?? '');
+              const student = lookup[id];
+              const name = student?.name || (id ? `Student ${id.slice(0, 4)}` : 'Student');
+              return {
+                studentId: id,
+                name,
+                initials: student?.initials || initialsFromName(name),
+                status: item?.status || 'not_started',
+              };
+            })
+          : [],
+        suggestion: section?.suggestion || null,
+      }))
+    : [];
+
+  return {
+    title: payload?.lesson_title || 'Lesson insights',
+    sections,
+  };
+}
+
+function normalizeTopicDetail(payload: any): TopicDetail {
+  const bars = Object.entries(payload?.class_performance_data || {}).map(([label, value]) => ({
     label,
-    options,
-    onSelect,
-}: {
-    label: string;
-    options: string[];
-    onSelect: (value: string) => void;
-}) {
-    const [open, setOpen] = useState(false);
-    return (
-        <div className="relative">
-            <button
-                onClick={() => setOpen(!open)}
-                className="flex items-center gap-1.5 px-4 py-2 border border-[#D4D0CA] rounded-xl text-[13px] font-semibold text-[#3B3F6E] bg-white hover:bg-gray-50 transition-colors cursor-pointer"
-            >
-                {label}
-                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#3B3F6E" strokeWidth="1.5" className={`transition-transform ${open ? 'rotate-180' : ''}`}>
-                    <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-            </button>
-            {open && (
-                <div className="absolute right-0 top-full mt-1 bg-white border border-[#E0DDD8] rounded-xl shadow-lg py-1 min-w-[160px] z-10">
-                    {options.map((opt) => (
-                        <button
-                            key={opt}
-                            onClick={() => {
-                                onSelect(opt);
-                                setOpen(false);
-                            }}
-                            className={`w-full text-left px-4 py-2 text-[13px] font-medium transition-colors cursor-pointer ${
-                                opt === label ? 'text-[#3B3F6E] bg-indigo-5' : 'text-graphite-60 hover:bg-gray-50'
-                            }`}
-                        >
-                            {opt}
-                        </button>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
+    value: Number(value ?? 0),
+  }));
+
+  return {
+    title: payload?.topic_name || 'Topic insights',
+    bars,
+    summary: payload?.performance_summary || 'Understanding has improved across this topic.',
+    students: Array.isArray(payload?.students)
+      ? payload.students.map((student: any, index: number) => {
+          const name = fullName(student);
+          const rawStatus = String(student?.mastery_status || 'building') as TopicStudent['status'];
+          return {
+            id: String(student?.student_id ?? index),
+            name,
+            initials: student?.avatar_initials || initialsFromName(name),
+            status: rawStatus === 'on_track' || rawStatus === 'may_need_support' ? rawStatus : 'building',
+          };
+        })
+      : [],
+  };
 }
 
-/* ─── Icons ─── */
-function CalendarIcon() {
+function extractGrade(option: string) {
+  const match = option.match(/grade\s*(\d+)/i);
+  return match ? Number(match[1]) : undefined;
+}
+
+export function InsightsView() {
+  const guardAuth = useAuthGuard('teacher');
+  const [overview, setOverview] = useState<OverviewData | null>(null);
+  const [studentLookup, setStudentLookup] = useState<StudentLookup>({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [classFilter, setClassFilter] = useState('All classes');
+  const [showClassFilter, setShowClassFilter] = useState(false);
+  const [drilldown, setDrilldown] = useState<Drilldown>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const [insightsRes, studentsRes] = await Promise.all([
+        getTeacherInsightsOverview({ grade: extractGrade(classFilter), daysBack: 7 }),
+        getTeacherStudents(),
+      ]);
+
+      if (guardAuth([insightsRes as any, studentsRes as any]) || !mounted) return;
+
+      if ('error' in insightsRes && insightsRes.error) {
+        setError(insightsRes.error);
+        setOverview(null);
+        setLoading(false);
+        return;
+      }
+
+      const studentPayload = 'data' in studentsRes ? studentsRes.data : null;
+      const students = Array.isArray(studentPayload)
+        ? studentPayload
+        : Array.isArray(studentPayload?.students)
+          ? studentPayload.students
+          : [];
+
+      setStudentLookup(buildStudentLookup(students));
+      setOverview(normalizeOverview('data' in insightsRes ? insightsRes.data : null));
+      setError(null);
+      setLoading(false);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [classFilter, guardAuth]);
+
+  const classOptions = useMemo(() => {
+    const values = Object.values(studentLookup)
+      .map((student: any) => student.className)
+      .filter(Boolean);
+    return ['All classes', ...Array.from(new Set(values))];
+  }, [studentLookup]);
+
+  if (drilldown?.type === 'lesson') {
     return (
-        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="#3B3F6E" strokeWidth="1.3">
-            <rect x="2" y="3" width="12" height="11" rx="2" />
-            <line x1="2" y1="7" x2="14" y2="7" />
-            <line x1="5" y1="1" x2="5" y2="4" strokeLinecap="round" />
-            <line x1="11" y1="1" x2="11" y2="4" strokeLinecap="round" />
-        </svg>
+      <LessonInsightDetail
+        lessonId={drilldown.id}
+        fallbackTitle={drilldown.title}
+        studentLookup={studentLookup}
+        onBack={() => setDrilldown(null)}
+      />
     );
+  }
+
+  if (drilldown?.type === 'topic') {
+    return (
+      <TopicInsightDetail
+        topicName={drilldown.id}
+        fallbackTitle={drilldown.title}
+        onBack={() => setDrilldown(null)}
+      />
+    );
+  }
+
+  if (loading) return <InsightsSkeleton />;
+
+  if (error) {
+    return (
+      <TabletFrame>
+        <div className="flex h-full items-center justify-center px-8 text-center">
+          <div className="max-w-[420px] rounded-[16px] border border-[#E0D9CE] bg-[#FAF6EE] px-8 py-10">
+            <p className="mb-2 text-[16px] font-semibold text-[#3B3F6E]">Could not load insights</p>
+            <p className="text-[14px] leading-5 text-[#2B2B2F]/60">{error}</p>
+          </div>
+        </div>
+      </TabletFrame>
+    );
+  }
+
+  const currentOverview = overview;
+  const hasData =
+    currentOverview !== null &&
+    (currentOverview.supportStudents.length > 0 ||
+      currentOverview.confusionLessons.length > 0 ||
+      currentOverview.buildingTopics.length > 0);
+
+  if (!hasData) return <InsightsEmpty />;
+
+  return (
+    <TabletFrame>
+      <div className="flex h-full w-[804px] flex-col gap-8 bg-[#F7F1E6] p-8">
+        <div className="flex h-9 w-[740px] items-center justify-between">
+          <h1 className="text-[20px] font-bold leading-7 text-[#3B3F6E]">Insights</h1>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowClassFilter((value) => !value)}
+                className="flex h-9 min-w-[142px] items-center justify-center gap-2 rounded-[8px] border border-[#3B3F6E] bg-[#F7F1E6] px-[17px] text-[13px] font-medium text-[#3B3F6E]"
+              >
+                <span>{classFilter}</span>
+                <ChevronDown />
+              </button>
+              {showClassFilter ? (
+                <div className="absolute right-0 top-full z-20 mt-2 min-w-[180px] overflow-hidden rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6] shadow-[0_12px_32px_rgba(31,37,71,0.08)]">
+                  {classOptions.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => {
+                        setClassFilter(option);
+                        setShowClassFilter(false);
+                      }}
+                      className="w-full px-4 py-2.5 text-left text-[13px] font-medium text-[#3B3F6E] hover:bg-[#EFE7D9]"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="flex h-9 min-w-[128px] items-center justify-center gap-2 rounded-[8px] border border-[#3B3F6E] bg-[#F7F1E6] px-[17px] text-[13px] font-medium text-[#3B3F6E]"
+            >
+              <CalendarIcon />
+              Last 7 days
+            </button>
+          </div>
+        </div>
+
+        <section className="flex w-[740px] flex-col gap-4">
+          <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Students who may need support</h2>
+              {currentOverview!.supportStudents.length > 0 ? (
+            <div className="flex w-[740px] gap-3 overflow-x-auto pb-1">
+              {currentOverview!.supportStudents.slice(0, 10).map((student) => (
+                <article
+                  key={student.id}
+                  className="flex h-[120px] w-[160px] shrink-0 flex-col rounded-[12px] border border-l-4 border-[#E0D9CE] border-l-[#F5A623] bg-[#F7F1E6] px-4 py-3"
+                >
+                  <div className="mb-2 flex items-center gap-2">
+                    <Avatar initials={student.initials} size={36} />
+                    <p className="min-w-0 truncate text-[14px] font-semibold leading-5 text-[#3B3F6E]">{student.name}</p>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-0.5">
+                    {student.signals.slice(0, 2).map((signal) => (
+                      <p key={signal} className="truncate text-[12px] font-normal leading-4 text-[#2B2B2F]/60">
+                        {signal}
+                      </p>
+                    ))}
+                  </div>
+                  <button className="mt-1 text-left text-[13px] font-medium leading-5 text-[#9A9CCB]">
+                    View student
+                  </button>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-[120px] w-[740px] items-center justify-center text-[14px] text-[#2B2B2F]/60">
+              All students appear to be on track this week.
+            </div>
+          )}
+        </section>
+
+        <section className="flex w-[740px] flex-col gap-4">
+          <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Lessons with confusion signals</h2>
+          <div className="flex flex-col gap-3">
+            {currentOverview!.confusionLessons.map((lesson) => (
+              <SignalRow
+                key={lesson.id}
+                title={lesson.title}
+                detail={lesson.detail}
+                actionLabel="View lesson"
+                stripColor={VIOLET}
+                onClick={() => setDrilldown({ type: 'lesson', id: lesson.id, title: lesson.title })}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="flex w-[740px] flex-col gap-4">
+          <h2 className="text-[15px] font-semibold leading-[22px] text-[#3B3F6E]">Topics building well</h2>
+          <div className="flex flex-col gap-3">
+            {currentOverview!.buildingTopics.map((topic) => (
+              <SignalRow
+                key={topic.id}
+                title={topic.title}
+                detail={topic.description}
+                actionLabel="View progress"
+                stripColor={GREEN}
+                onClick={() => setDrilldown({ type: 'topic', id: topic.id, title: topic.title })}
+              />
+            ))}
+          </div>
+        </section>
+      </div>
+    </TabletFrame>
+  );
+}
+
+function TabletFrame({ children }: { children: ReactNode }) {
+  return <div className="h-full min-h-[900px] w-[804px] bg-[#F7F1E6]">{children}</div>;
+}
+
+function SignalRow({
+  title,
+  detail,
+  actionLabel,
+  stripColor,
+  onClick,
+}: {
+  title: string;
+  detail: string;
+  actionLabel: string;
+  stripColor: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-20 w-[740px] items-center justify-between rounded-[12px] border border-l-4 border-[#E0D9CE] bg-[#F7F1E6] px-[21px] py-[17px] text-left"
+      style={{ borderLeftColor: stripColor }}
+    >
+      <span className="flex min-w-0 flex-col gap-1">
+        <span className="truncate text-[15px] font-medium leading-[22px] text-[#3B3F6E]">{title}</span>
+        <span className="truncate text-[13px] font-normal leading-5 text-[#2B2B2F]/60">{detail}</span>
+      </span>
+      <span className="shrink-0 text-[13px] font-medium leading-5 text-[#9A9CCB]">
+        {actionLabel} <span aria-hidden="true">-&gt;</span>
+      </span>
+    </button>
+  );
+}
+
+function LessonInsightDetail({
+  lessonId,
+  fallbackTitle,
+  studentLookup,
+  onBack,
+}: {
+  lessonId: string;
+  fallbackTitle: string;
+  studentLookup: StudentLookup;
+  onBack: () => void;
+}) {
+  const guardAuth = useAuthGuard('teacher');
+  const [detail, setDetail] = useState<LessonDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const res = await getTeacherLessonInsights(lessonId);
+      if (guardAuth(res as any) || !mounted) return;
+      setDetail('data' in res ? normalizeLessonDetail(res.data, studentLookup) : null);
+      setLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [guardAuth, lessonId, studentLookup]);
+
+  if (loading) return <InsightsSkeleton backLabel="Insights" />;
+
+  const data = detail ?? { title: fallbackTitle, sections: [] };
+
+  return (
+    <TabletFrame>
+      <div className="relative h-full min-h-[900px] w-[804px] bg-[#F7F1E6] px-8 pt-8">
+        <BackButton label="Insights" onBack={onBack} />
+        <h1 className="mt-7 w-[740px] text-center text-[17px] font-semibold leading-[26px] text-[#3B3F6E]">
+          {data.title}
+        </h1>
+        <div className="mt-10 flex w-[740px] flex-col gap-3">
+          {data.sections.map((section, index) => {
+            const expanded = expandedIndex === index;
+            const pct = section.total > 0 ? Math.min(100, (section.understood / section.total) * 100) : 0;
+            return (
+              <article
+                key={`${section.title}-${index}`}
+                className="w-[740px] rounded-[12px] border border-[#E0D9CE] bg-[#F7F1E6]"
+              >
+                <button
+                  type="button"
+                  onClick={() => setExpandedIndex(expanded ? null : index)}
+                  className="flex min-h-[76px] w-full items-center justify-between px-[21px] py-[17px] text-left"
+                >
+                  <span className="flex flex-col gap-1">
+                    <span className="text-[15px] font-medium leading-[22px] text-[#3B3F6E]">{section.title}</span>
+                    <span className="text-[12px] font-normal leading-4 text-[#3B3F6E]/55">
+                      {section.checkpoints} checkpoints
+                    </span>
+                  </span>
+                  <span className="flex flex-col items-end gap-1">
+                    <span className="relative block h-1.5 w-20 rounded-full bg-[#E8E2D4]">
+                      <span className="absolute left-0 top-0 h-1.5 rounded-full bg-[#3B3F6E]" style={{ width: `${pct}%` }} />
+                    </span>
+                    <span className="text-[12px] font-normal leading-4 text-[#3B3F6E]/55">
+                      {section.understood} of {section.total} understood
+                    </span>
+                  </span>
+                </button>
+                {expanded ? (
+                  <div className="border-t border-[#E0D9CE] px-[21px] pb-5 pt-4">
+                    <div className="flex flex-col gap-3">
+                      {section.studentStatuses.map((student) => (
+                        <div key={`${student.studentId}-${student.status}`} className="flex h-8 items-center gap-3">
+                          <Avatar initials={student.initials} size={28} />
+                          <span className="min-w-[120px] text-[13px] font-normal leading-5 text-[#3B3F6E]">{student.name}</span>
+                          <StatusTag status={student.status} />
+                        </div>
+                      ))}
+                    </div>
+                    {section.studentStatuses.length > 0 ? (
+                      <button className="mt-4 w-full text-right text-[13px] font-medium text-[#9A9CCB]">
+                        View all {section.total} students -&gt;
+                      </button>
+                    ) : null}
+                    {section.suggestion ? (
+                      <div className="mt-6 rounded-[12px] bg-[#9A9CCB]/10 p-5">
+                        <p className="mb-3 text-[12px] font-normal uppercase tracking-[0.3px] text-[#9A9CCB]">Suggestion</p>
+                        <div className="flex items-center justify-between gap-6">
+                          <p className="text-[14px] font-normal leading-5 text-[#2B2B2F]">{section.suggestion}</p>
+                          <button className="h-8 shrink-0 rounded-[8px] border border-[#3B3F6E] px-4 text-[13px] font-medium text-[#3B3F6E]">
+                            Revise section
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </TabletFrame>
+  );
+}
+
+function TopicInsightDetail({
+  topicName,
+  fallbackTitle,
+  onBack,
+}: {
+  topicName: string;
+  fallbackTitle: string;
+  onBack: () => void;
+}) {
+  const router = useRouter();
+  const guardAuth = useAuthGuard('teacher');
+  const [detail, setDetail] = useState<TopicDetail | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      setLoading(true);
+      const res = await getTeacherTopicInsights(topicName);
+      if (guardAuth(res as any) || !mounted) return;
+      setDetail('data' in res ? normalizeTopicDetail(res.data) : null);
+      setLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [guardAuth, topicName]);
+
+  if (loading) return <InsightsSkeleton backLabel="Insights" />;
+
+  const data = detail ?? { title: fallbackTitle, bars: [], summary: '', students: [] };
+  const maxBar = Math.max(100, ...data.bars.map((bar) => bar.value));
+
+  return (
+    <TabletFrame>
+      <div className="relative min-h-[900px] w-[804px] bg-[#F7F1E6] px-8 pt-8">
+        <BackButton label="Insights" onBack={onBack} />
+        <h1 className="mt-7 w-[740px] text-center text-[17px] font-semibold leading-[26px] text-[#3B3F6E]">
+          {data.title}
+        </h1>
+
+        <section className="mt-10 flex w-[740px] flex-col gap-4">
+          <h2 className="text-[15px] font-medium leading-[22px] text-[#3B3F6E]">Class performance on this topic</h2>
+          <div className="flex h-60 w-[740px] items-end justify-center rounded-[12px] bg-[#FAF9F6] px-6 py-6">
+            {data.bars.length > 0 ? (
+              <div className="flex h-[192px] items-end justify-center gap-6">
+                {data.bars.map((bar, index) => (
+                  <div key={`${bar.label}-${index}`} className="flex w-[52px] flex-col items-center gap-3">
+                    <div className="flex h-40 w-10 items-end">
+                      <div
+                        className="w-10 rounded-t-[8px] bg-[#3B3F6E]"
+                        style={{ height: `${Math.max(28, (bar.value / maxBar) * 160)}px` }}
+                      />
+                    </div>
+                    <span className="max-w-[68px] truncate text-center text-[12px] font-normal leading-4 text-[#3B3F6E]/60">
+                      {bar.label || `Lesson ${index + 1}`}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-[#3B3F6E]/60">No completed lesson data is available yet for this topic.</p>
+            )}
+          </div>
+          <p className="text-[13px] font-normal leading-5 text-[#3B3F6E]/60">
+            {data.summary || 'Understanding has improved across 3 lessons on this topic.'}
+          </p>
+        </section>
+
+        <section className="mt-9 flex w-[740px] flex-col gap-4 pb-10">
+          <h2 className="text-[15px] font-medium leading-[22px] text-[#3B3F6E]">Students</h2>
+          <div className="flex flex-col gap-2">
+            {data.students.map((student) => (
+              <button
+                key={student.id}
+                type="button"
+                onClick={() => router.push(`${getDashboardPath('teacher', 'students')}?student=${encodeURIComponent(student.id)}`)}
+                className="flex h-14 w-[740px] items-center gap-3 rounded-[8px] px-3 text-left hover:bg-[#F2EADB]"
+              >
+                <Avatar initials={student.initials} size={32} />
+                <span className="min-w-[140px] text-[14px] font-medium leading-5 text-[#3B3F6E]">{student.name}</span>
+                <TopicStatus status={student.status} />
+              </button>
+            ))}
+          </div>
+        </section>
+      </div>
+    </TabletFrame>
+  );
+}
+
+function InsightsEmpty() {
+  return (
+    <TabletFrame>
+      <div className="flex h-[900px] w-[804px] items-center justify-center bg-[#F7F1E6]">
+        <div className="flex w-[380px] flex-col items-center">
+          <ClassroomIllustration />
+          <h2 className="mt-6 text-center text-[16px] font-semibold leading-6 text-[#3B3F6E]">
+            No signals to review right now
+          </h2>
+          <p className="mt-2 text-center text-[14px] font-normal leading-5 text-[#2B2B2F]/60">
+            Check back as students progress through their lessons.
+          </p>
+        </div>
+      </div>
+    </TabletFrame>
+  );
+}
+
+function InsightsSkeleton({ backLabel }: { backLabel?: string }) {
+  return (
+    <TabletFrame>
+      <div className="flex h-[900px] w-[804px] flex-col gap-8 bg-[#F7F1E6] p-8">
+        {backLabel ? <div className="h-5 w-[96px] rounded-[6px] bg-[#E8E2D4]" /> : null}
+        <div className="flex h-9 w-[740px] items-center justify-between">
+          <div className="h-[18px] w-[100px] rounded-[8px] bg-[#E8E2D4]" />
+          <div className="flex gap-3">
+            <div className="h-9 w-[120px] rounded-[8px] bg-[#E8E2D4]" />
+            <div className="h-9 w-[120px] rounded-[8px] bg-[#E8E2D4]" />
+          </div>
+        </div>
+        <div className="flex w-[740px] flex-col gap-4">
+          <div className="h-[18px] w-[220px] rounded-[6px] bg-[#E8E2D4]" />
+          <div className="flex gap-3">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="h-[120px] w-[160px] rounded-[12px] bg-[#E8E2D4]" />
+            ))}
+          </div>
+        </div>
+        <div className="flex w-[740px] flex-col gap-4">
+          <div className="h-[18px] w-[240px] rounded-[6px] bg-[#E8E2D4]" />
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-[72px] w-[740px] rounded-[12px] bg-[#E8E2D4]" />
+          ))}
+        </div>
+        <div className="flex w-[740px] flex-col gap-4">
+          <div className="h-[18px] w-[180px] rounded-[6px] bg-[#E8E2D4]" />
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="h-[72px] w-[740px] rounded-[12px] bg-[#E8E2D4]" />
+          ))}
+        </div>
+      </div>
+    </TabletFrame>
+  );
+}
+
+function BackButton({ label, onBack }: { label: string; onBack: () => void }) {
+  return (
+    <button type="button" onClick={onBack} className="flex h-5 items-center gap-2 text-[14px] font-normal leading-5 text-[#3B3F6E]">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.875" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M11.5 5L6.5 10L11.5 15" />
+      </svg>
+      {label}
+    </button>
+  );
+}
+
+function Avatar({ initials, size }: { initials: string; size: number }) {
+  return (
+    <span
+      className="flex shrink-0 items-center justify-center rounded-full bg-[#E0D9CE] text-[12px] font-semibold text-[#3B3F6E]"
+      style={{ width: size, height: size }}
+    >
+      {initials}
+    </span>
+  );
+}
+
+function StatusTag({ status }: { status: string }) {
+  const label =
+    status === 'understood'
+      ? 'Understood'
+      : status === 'not_understood'
+        ? 'Asked for help'
+        : 'Not started';
+  const isSupport = status === 'not_understood';
+  return (
+    <span
+      className="rounded-[6px] px-2 py-1 text-[11px] font-normal leading-4"
+      style={{
+        backgroundColor: isSupport ? 'rgba(245, 166, 35, 0.15)' : 'rgba(154, 156, 203, 0.15)',
+        color: isSupport ? AMBER : VIOLET,
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function TopicStatus({ status }: { status: TopicStudent['status'] }) {
+  const config =
+    status === 'on_track'
+      ? { label: 'On track', bg: '#D4EDDA', color: GREEN }
+      : status === 'may_need_support'
+        ? { label: 'May need support', bg: '#FFF3CD', color: AMBER }
+        : { label: 'Building', bg: '#E8E7F5', color: VIOLET };
+
+  return (
+    <span className="rounded-full px-3 py-2 text-[12px] font-normal leading-4" style={{ backgroundColor: config.bg, color: config.color }}>
+      {config.label}
+    </span>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#3B3F6E" strokeWidth="1">
+      <rect x="1.5" y="2.5" width="13" height="12" rx="2" />
+      <path d="M4 1.5V4" strokeLinecap="round" />
+      <path d="M12 1.5V4" strokeLinecap="round" />
+      <path d="M1.5 6H14.5" />
+      <path d="M6 9H6.1M9 9H9.1M12 9H12.1M4 12H4.1M7 12H7.1M10 12H10.1" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function ChevronDown() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#3B3F6E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 6L8 10L12 6" />
+    </svg>
+  );
+}
+
+function ClassroomIllustration() {
+  return (
+    <svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg" className="rounded-[12px] opacity-80">
+      <rect width="200" height="200" rx="12" fill="#F7E7C7" />
+      <path d="M0 140H200V200H0V140Z" fill="#EBD6B4" />
+      <path d="M25 28H175V142H25V28Z" fill="#FFF7E7" />
+      <path d="M25 28H175L152 142H48L25 28Z" fill="#FBEFD9" />
+      <rect x="70" y="54" width="60" height="38" rx="2" fill="#FFFDF8" stroke="#D7B98A" strokeWidth="2" />
+      <path d="M44 45H62V130H44V45Z" fill="#FFE7B6" />
+      <path d="M138 45H156V130H138V45Z" fill="#FFE7B6" />
+      <path d="M45 68H62M45 92H62M45 116H62M139 68H156M139 92H156M139 116H156" stroke="#E0BE85" strokeWidth="2" />
+      <g fill="#D88D3D">
+        <rect x="26" y="146" width="34" height="13" rx="2" />
+        <rect x="83" y="146" width="34" height="13" rx="2" />
+        <rect x="140" y="146" width="34" height="13" rx="2" />
+        <rect x="52" y="168" width="34" height="13" rx="2" />
+        <rect x="112" y="168" width="34" height="13" rx="2" />
+      </g>
+      <g stroke="#A96424" strokeWidth="2" strokeLinecap="round">
+        <path d="M31 159V181M55 159V181M88 159V181M112 159V181M145 159V181M169 159V181" />
+        <path d="M57 181V193M81 181V193M117 181V193M141 181V193" />
+      </g>
+      <path d="M134 30C146 50 157 83 160 122" stroke="#FFEBC1" strokeWidth="8" strokeLinecap="round" />
+      <path d="M64 32C54 56 46 88 43 124" stroke="#FFEBC1" strokeWidth="8" strokeLinecap="round" />
+    </svg>
+  );
 }
