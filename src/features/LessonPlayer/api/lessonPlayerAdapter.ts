@@ -9,12 +9,22 @@ import {
     type LessonCompletionData,
     type LessonMicroQuizQuestion,
     type LessonPlayerData,
+    type RenderingPreferences,
     type LessonReorientationData,
     type LessonReflectionData,
     type Stage,
     type StageKey,
     type StagePhaseKey,
 } from './types';
+
+type BackendRenderingPreferences = {
+    letter_spacing?: string;
+    line_height?: number;
+    word_spacing?: string;
+    font_size_boost?: boolean;
+    text_align?: string;
+    max_line_width?: string;
+};
 
 type BackendConceptStep = {
     step_number?: number;
@@ -41,6 +51,7 @@ type BackendConcept = {
     difficulty_level?: number;
     estimated_read_time_seconds?: number;
     estimated_listen_time_seconds?: number;
+    rendering_preferences?: BackendRenderingPreferences | null;
 };
 
 type BackendLessonPayload = {
@@ -138,6 +149,21 @@ function normalizeLearningMode(mode?: string | null): LearningMode {
     }
 
     return 'visual';
+}
+
+function normalizeRenderingPreferences(
+    preferences?: BackendRenderingPreferences | null,
+): RenderingPreferences | undefined {
+    if (!preferences || typeof preferences !== 'object') return undefined;
+
+    return {
+        letterSpacing: preferences.letter_spacing || 'normal',
+        lineHeight: Number(preferences.line_height || 1.6),
+        wordSpacing: preferences.word_spacing || 'normal',
+        fontSizeBoost: Boolean(preferences.font_size_boost),
+        textAlign: 'left',
+        maxLineWidth: preferences.max_line_width || '100%',
+    };
 }
 
 function splitIntoSentences(text: string) {
@@ -449,6 +475,7 @@ function buildStage(blueprint: StageBlueprint): Stage {
     const expanded = removeVisualFiller(expandText(visualBody, concept));
     const audioSimplified = simplifyText(audioBody);
     const audioExpanded = expandText(audioBody, concept);
+    const renderingPreferences = normalizeRenderingPreferences(concept.rendering_preferences);
     const scopedConcept = {
         ...concept,
         concept_text: visualBody,
@@ -484,6 +511,7 @@ function buildStage(blueprint: StageBlueprint): Stage {
                 body: visualBody,
                 bodySimplified: simplified,
                 bodyExpanded: expanded,
+                renderingPreferences,
             },
             audio: {
                 audioUrl: '',
@@ -493,6 +521,7 @@ function buildStage(blueprint: StageBlueprint): Stage {
                 spokenBody: audioBody,
                 spokenBodySimplified: audioSimplified,
                 spokenBodyExpanded: audioExpanded,
+                renderingPreferences,
             },
             action: {
                 steps: actionSteps,
@@ -507,9 +536,13 @@ function buildStage(blueprint: StageBlueprint): Stage {
                 definitionExpanded: expanded,
                 formula: concept.contains_formal_representation ? concept.formal_representation || undefined : undefined,
                 formulaExpanded: concept.contains_formal_representation ? concept.formal_representation || undefined : undefined,
+                renderingPreferences,
             },
         },
-        slowerSteps: buildSlowerSteps(scopedConcept),
+        slowerSteps: buildSlowerSteps(scopedConcept).map((step) => ({
+            ...step,
+            renderingPreferences,
+        })),
     };
 }
 
@@ -907,6 +940,7 @@ function coerceOfflineConcept(
     index: number,
     fallbackTitle: string,
 ): BackendConcept | null {
+    const blockRecord = block as Record<string, unknown>;
     const conceptText =
         (typeof block.concept_text === 'string' && block.concept_text.trim()) ||
         (typeof block.content === 'string' && block.content.trim()) ||
@@ -984,6 +1018,10 @@ function coerceOfflineConcept(
             fallbackTitle,
         difficulty_level: Number(block.difficulty_level ?? 1),
         estimated_read_time_seconds: Number(block.estimated_read_time_seconds ?? 20),
+        rendering_preferences:
+            blockRecord.rendering_preferences && typeof blockRecord.rendering_preferences === 'object'
+                ? blockRecord.rendering_preferences as BackendRenderingPreferences
+                : null,
     };
 }
 

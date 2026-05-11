@@ -18,6 +18,15 @@ export type LessonReflectionOption = {
     label: string;
 };
 
+export type RenderingPreferences = {
+    letterSpacing: string;
+    lineHeight: number;
+    wordSpacing: string;
+    fontSizeBoost: boolean;
+    textAlign: 'left';
+    maxLineWidth: string;
+};
+
 export type LessonReflectionData = {
     title: string;
     description: string;
@@ -77,6 +86,7 @@ export type VisualContent = {
     body: string;
     bodySimplified: string;
     bodyExpanded: string;
+    renderingPreferences?: RenderingPreferences;
     highlight?: { x: number; y: number; size: number };
     marker?: { x: number; y: number; label: string };
 };
@@ -89,6 +99,7 @@ export type AudioContent = {
     spokenBody: string;
     spokenBodySimplified: string;
     spokenBodyExpanded: string;
+    renderingPreferences?: RenderingPreferences;
 };
 
 export type ActionStep = {
@@ -110,6 +121,7 @@ export type ReadingContent = {
     definitionExpanded: string;
     formula?: string;
     formulaExpanded?: string;
+    renderingPreferences?: RenderingPreferences;
 };
 
 export type StageModeContent = {
@@ -124,6 +136,7 @@ export type SlowerStep = {
     text: string;
     ttsText: string;
     isLastStep?: boolean;
+    renderingPreferences?: RenderingPreferences;
 };
 
 export type LessonModeCard = {

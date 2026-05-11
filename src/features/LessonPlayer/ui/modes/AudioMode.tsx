@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { StageShell } from '../StageShell';
+import { getRenderingPreferenceStyle } from '../renderingPreferences';
 import { useLessonTts } from '../../api/useLessonTts';
 import type { LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 
@@ -54,6 +55,7 @@ export function AudioMode({
               ? content.spokenBodyExpanded
               : content.spokenBody;
     const isCalmDensity = paceDensity === 'calm';
+    const renderingStyle = getRenderingPreferenceStyle(content.renderingPreferences);
     const { isLoading, isPlaying, error, togglePlayback, replay } = useLessonTts(spokenBody, null, {
         autoPlay: true,
         cacheKey: audioCacheBaseKey ? `${audioCacheBaseKey}:${toolbarState}` : undefined,
@@ -72,13 +74,17 @@ export function AudioMode({
                                 .map((line) => line.trim())
                                 .filter(Boolean)
                                 .map((line, index) => (
-                                    <p key={`${line}:${index}`} className="text-[20px] font-semibold leading-8 text-graphite">
+                                    <p
+                                        key={`${line}:${index}`}
+                                        className="text-[20px] font-semibold leading-8 text-graphite"
+                                        style={renderingStyle}
+                                    >
                                         {line.endsWith('.') ? line : `${line}.`}
                                     </p>
                                 ))}
                         </div>
                     ) : (
-                        <p className="text-[15px] leading-6 text-graphite">{body}</p>
+                        <p className="text-[15px] leading-6 text-graphite" style={renderingStyle}>{body}</p>
                     )}
 
                     {error ? (

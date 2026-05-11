@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { LearningMode } from '@/shared/store/useRegistrationStore';
 import type { Stage, ToolbarState } from '../../api/types';
 import { StageShell } from '../StageShell';
+import { getRenderingPreferenceStyle } from '../renderingPreferences';
 
 type SlowerModeProps = {
     stage: Stage;
@@ -57,6 +58,7 @@ export function SlowerMode({
 
     const currentStep = stage.slowerSteps[Math.min(stepIndex, stage.slowerSteps.length - 1)];
     const isLastStep = currentStep?.isLastStep || stepIndex >= stage.slowerSteps.length - 1;
+    const renderingStyle = getRenderingPreferenceStyle(currentStep?.renderingPreferences);
 
     const title = useMemo(() => {
         if (activeMode === 'audio') return 'LISTEN — ABSORB THE CONCEPT';
@@ -86,7 +88,7 @@ export function SlowerMode({
             {activeMode === 'visual' ? (
                 <>
                     <div className="w-full h-[180px] rounded-xl border border-[#E0D9CE] bg-[linear-gradient(135deg,#467a19_0%,#91b825_35%,#d3dd3d_70%,#9bbd18_100%)] overflow-hidden" />
-                    <p className="mt-6 max-w-[680px] text-[18px] leading-[30px] text-graphite text-left">
+                    <p className="mt-6 max-w-[680px] text-[18px] leading-[30px] text-graphite text-left" style={renderingStyle}>
                         {currentStep?.text}
                     </p>
                 </>
@@ -101,7 +103,7 @@ export function SlowerMode({
                             <span className="w-1 h-3 rounded-full bg-indigo/80" />
                         </div>
                     </div>
-                    <p className="mt-8 text-[20px] leading-8 font-semibold text-graphite text-center">
+                    <p className="mt-8 text-[20px] leading-8 font-semibold text-graphite text-left" style={renderingStyle}>
                         {currentStep?.text}
                     </p>
                     <div className="mt-6 flex items-center gap-[3px] h-8">
@@ -121,7 +123,7 @@ export function SlowerMode({
                     <div className="w-14 h-14 rounded-full bg-indigo text-parchment flex items-center justify-center text-[28px] font-bold shrink-0">
                         {currentStep?.stepNumber}
                     </div>
-                    <p className="text-[20px] leading-8 text-graphite">{currentStep?.text}</p>
+                    <p className="text-[20px] leading-8 text-graphite" style={renderingStyle}>{currentStep?.text}</p>
                 </div>
             ) : null}
 
@@ -135,7 +137,7 @@ export function SlowerMode({
                             {stage.modes.reading.keyTerm}
                         </h3>
                     </div>
-                    <p className="mt-5 text-[18px] leading-[30px] text-graphite">
+                    <p className="mt-5 text-[18px] leading-[30px] text-graphite" style={renderingStyle}>
                         {currentStep?.text}
                     </p>
                 </div>

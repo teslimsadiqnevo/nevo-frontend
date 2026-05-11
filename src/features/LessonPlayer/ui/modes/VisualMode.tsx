@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { StageShell } from '../StageShell';
+import { getRenderingPreferenceStyle } from '../renderingPreferences';
 import type { LessonPaceDensity, Stage, StagePhaseKey, ToolbarState } from '../../api/types';
 
 const STAGE_VISUAL_INTENT: Record<StagePhaseKey, string> = {
@@ -55,6 +56,7 @@ export function VisualMode({
               : content.body;
 
     const isCalmDensity = paceDensity === 'calm';
+    const renderingStyle = getRenderingPreferenceStyle(content.renderingPreferences);
     const visualContext = [
         stage.phase,
         stage.label,
@@ -186,7 +188,10 @@ export function VisualMode({
             pillText={stage.pillText}
             label={label}
             body={
-                <p className={isCalmDensity ? 'text-[18px] leading-8 text-graphite' : 'text-[15px] leading-6 text-graphite'}>
+                <p
+                    className={isCalmDensity ? 'text-[18px] leading-8 text-graphite' : 'text-[15px] leading-6 text-graphite'}
+                    style={renderingStyle}
+                >
                     {body}
                 </p>
             }
