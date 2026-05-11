@@ -38,6 +38,8 @@ export type LessonReorientationOption = {
     title: string;
     description: string;
     icon: 'hands' | 'image' | 'bookmark';
+    mode?: string;
+    text?: string;
 };
 
 export type LessonReorientationData = {

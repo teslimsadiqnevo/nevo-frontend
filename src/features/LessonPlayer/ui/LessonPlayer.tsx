@@ -10,6 +10,10 @@ import {
 import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { getStudentProfile, updateLessonProgress } from '@/features/Dashboard/api/student';
+import {
+    fetchReorientationAlternatives,
+    type ReorientationAlternative,
+} from '../api/adaptiveControls';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import type { Stage, StageKey, ToolbarState } from '../api/types';
 import { VisualMode } from './modes/VisualMode';
@@ -84,6 +88,9 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const [showPaceOverlay, setShowPaceOverlay] = useState(false);
     const [showReflectionOverlay, setShowReflectionOverlay] = useState(false);
     const [showReorientationOverlay, setShowReorientationOverlay] = useState(false);
+    const [reorientationOptions, setReorientationOptions] = useState<ReorientationAlternative[]>([]);
+    const [reorientationLoading, setReorientationLoading] = useState(false);
+    const [reorientationError, setReorientationError] = useState<string | null>(null);
     const [showAskNevoDrawer, setShowAskNevoDrawer] = useState(false);
     const [paceSelection, setPaceSelection] = useState<'slower' | 'steady' | 'faster'>('slower');
     const [paceDensity, setPaceDensity] = useState<LessonPaceDensity>('standard');
@@ -355,6 +362,35 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     }, [activeMode, activeStageKey, data, lessonId, stageIndex]);
 
     useEffect(() => {
+        if (!showReorientationOverlay || !currentStageForSignal) return;
+
+        let cancelled = false;
+        setReorientationLoading(true);
+        setReorientationError(null);
+
+        fetchReorientationAlternatives(currentStageForSignal, activeMode)
+            .then((options) => {
+                if (cancelled) return;
+                setReorientationOptions(options);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setReorientationError(
+                    err instanceof Error ? err.message : 'Could not load another approach.',
+                );
+                setReorientationOptions([]);
+            })
+            .finally(() => {
+                if (cancelled) return;
+                setReorientationLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeMode, currentStageForSignal, showReorientationOverlay]);
+
+    useEffect(() => {
         if (!data || stageIndex < 0) return;
 
         const previousStage = stageIndex > 0 ? stageOrder[stageIndex - 1] : null;
@@ -595,6 +631,15 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
     const handleReorientationSelect = (optionId: string) => {
         stopAllLessonTts();
+        if (optionId.startsWith('alternative:')) {
+            queueSignal({
+                signal_type: 'reorientation_alternative',
+                confidence_self_report: 1,
+            });
+            setShowReorientationOverlay(false);
+            return;
+        }
+
         if (optionId === 'skip') {
             queueSignal({
                 signal_type: 'reorientation_dismissed',
@@ -635,6 +680,20 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         setShowReorientationOverlay(false);
     };
 
+    const activeReorientationData = {
+        ...data.reorientation,
+        options: reorientationOptions.length
+            ? reorientationOptions.map((option) => ({
+                id: `alternative:${option.mode}`,
+                title: option.label,
+                description: `Try this as a ${option.mode === 'auditory' ? 'listening' : option.mode} explanation.`,
+                icon: option.mode === 'kinesthetic' ? ('hands' as const) : option.mode === 'visual' ? ('image' as const) : ('bookmark' as const),
+                mode: option.mode,
+                text: option.text,
+            }))
+            : data.reorientation.options,
+    };
+
     return (
         <>
             <div className="flex min-h-screen justify-center bg-parchment px-0 py-0">
@@ -665,12 +724,14 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
                     {showReorientationOverlay ? (
                         <LessonReorientationOverlay
-                            data={data.reorientation}
+                            data={activeReorientationData}
                             onSelect={handleReorientationSelect}
                             onAskNevo={() => {
                                 setShowReorientationOverlay(false);
                                 setShowAskNevoDrawer(true);
                             }}
+                            isLoading={reorientationLoading}
+                            error={reorientationError}
                         />
                     ) : null}
                 </div>

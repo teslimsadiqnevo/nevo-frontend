@@ -6,7 +6,15 @@ type LessonReorientationOverlayProps = {
     data: LessonReorientationData;
     onSelect: (optionId: string) => void;
     onAskNevo: () => void;
+    isLoading?: boolean;
+    error?: string | null;
 };
+
+function optionIconFromMode(option: LessonReorientationData['options'][number]) {
+    if (option.mode === 'visual') return 'image';
+    if (option.mode === 'kinesthetic') return 'hands';
+    return option.icon;
+}
 
 function OptionIcon({ icon }: { icon: LessonReorientationData['options'][number]['icon'] }) {
     if (icon === 'hands') {
@@ -42,6 +50,8 @@ export function LessonReorientationOverlay({
     data,
     onSelect,
     onAskNevo,
+    isLoading,
+    error,
 }: LessonReorientationOverlayProps) {
     return (
         <div className="absolute inset-0 z-20 bg-black/30">
@@ -71,6 +81,27 @@ export function LessonReorientationOverlay({
                 </p>
 
                 <div className="mt-6 flex flex-col gap-2">
+                    {isLoading ? (
+                        <div className="flex items-center justify-center gap-2 rounded-xl border border-[#E0D9CE] bg-white/80 px-4 py-5">
+                            {[0, 1, 2].map((index) => (
+                                <span
+                                    key={index}
+                                    className="h-2 w-2 animate-bounce rounded-full bg-lavender"
+                                    style={{ animationDelay: `${index * 120}ms` }}
+                                />
+                            ))}
+                            <span className="ml-2 text-[13px] leading-5 text-graphite/60">
+                                Finding another way in...
+                            </span>
+                        </div>
+                    ) : null}
+
+                    {error ? (
+                        <p className="rounded-xl bg-[#FFF3CD] px-4 py-3 text-[12px] leading-5 text-[#9A6412]">
+                            {error}
+                        </p>
+                    ) : null}
+
                     {data.options.map((option) => (
                         <button
                             key={option.id}
@@ -78,10 +109,17 @@ export function LessonReorientationOverlay({
                             onClick={() => onSelect(option.id)}
                             className="flex w-full items-start gap-3 rounded-xl border border-[#E0D9CE] bg-white/90 px-4 py-3 text-left cursor-pointer"
                         >
-                            <OptionIcon icon={option.icon} />
-                            <div>
+                            <OptionIcon icon={optionIconFromMode(option)} />
+                            <div className="min-w-0">
                                 <div className="text-[14px] font-semibold leading-5 text-indigo">{option.title}</div>
-                                <div className="mt-1 text-[12px] leading-[17px] text-graphite/60">{option.description}</div>
+                                <div className="mt-1 text-[12px] leading-[17px] text-graphite/60">
+                                    {option.description}
+                                </div>
+                                {option.text ? (
+                                    <p className="mt-2 text-[13px] leading-[19px] text-graphite/80">
+                                        {option.text}
+                                    </p>
+                                ) : null}
                             </div>
                         </button>
                     ))}
