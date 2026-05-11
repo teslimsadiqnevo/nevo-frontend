@@ -4,6 +4,11 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { LessonMicroQuizQuestion, LessonMicroQuizResultState, LessonPlayerData } from '../api/types';
 import { LessonMicroQuizPromptOverlay } from './LessonMicroQuizPromptOverlay';
+import {
+    ensureLessonSession,
+    getStoredLessonSessionId,
+    logLessonSessionSignal,
+} from '../api/lessonSessionTelemetry';
 
 type LessonMicroQuizScreenProps = {
     lessonId: string;
@@ -77,14 +82,35 @@ export function LessonMicroQuizScreen({ lessonId, data, index, returnStageKey }:
 
     const simplifiedExplanation = question.explanation.split('. ')[0]?.trim();
 
+    const logCheckpointSignal = async (result: 'correct' | 'incorrect') => {
+        const candidates = [lessonId, data.id, data.originalLessonId, data.adaptedLessonId]
+            .map((candidate) => String(candidate || '').trim())
+            .filter(Boolean);
+        const sessionId =
+            getStoredLessonSessionId(lessonId) ||
+            (await ensureLessonSession(lessonId, candidates));
+        if (!sessionId) return;
+
+        await logLessonSessionSignal(sessionId, {
+            lesson_section: question.moduleNumber || safeIndex + 1,
+            concept_id: question.prompt,
+            signal_type: 'checkpoint',
+            checkpoint_result: result,
+            confidence_self_report: result === 'correct' ? 3 : 1,
+            completion_status: result === 'correct' ? 'complete' : 'active',
+        });
+    };
+
     const submit = () => {
         if (!selectedOptionId) return;
 
         if (selectedOptionId === question.correctOptionId) {
+            void logCheckpointSignal('correct');
             setResultState('correct');
             return;
         }
 
+        void logCheckpointSignal('incorrect');
         const nextPromptIndex = Math.min(incorrectAttempts, question.feedbackPrompts.length - 1);
         setResultState('incorrect');
         setActivePromptIndex(nextPromptIndex);

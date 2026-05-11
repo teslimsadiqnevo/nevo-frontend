@@ -6,6 +6,7 @@ import { useLessonPlayer } from '../api/useLessonPlayer';
 import { useApiTokenExpiryRedirect } from '@/shared/lib';
 import { LessonCompletionScreen } from './LessonCompletionScreen';
 import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
+import { completeLessonSession } from '../api/lessonSessionTelemetry';
 
 type LessonCompletionRouteProps = {
     lessonId: string;
@@ -48,13 +49,10 @@ export function LessonCompletionRoute({ lessonId, showNextLesson }: LessonComple
     useEffect(() => {
         if (!data) return;
         if (completionSavedRef.current) {
-            setIsSavingCompletion(false);
             return;
         }
 
         completionSavedRef.current = true;
-        setIsSavingCompletion(true);
-        setCompletionSaveError(null);
 
         const progressIdCandidates = getLessonProgressIdCandidates(
             lessonId,
@@ -76,6 +74,20 @@ export function LessonCompletionRoute({ lessonId, showNextLesson }: LessonComple
                     return;
                 }
 
+                void completeLessonSession(lessonId, {
+                    time_spent_seconds: Math.max(1, data.stageOrder.length * 60),
+                    sections_completed: Math.max(1, data.stageOrder.length),
+                    concepts_covered: Math.max(
+                        1,
+                        data.completion.conceptResults.length || data.stageOrder.length,
+                    ),
+                    moments_of_clarity: data.completion.conceptResults.filter(
+                        (concept) => concept.status === 'understood',
+                    ).length,
+                    tools_used: {
+                        completed_from: 'lesson_completion_route',
+                    },
+                });
                 setIsSavingCompletion(false);
             })
             .catch(() => {

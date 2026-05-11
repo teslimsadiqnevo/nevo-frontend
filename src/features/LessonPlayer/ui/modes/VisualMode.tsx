@@ -25,6 +25,7 @@ type VisualModeProps = {
     onToolbarChange: (state: ToolbarState) => void;
     headerAction?: ReactNode;
     paceDensity: LessonPaceDensity;
+    onImageViewed?: () => void;
 };
 
 export function VisualMode({
@@ -39,9 +40,9 @@ export function VisualMode({
     onToolbarChange,
     headerAction,
     paceDensity,
+    onImageViewed,
 }: VisualModeProps) {
     const content = stage.modes.visual;
-    const stageKey: StagePhaseKey = stage.phase;
     const label =
         toolbarState === 'simplified'
             ? stage.labelSimplified || stage.label
@@ -182,6 +183,11 @@ export function VisualMode({
     ]);
 
     const hasResolvedImage = Boolean(resolvedImageState.imageUrl);
+
+    useEffect(() => {
+        if (!hasResolvedImage) return;
+        onImageViewed?.();
+    }, [hasResolvedImage, onImageViewed, visualScopeKey]);
 
     return (
         <StageShell
