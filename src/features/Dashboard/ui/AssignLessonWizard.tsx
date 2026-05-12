@@ -447,8 +447,8 @@ export function AssignLessonWizard({
     }
 
     return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            <div className="flex items-center mb-6">
+        <div className="flex h-full min-h-0 w-full max-w-[900px] flex-col pb-6 sm:pb-8 lg:pb-12">
+            <div className="mb-6 flex shrink-0 items-center">
                 <button
                     onClick={handleBack}
                     className="p-1 hover:bg-white/40 rounded-lg transition-colors cursor-pointer"
@@ -540,7 +540,7 @@ function Step1Lesson({
     const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId);
 
     return (
-        <div className="flex flex-col h-full flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">Which lesson?</h2>
 
             {!isSelectingLesson && selectedLesson ? (
@@ -635,15 +635,13 @@ function Step1Lesson({
                 </>
             )}
 
-            <div className="flex-1" />
-
             <button
                 disabled={!selectedLessonId}
                 onClick={() => {
                     setIsSelectingLesson(false);
                     onContinue();
                 }}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
+                className={`mt-4 w-full shrink-0 rounded-2xl py-3.5 text-[14px] font-semibold transition-all cursor-pointer ${
                     selectedLessonId
                         ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
                         : 'bg-[#B0ADAD] text-white cursor-not-allowed'
@@ -720,10 +718,10 @@ function Step2Recipients({
                 : false;
 
     return (
-        <div className="flex flex-col h-full flex-1">
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">Who receives this lesson?</h2>
+        <div className="flex min-h-0 flex-1 flex-col">
+            <h2 className="mb-6 text-[20px] font-semibold text-[#3B3F6E]">Who receives this lesson?</h2>
 
-            <div className="flex gap-2 mb-8">
+            <div className="mb-8 flex shrink-0 flex-wrap gap-2">
                 <button
                     onClick={() => {
                         setRecipientMode('class');
@@ -861,12 +859,10 @@ function Step2Recipients({
                 </div>
             ) : null}
 
-            <div className="flex-1" />
-
             <button
                 disabled={!canContinue}
                 onClick={onContinue}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
+                className={`mt-4 w-full shrink-0 rounded-2xl py-3.5 text-[14px] font-semibold transition-all cursor-pointer ${
                     canContinue
                         ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
                         : 'bg-[#B0ADAD] text-white cursor-not-allowed'
@@ -908,7 +904,7 @@ function Step3Scheduling({
         : '';
 
     return (
-        <div className="flex flex-col h-full flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">When should students complete this?</h2>
             <p className="text-[13px] text-graphite-60 mb-8">A due date is optional.</p>
 
@@ -972,11 +968,9 @@ function Step3Scheduling({
                 </div>
             </div>
 
-            <div className="flex-1" />
-
             <button
                 onClick={onContinue}
-                className="w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 bg-[#3B3F6E] text-white hover:bg-[#2E3259]"
+                className="mt-auto w-full shrink-0 rounded-2xl bg-[#3B3F6E] py-3.5 text-[14px] font-semibold text-white transition-all cursor-pointer hover:bg-[#2E3259]"
             >
                 Continue
             </button>
@@ -1022,7 +1016,7 @@ function Step4Summary({
     };
 
     return (
-        <div className="flex flex-col h-full flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">Ready to assign.</h2>
             <p className="text-[13px] text-graphite-60 mb-8">Review the details before sending.</p>
 
@@ -1055,12 +1049,10 @@ function Step4Summary({
                 </div>
             ) : null}
 
-            <div className="flex-1" />
-
             <button
                 onClick={onAssign}
                 disabled={assigning}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer ${
+                className={`mt-auto w-full shrink-0 rounded-2xl py-3.5 text-[14px] font-semibold transition-all cursor-pointer ${
                     assigning
                         ? 'bg-[#B0ADAD] text-white cursor-not-allowed'
                         : 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
