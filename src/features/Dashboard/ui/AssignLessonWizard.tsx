@@ -30,10 +30,68 @@ type StudentOption = {
     initials: string;
 };
 
-function buildErrorMessage(data: any, fallback: string) {
-    if (typeof data?.detail === 'string') return data.detail;
-    if (typeof data?.message === 'string') return data.message;
-    if (typeof data?.error === 'string') return data.error;
+type LessonPackageReview = {
+    status: 'ready' | 'processing' | 'needs_attention' | 'not_started' | string;
+    concepts: Array<{
+        concept_id?: string | null;
+        key_term: string;
+        concept_text: string;
+        step_count: number;
+        checkpoint_question?: string | null;
+        learning_mode_delivered?: string | null;
+    }>;
+    lesson_package_quality?: {
+        score?: number;
+        status?: string;
+        warnings?: string[];
+        auto_repaired?: string[];
+        concept_count?: number;
+    } | null;
+    variant_summary?: {
+        ready?: number;
+        failed?: number;
+        running?: number;
+        source_concepts?: number;
+    };
+    ai_debug?: {
+        model?: string | null;
+        generation_duration_ms?: number | null;
+        quality_score?: number | null;
+        auto_repaired_count?: number;
+    };
+};
+
+type AuthGuardableError = { authExpired?: boolean; error?: string };
+type ApiRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is ApiRecord {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown, fallback = '') {
+    return typeof value === 'string' ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+    const nextValue = Number(value ?? fallback);
+    return Number.isFinite(nextValue) ? nextValue : fallback;
+}
+
+function toGuardableError(error: unknown): AuthGuardableError {
+    if (isRecord(error)) {
+        return {
+            authExpired: error.authExpired === true,
+            error: stringValue(error.error) || (error instanceof Error ? error.message : undefined),
+        };
+    }
+    return { error: error instanceof Error ? error.message : undefined };
+}
+
+function buildErrorMessage(data: unknown, fallback: string) {
+    if (!isRecord(data)) return fallback;
+    if (typeof data.detail === 'string') return data.detail;
+    if (typeof data.message === 'string') return data.message;
+    if (typeof data.error === 'string') return data.error;
     return fallback;
 }
 
@@ -70,20 +128,20 @@ async function fetchTeacherLessons() {
         });
     }
 
-    const rawLessons = Array.isArray(data?.lessons) ? data.lessons : [];
+    const rawLessons = isRecord(data) && Array.isArray(data.lessons) ? data.lessons : [];
     return rawLessons
-        .filter((lesson: any) => String(lesson?.status || '').toLowerCase() === 'published')
-        .map((lesson: any): Lesson => {
-            const confusionCount = Number(lesson?.confusion_signal_count || 0);
-            const completionCount = Number(lesson?.completion_count || 0);
+        .filter((lesson): lesson is ApiRecord => isRecord(lesson) && String(lesson.status || '').toLowerCase() === 'published')
+        .map((lesson): Lesson => {
+            const confusionCount = numberValue(lesson.confusion_signal_count);
+            const completionCount = numberValue(lesson.completion_count);
             return {
                 id: String(lesson.id),
-                title: lesson.title || 'Untitled lesson',
-                subject: lesson.subject || lesson.topic || 'Not set',
-                level: lesson.education_level || 'Not set',
-                duration: Number(lesson.estimated_duration_minutes || 0),
+                title: stringValue(lesson.title, 'Untitled lesson'),
+                subject: stringValue(lesson.subject) || stringValue(lesson.topic, 'Not set'),
+                level: stringValue(lesson.education_level, 'Not set'),
+                duration: numberValue(lesson.estimated_duration_minutes),
                 status: 'Published',
-                lastUpdated: formatUpdatedDate(lesson.last_updated || lesson.created_at),
+                lastUpdated: formatUpdatedDate(stringValue(lesson.last_updated) || stringValue(lesson.created_at)),
                 signal:
                     confusionCount > 0
                         ? { type: 'warning', text: `Confusion signals from ${confusionCount} students` }
@@ -104,17 +162,17 @@ async function fetchTeacherClasses() {
     }
 
     const rawClasses = [
-        data?.classes,
-        data?.data?.classes,
-        data?.data?.data?.classes,
-        data?.results,
+        isRecord(data) ? data.classes : null,
+        isRecord(data) && isRecord(data.data) ? data.data.classes : null,
+        isRecord(data) && isRecord(data.data) && isRecord(data.data.data) ? data.data.data.classes : null,
+        isRecord(data) ? data.results : null,
         Array.isArray(data) ? data : null,
     ].find(Array.isArray) || [];
-    return rawClasses.map((item: any): ClassOption => ({
+    return rawClasses.filter(isRecord).map((item): ClassOption => ({
         id: String(item.id || item.class_id),
-        name: item.name || item.class_name || 'Class',
-        teacherName: item.teacher_name || undefined,
-        students: Number(item.student_count || 0),
+        name: stringValue(item.name) || stringValue(item.class_name, 'Class'),
+        teacherName: stringValue(item.teacher_name) || undefined,
+        students: numberValue(item.student_count),
     }));
 }
 
@@ -127,12 +185,12 @@ async function fetchAssignableStudents() {
         });
     }
 
-    const rawStudents = Array.isArray(data?.students) ? data.students : [];
-    return rawStudents.map((item: any): StudentOption => {
+    const rawStudents = isRecord(data) && Array.isArray(data.students) ? data.students : [];
+    return rawStudents.filter(isRecord).map((item): StudentOption => {
         const name =
-            item.name ||
-            `${item.first_name || ''} ${item.last_name || ''}`.trim() ||
-            item.email ||
+            stringValue(item.name) ||
+            `${stringValue(item.first_name)} ${stringValue(item.last_name)}`.trim() ||
+            stringValue(item.email) ||
             'Student';
         return {
             id: String(item.id),
@@ -170,6 +228,19 @@ async function assignLesson(payload: {
     return data;
 }
 
+async function fetchLessonPackageReview(lessonId: string): Promise<LessonPackageReview> {
+    const res = await fetch(`/api/teacher/lessons/${lessonId}/package-review`, {
+        cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not load package review.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
+    return data as LessonPackageReview;
+}
+
 export function AssignLessonWizard({
     onClose,
     initialLessonId,
@@ -190,6 +261,9 @@ export function AssignLessonWizard({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [assigning, setAssigning] = useState(false);
+    const [packageReview, setPackageReview] = useState<LessonPackageReview | null>(null);
+    const [packageReviewLoading, setPackageReviewLoading] = useState(false);
+    const [packageReviewError, setPackageReviewError] = useState<string | null>(null);
 
     const [selectedLessonId, setSelectedLessonId] = useState<string | null>(
         initialLessonId ? String(initialLessonId) : null,
@@ -219,7 +293,7 @@ export function AssignLessonWizard({
                 // Lessons are required — if they fail, show an error
                 if (lessonResult.status === 'rejected') {
                     const err = lessonResult.reason;
-                    if (guardAuth(err as any)) return;
+                    if (guardAuth(toGuardableError(err))) return;
                     setLoadError(err instanceof Error ? err.message : 'Could not load lessons.');
                     return;
                 }
@@ -229,7 +303,7 @@ export function AssignLessonWizard({
                 setStudents(studentResult.status === 'fulfilled' ? studentResult.value : []);
             } catch (error) {
                 if (!mounted) return;
-                if (guardAuth(error as any)) return;
+                if (guardAuth(toGuardableError(error))) return;
                 setLoadError(error instanceof Error ? error.message : 'Could not load assignment data.');
             } finally {
                 if (mounted) setLoading(false);
@@ -239,7 +313,7 @@ export function AssignLessonWizard({
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [guardAuth]);
 
     const selectedLesson = useMemo(
         () => lessons.find((lesson) => lesson.id === selectedLessonId),
@@ -255,6 +329,38 @@ export function AssignLessonWizard({
         () => students.filter((student) => selectedStudents.includes(student.id)),
         [students, selectedStudents],
     );
+
+    useEffect(() => {
+        if (!selectedLessonId) {
+            setPackageReview(null);
+            setPackageReviewError(null);
+            setPackageReviewLoading(false);
+            return;
+        }
+
+        let mounted = true;
+        setPackageReviewLoading(true);
+        setPackageReviewError(null);
+
+        fetchLessonPackageReview(selectedLessonId)
+            .then((review) => {
+                if (!mounted) return;
+                setPackageReview(review);
+            })
+            .catch((error) => {
+                if (!mounted) return;
+                if (guardAuth(toGuardableError(error))) return;
+                setPackageReview(null);
+                setPackageReviewError(error instanceof Error ? error.message : 'Could not load package review.');
+            })
+            .finally(() => {
+                if (mounted) setPackageReviewLoading(false);
+            });
+
+        return () => {
+            mounted = false;
+        };
+    }, [guardAuth, selectedLessonId]);
 
     const handleBack = () => {
         setSubmitError(null);
@@ -288,7 +394,7 @@ export function AssignLessonWizard({
             setSuccessCount(Number(result?.assigned_count || 0));
             setShowSuccess(true);
         } catch (error) {
-            if (guardAuth(error as any)) {
+            if (guardAuth(toGuardableError(error))) {
                 setAssigning(false);
                 return;
             }
@@ -395,6 +501,9 @@ export function AssignLessonWizard({
                     onAssign={handleAssign}
                     assigning={assigning}
                     submitError={submitError}
+                    packageReview={packageReview}
+                    packageReviewLoading={packageReviewLoading}
+                    packageReviewError={packageReviewError}
                 />
             ) : null}
         </div>
@@ -884,6 +993,9 @@ function Step4Summary({
     onAssign,
     assigning,
     submitError,
+    packageReview,
+    packageReviewLoading,
+    packageReviewError,
 }: {
     lesson?: Lesson;
     recipientMode: 'class' | 'students' | null;
@@ -893,6 +1005,9 @@ function Step4Summary({
     onAssign: () => void;
     assigning: boolean;
     submitError: string | null;
+    packageReview: LessonPackageReview | null;
+    packageReviewLoading: boolean;
+    packageReviewError: string | null;
 }) {
     const recipientLabel =
         recipientMode === 'class'
@@ -928,6 +1043,12 @@ function Step4Summary({
                 </div>
             </div>
 
+            <PackageReviewCard
+                review={packageReview}
+                loading={packageReviewLoading}
+                error={packageReviewError}
+            />
+
             {submitError ? (
                 <div className="mb-5 rounded-xl border border-[#F1C5BF] bg-[#FFF6F4] px-4 py-3 text-[13px] text-[#B54708]">
                     {submitError}
@@ -947,6 +1068,104 @@ function Step4Summary({
             >
                 {assigning ? 'Assigning...' : 'Assign lesson'}
             </button>
+        </div>
+    );
+}
+
+function PackageReviewCard({
+    review,
+    loading,
+    error,
+}: {
+    review: LessonPackageReview | null;
+    loading: boolean;
+    error: string | null;
+}) {
+    const qualityScore =
+        review?.lesson_package_quality?.score ??
+        review?.ai_debug?.quality_score ??
+        null;
+    const autoRepaired =
+        review?.lesson_package_quality?.auto_repaired?.length ??
+        review?.ai_debug?.auto_repaired_count ??
+        0;
+    const conceptCount =
+        review?.lesson_package_quality?.concept_count ??
+        review?.concepts.length ??
+        review?.variant_summary?.source_concepts ??
+        0;
+    const readyCount = review?.variant_summary?.ready ?? 0;
+    const failedCount = review?.variant_summary?.failed ?? 0;
+
+    const statusLabel = loading
+        ? 'Checking package...'
+        : error
+            ? 'Review unavailable'
+            : review?.status === 'ready'
+                ? 'Ready for students'
+                : review?.status === 'needs_attention'
+                    ? 'Needs attention'
+                    : 'Preparing adaptive package';
+    const statusTone = review?.status === 'needs_attention' || error
+        ? 'border-[#F1C5BF] bg-[#FFF8F4] text-[#B54708]'
+        : review?.status === 'ready'
+            ? 'border-[#CDE8D4] bg-[#F4FBF5] text-[#2E7D32]'
+            : 'border-[#E8E2D4] bg-[#FDFBF9] text-[#3B3F6E]';
+
+    return (
+        <div className={`mb-8 rounded-xl border px-5 py-4 ${statusTone}`}>
+            <div className="mb-3 flex items-start justify-between gap-4">
+                <div>
+                    <span className="block text-[13px] font-bold">Smart package review</span>
+                    <p className="mt-1 text-[12px] opacity-75">
+                        {error || 'Nevo checks concept coverage and generated lesson quality before assignment.'}
+                    </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em]">
+                    {statusLabel}
+                </span>
+            </div>
+
+            {loading ? (
+                <div className="grid grid-cols-3 gap-3">
+                    {[0, 1, 2].map((item) => (
+                        <div key={item} className="h-14 rounded-lg bg-[#E8E2D4]" />
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-3 gap-3">
+                    <PackageReviewMetric label="Quality" value={qualityScore !== null ? `${Math.round(qualityScore)}%` : 'Pending'} />
+                    <PackageReviewMetric label="Concepts" value={conceptCount ? String(conceptCount) : 'No concepts yet'} />
+                    <PackageReviewMetric label="Variants" value={failedCount ? `${readyCount} ready, ${failedCount} failed` : `${readyCount} ready`} />
+                </div>
+            )}
+
+            {!loading && review?.concepts?.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {review.concepts.slice(0, 4).map((concept) => (
+                        <span
+                            key={concept.concept_id || concept.key_term}
+                            className="rounded-full bg-white/70 px-3 py-1 text-[12px] font-medium text-[#3B3F6E]"
+                        >
+                            {concept.key_term}
+                        </span>
+                    ))}
+                    {autoRepaired > 0 ? (
+                        <span className="rounded-full bg-[#FFF3CD] px-3 py-1 text-[12px] font-medium text-[#A66A00]">
+                            {autoRepaired} auto-fixed
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
+        </div>
+    );
+}
+
+function PackageReviewMetric({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-lg bg-white/70 px-3 py-2">
+            <span className="block text-[11px] font-bold uppercase tracking-[0.08em] opacity-60">{label}</span>
+            <span className="mt-1 block text-[13px] font-semibold">{value}</span>
         </div>
     );
 }
