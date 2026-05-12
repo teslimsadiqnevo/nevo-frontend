@@ -31,7 +31,7 @@ type StudentOption = {
 };
 
 type LessonPackageReview = {
-    status: 'ready' | 'processing' | 'needs_attention' | 'not_started' | string;
+    status: 'ready' | 'source_ready' | 'processing' | 'needs_attention' | 'not_started' | string;
     concepts: Array<{
         concept_id?: string | null;
         key_term: string;
@@ -1103,6 +1103,8 @@ function PackageReviewCard({
             ? 'Review unavailable'
             : review?.status === 'ready'
                 ? 'Ready for students'
+                : review?.status === 'source_ready'
+                    ? 'Source concepts ready'
                 : review?.status === 'needs_attention'
                     ? 'Needs attention'
                     : 'Preparing adaptive package';
@@ -1118,7 +1120,9 @@ function PackageReviewCard({
                 <div>
                     <span className="block text-[13px] font-bold">Smart package review</span>
                     <p className="mt-1 text-[12px] opacity-75">
-                        {error || 'Nevo checks concept coverage and generated lesson quality before assignment.'}
+                        {error || (review?.status === 'source_ready'
+                            ? 'Concepts are extracted. Student-specific variants are generated after assignment.'
+                            : 'Nevo checks concept coverage and generated lesson quality before assignment.')}
                     </p>
                 </div>
                 <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em]">
@@ -1136,7 +1140,16 @@ function PackageReviewCard({
                 <div className="grid grid-cols-3 gap-3">
                     <PackageReviewMetric label="Quality" value={qualityScore !== null ? `${Math.round(qualityScore)}%` : 'Pending'} />
                     <PackageReviewMetric label="Concepts" value={conceptCount ? String(conceptCount) : 'No concepts yet'} />
-                    <PackageReviewMetric label="Variants" value={failedCount ? `${readyCount} ready, ${failedCount} failed` : `${readyCount} ready`} />
+                    <PackageReviewMetric
+                        label="Variants"
+                        value={
+                            review?.status === 'source_ready'
+                                ? 'After assign'
+                                : failedCount
+                                    ? `${readyCount} ready, ${failedCount} failed`
+                                    : `${readyCount} ready`
+                        }
+                    />
                 </div>
             )}
 
