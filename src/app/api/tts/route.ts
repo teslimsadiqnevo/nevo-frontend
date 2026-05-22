@@ -4,6 +4,19 @@ type TtsRequestBody = {
     text?: string;
 };
 
+export async function GET() {
+    const configured = Boolean(process.env.YARNGPT_API_KEY);
+    return NextResponse.json({
+        configured,
+        provider: 'yarngpt',
+        voice: 'Idera',
+        status: configured ? 'ready' : 'missing_key',
+        detail: configured
+            ? 'Audio narration is configured.'
+            : 'Audio narration is not configured for this deployment scope.',
+    });
+}
+
 export async function POST(req: Request) {
     try {
         const apiKey = process.env.YARNGPT_API_KEY;

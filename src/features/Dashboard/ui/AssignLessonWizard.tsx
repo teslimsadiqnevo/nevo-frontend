@@ -31,6 +31,7 @@ type StudentOption = {
 };
 
 type LessonPackageReview = {
+    lesson_id?: string;
     status: 'ready' | 'source_ready' | 'processing' | 'needs_attention' | 'not_started' | string;
     concepts: Array<{
         concept_id?: string | null;
@@ -45,6 +46,7 @@ type LessonPackageReview = {
         status?: string;
         warnings?: string[];
         auto_repaired?: string[];
+        repaired_concepts?: number;
         concept_count?: number;
     } | null;
     variant_summary?: {
@@ -53,12 +55,38 @@ type LessonPackageReview = {
         running?: number;
         source_concepts?: number;
     };
+    transform_job?: TransformJobStatus | null;
     ai_debug?: {
         model?: string | null;
         generation_duration_ms?: number | null;
         quality_score?: number | null;
         auto_repaired_count?: number;
+        runtime?: {
+            primary_provider?: string;
+            fallback_provider?: string | null;
+            active_provider_configured?: boolean;
+            fallback_configured?: boolean | null;
+            image_search_configured?: boolean;
+        };
+        tts_preload?: {
+            status?: string;
+            concept_tts_texts?: number;
+            step_tts_texts?: number;
+            note?: string;
+        };
     };
+};
+
+type TransformJobStatus = {
+    lesson_id?: string;
+    status?: string;
+    processed_students?: number;
+    total_students?: number;
+    processed_signatures?: number;
+    total_signatures?: number;
+    failed_students?: number;
+    failed_signatures?: number;
+    error_message?: string | null;
 };
 
 type AuthGuardableError = { authExpired?: boolean; error?: string };
@@ -206,7 +234,12 @@ async function assignLesson(payload: {
     classId?: string | null;
     studentIds?: string[];
     dueDate?: string;
-}) {
+}): Promise<{
+    assigned_count?: number;
+    skipped_count?: number;
+    message?: string;
+    transform_job?: TransformJobStatus | null;
+}> {
     const res = await fetch(`/api/teacher/lessons/${payload.lessonId}/assign`, {
         method: 'POST',
         headers: {
@@ -252,6 +285,7 @@ export function AssignLessonWizard({
     const [step, setStep] = useState(1);
     const [showSuccess, setShowSuccess] = useState(false);
     const [successCount, setSuccessCount] = useState(0);
+    const [successTransformJob, setSuccessTransformJob] = useState<TransformJobStatus | null>(null);
     const TOTAL_STEPS = 4;
 
     const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -392,6 +426,17 @@ export function AssignLessonWizard({
             });
 
             setSuccessCount(Number(result?.assigned_count || 0));
+            setSuccessTransformJob(result?.transform_job || null);
+            if (result?.transform_job) {
+                setPackageReview((current) => ({
+                    ...(current || {
+                        lesson_id: selectedLessonId,
+                        concepts: [],
+                    }),
+                    status: 'processing',
+                    transform_job: result.transform_job,
+                } as LessonPackageReview));
+            }
             setShowSuccess(true);
         } catch (error) {
             if (guardAuth(toGuardableError(error))) {
@@ -415,12 +460,14 @@ export function AssignLessonWizard({
         setSubmitError(null);
         setShowSuccess(false);
         setSuccessCount(0);
+        setSuccessTransformJob(null);
     };
 
     if (showSuccess) {
         return (
             <AssignmentSuccess
                 recipientCount={successCount}
+                transformJob={successTransformJob}
                 onView={onClose}
                 onAssignAnother={resetWizard}
                 onBack={onClose}
@@ -1073,12 +1120,30 @@ function PackageReviewCard({
     loading: boolean;
     error: string | null;
 }) {
+    const [ttsStatus, setTtsStatus] = useState<{ configured?: boolean; status?: string; detail?: string } | null>(null);
+
+    useEffect(() => {
+        let mounted = true;
+        fetch('/api/tts', { cache: 'no-store' })
+            .then((res) => res.json())
+            .then((data) => {
+                if (mounted) setTtsStatus(data);
+            })
+            .catch(() => {
+                if (mounted) setTtsStatus({ configured: false, status: 'unavailable' });
+            });
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
     const qualityScore =
         review?.lesson_package_quality?.score ??
         review?.ai_debug?.quality_score ??
         null;
     const autoRepaired =
         review?.lesson_package_quality?.auto_repaired?.length ??
+        review?.lesson_package_quality?.repaired_concepts ??
         review?.ai_debug?.auto_repaired_count ??
         0;
     const conceptCount =
@@ -1088,6 +1153,9 @@ function PackageReviewCard({
         0;
     const readyCount = review?.variant_summary?.ready ?? 0;
     const failedCount = review?.variant_summary?.failed ?? 0;
+    const runningCount = review?.variant_summary?.running ?? 0;
+    const runtime = review?.ai_debug?.runtime;
+    const ttsPreload = review?.ai_debug?.tts_preload;
 
     const statusLabel = loading
         ? 'Checking package...'
@@ -1139,11 +1207,29 @@ function PackageReviewCard({
                                 ? 'After assign'
                                 : failedCount
                                     ? `${readyCount} ready, ${failedCount} failed`
-                                    : `${readyCount} ready`
+                                    : runningCount
+                                        ? `${readyCount} ready, ${runningCount} running`
+                                        : `${readyCount} ready`
                         }
                     />
                 </div>
             )}
+
+            {!loading ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
+                        <span className="font-semibold">AI:</span>{' '}
+                        {runtime?.primary_provider || 'provider'}{runtime?.fallback_provider ? ` -> ${runtime.fallback_provider}` : ''}
+                        {runtime?.active_provider_configured === false ? ' (primary key missing)' : ''}
+                    </div>
+                    <div className="rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
+                        <span className="font-semibold">TTS:</span>{' '}
+                        {ttsStatus?.configured
+                            ? `ready (${ttsPreload?.step_tts_texts || 0} step texts)`
+                            : ttsStatus?.detail || 'not configured for this deployment'}
+                    </div>
+                </div>
+            ) : null}
 
             {!loading && review?.concepts?.length ? (
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -1197,15 +1283,24 @@ function Tag({ label }: { label: string }) {
 
 function AssignmentSuccess({
     recipientCount,
+    transformJob,
     onView,
     onAssignAnother,
     onBack,
 }: {
     recipientCount: number;
+    transformJob: TransformJobStatus | null;
     onView: () => void;
     onAssignAnother: () => void;
     onBack: () => void;
 }) {
+    const packageCopy =
+        transformJob?.status === 'failed'
+            ? 'Smart package generation needs a retry before every profile is ready.'
+            : transformJob
+                ? 'Nevo is preparing student-specific smart packages in the background.'
+                : 'Students will see it in their lessons tab.';
+
     return (
         <div className="flex flex-col h-full flex-1 relative items-center justify-center -mt-16">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#3B3F6E] text-white text-[13px] font-medium px-6 py-3 rounded-lg shadow-sm whitespace-nowrap">
@@ -1219,7 +1314,25 @@ function AssignmentSuccess({
             </div>
 
             <h2 className="text-[24px] font-bold text-[#2B2B2F] mb-3">Lesson assigned.</h2>
-            <p className="text-[14px] text-graphite-60 mb-8">Students will see it in their lessons tab.</p>
+            <p className="max-w-[360px] text-center text-[14px] text-graphite-60 mb-4">{packageCopy}</p>
+            {transformJob ? (
+                <div className="mb-8 w-full max-w-[360px] rounded-xl border border-[#E0D9CE] bg-white/70 px-4 py-3 text-left">
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#6E74AA]">
+                            Smart package
+                        </span>
+                        <span className="rounded-full bg-[#E8E6F5] px-3 py-1 text-[11px] font-semibold text-[#3B3F6E]">
+                            {transformJob.status || 'queued'}
+                        </span>
+                    </div>
+                    <p className="mt-2 text-[12px] leading-5 text-graphite-60">
+                        {Number(transformJob.processed_signatures || 0)} of {Number(transformJob.total_signatures || 0)} profile types ready.
+                    </p>
+                    {transformJob.error_message ? (
+                        <p className="mt-2 text-[12px] leading-5 text-[#B54708]">{transformJob.error_message}</p>
+                    ) : null}
+                </div>
+            ) : null}
 
             <button
                 onClick={onView}

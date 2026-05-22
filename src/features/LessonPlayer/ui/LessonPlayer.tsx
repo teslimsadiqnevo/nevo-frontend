@@ -308,7 +308,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     }, [learningMode, setLearningMode]);
 
     useEffect(() => {
-        if (!data || activeMode !== 'audio' || stageIndex < 0) return;
+        if (!data || stageIndex < 0) return;
 
         const currentStage = data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex];
         const currentCacheBaseKey = getAudioCacheBaseKey(lessonId, currentStage);
