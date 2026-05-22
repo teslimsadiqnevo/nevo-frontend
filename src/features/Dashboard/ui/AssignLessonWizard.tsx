@@ -55,6 +55,17 @@ type LessonPackageReview = {
         running?: number;
         source_concepts?: number;
     };
+    review_summary?: {
+        summary?: string;
+        next_action?: string;
+        weak_areas?: string[];
+        concepts_covered?: string[];
+        generated_variants?: {
+            ready?: number;
+            failed?: number;
+            running?: number;
+        };
+    };
     transform_job?: TransformJobStatus | null;
     ai_debug?: {
         model?: string | null;
@@ -272,6 +283,26 @@ async function fetchLessonPackageReview(lessonId: string): Promise<LessonPackage
         });
     }
     return data as LessonPackageReview;
+}
+
+async function regenerateLessonPackage(lessonId: string): Promise<TransformJobStatus | null> {
+    const res = await fetch(`/api/teacher/lessons/${lessonId}/transform`, {
+        method: 'POST',
+        cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not regenerate package.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
+    return isRecord(data)
+        ? {
+            lesson_id: String(data.lesson_id || lessonId),
+            status: stringValue(data.status, 'pending'),
+            total_students: numberValue(data.total_students),
+        }
+        : null;
 }
 
 export function AssignLessonWizard({
@@ -551,6 +582,7 @@ export function AssignLessonWizard({
                     packageReview={packageReview}
                     packageReviewLoading={packageReviewLoading}
                     packageReviewError={packageReviewError}
+                    onPackageReviewUpdated={setPackageReview}
                 />
             ) : null}
         </div>
@@ -1037,6 +1069,7 @@ function Step4Summary({
     packageReview,
     packageReviewLoading,
     packageReviewError,
+    onPackageReviewUpdated,
 }: {
     lesson?: Lesson;
     recipientMode: 'class' | 'students' | null;
@@ -1049,6 +1082,7 @@ function Step4Summary({
     packageReview: LessonPackageReview | null;
     packageReviewLoading: boolean;
     packageReviewError: string | null;
+    onPackageReviewUpdated: (review: LessonPackageReview) => void;
 }) {
     const recipientLabel =
         recipientMode === 'class'
@@ -1085,9 +1119,11 @@ function Step4Summary({
             </div>
 
             <PackageReviewCard
+                lessonId={lesson?.id}
                 review={packageReview}
                 loading={packageReviewLoading}
                 error={packageReviewError}
+                onReviewUpdated={onPackageReviewUpdated}
             />
 
             {submitError ? (
@@ -1112,15 +1148,22 @@ function Step4Summary({
 }
 
 function PackageReviewCard({
+    lessonId,
     review,
     loading,
     error,
+    onReviewUpdated,
 }: {
+    lessonId?: string;
     review: LessonPackageReview | null;
     loading: boolean;
     error: string | null;
+    onReviewUpdated: (review: LessonPackageReview) => void;
 }) {
     const [ttsStatus, setTtsStatus] = useState<{ configured?: boolean; status?: string; detail?: string } | null>(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [regenerating, setRegenerating] = useState(false);
+    const [regenerateError, setRegenerateError] = useState<string | null>(null);
 
     useEffect(() => {
         let mounted = true;
@@ -1156,6 +1199,9 @@ function PackageReviewCard({
     const runningCount = review?.variant_summary?.running ?? 0;
     const runtime = review?.ai_debug?.runtime;
     const ttsPreload = review?.ai_debug?.tts_preload;
+    const weakAreas = review?.review_summary?.weak_areas || review?.lesson_package_quality?.warnings || [];
+    const previewConcept = review?.concepts?.[0] || null;
+    const canRegenerate = Boolean(lessonId) && !loading && !regenerating;
 
     const statusLabel = loading
         ? 'Checking package...'
@@ -1173,6 +1219,32 @@ function PackageReviewCard({
         : review?.status === 'ready'
             ? 'border-[#CDE8D4] bg-[#F4FBF5] text-[#2E7D32]'
             : 'border-[#E8E2D4] bg-[#FDFBF9] text-[#3B3F6E]';
+
+    const handleRegenerate = async () => {
+        if (!lessonId || regenerating) return;
+
+        setRegenerating(true);
+        setRegenerateError(null);
+        try {
+            const transformJob = await regenerateLessonPackage(lessonId);
+            onReviewUpdated({
+                ...(review || {
+                    lesson_id: lessonId,
+                    concepts: [],
+                }),
+                lesson_id: lessonId,
+                status: 'processing',
+                transform_job: transformJob,
+            } as LessonPackageReview);
+
+            const refreshedReview = await fetchLessonPackageReview(lessonId);
+            onReviewUpdated(refreshedReview);
+        } catch (err) {
+            setRegenerateError(err instanceof Error ? err.message : 'Could not regenerate package.');
+        } finally {
+            setRegenerating(false);
+        }
+    };
 
     return (
         <div className={`mb-8 rounded-xl border px-5 py-4 ${statusTone}`}>
@@ -1231,6 +1303,16 @@ function PackageReviewCard({
                 </div>
             ) : null}
 
+            {!loading && review?.review_summary?.summary ? (
+                <div className="mt-3 rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
+                    <span className="font-semibold">What Nevo prepared:</span>{' '}
+                    {review.review_summary.summary}
+                    {review.review_summary.next_action ? (
+                        <span className="mt-1 block opacity-75">{review.review_summary.next_action}</span>
+                    ) : null}
+                </div>
+            ) : null}
+
             {!loading && review?.concepts?.length ? (
                 <div className="mt-4 flex flex-wrap gap-2">
                     {review.concepts.slice(0, 4).map((concept) => (
@@ -1247,6 +1329,70 @@ function PackageReviewCard({
                         </span>
                     ) : null}
                 </div>
+            ) : null}
+
+            {!loading && weakAreas.length ? (
+                <div className="mt-3 rounded-lg border border-[#F5D0A1] bg-[#FFF8EA] px-3 py-2 text-[12px] leading-5 text-[#9A6412]">
+                    <span className="font-semibold">Weak areas to review:</span>{' '}
+                    {weakAreas.slice(0, 3).join(' ')}
+                </div>
+            ) : null}
+
+            {!loading && previewOpen && previewConcept ? (
+                <div className="mt-3 rounded-xl border border-[#E0D9CE] bg-white/70 px-4 py-3 text-[#3B3F6E]">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#6E74AA]">
+                            Student preview
+                        </span>
+                        <span className="text-[11px] text-graphite-40">
+                            {previewConcept.learning_mode_delivered || 'adaptive'}
+                        </span>
+                    </div>
+                    <p className="text-[13px] font-semibold">{previewConcept.key_term}</p>
+                    <p className="mt-1 line-clamp-3 text-[12px] leading-5 text-graphite-60">
+                        {previewConcept.concept_text}
+                    </p>
+                    {previewConcept.checkpoint_question ? (
+                        <p className="mt-2 rounded-lg bg-[#F7F1E6] px-3 py-2 text-[12px] leading-5 text-graphite-60">
+                            Quick check: {previewConcept.checkpoint_question}
+                        </p>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {!loading ? (
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        disabled={!previewConcept}
+                        onClick={() => setPreviewOpen((current) => !current)}
+                        className={`h-10 flex-1 rounded-xl border text-[13px] font-semibold transition-colors ${
+                            previewConcept
+                                ? 'border-[#3B3F6E] bg-white/60 text-[#3B3F6E] hover:bg-white cursor-pointer'
+                                : 'border-[#E0D9CE] bg-white/30 text-graphite-40 cursor-not-allowed'
+                        }`}
+                    >
+                        {previewOpen ? 'Hide student preview' : 'Preview as student'}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={!canRegenerate}
+                        onClick={handleRegenerate}
+                        className={`h-10 flex-1 rounded-xl border text-[13px] font-semibold transition-colors ${
+                            canRegenerate
+                                ? 'border-[#3B3F6E] bg-[#3B3F6E] text-white hover:bg-[#2E3259] cursor-pointer'
+                                : 'border-[#E0D9CE] bg-[#B0ADAD] text-white cursor-not-allowed'
+                        }`}
+                    >
+                        {regenerating ? 'Regenerating...' : 'Regenerate package'}
+                    </button>
+                </div>
+            ) : null}
+
+            {regenerateError ? (
+                <p className="mt-2 rounded-lg bg-[#FFF3CD] px-3 py-2 text-[12px] leading-5 text-[#9A6412]">
+                    {regenerateError}
+                </p>
             ) : null}
         </div>
     );

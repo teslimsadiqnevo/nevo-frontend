@@ -97,9 +97,10 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const learningMode = useRegistrationStore((state) => state.learningMode);
     const setLearningMode = useRegistrationStore((state) => state.setLearningMode);
     const [resolvedLearningMode, setResolvedLearningMode] = useState<LearningMode | null>(null);
+    const [runtimeModeOverride, setRuntimeModeOverride] = useState<LearningMode | null>(null);
     const progressSessionStartedAt = useRef(0);
     const lastProgressKey = useRef<string | null>(null);
-    const activeMode: LearningMode = resolvedLearningMode ?? learningMode;
+    const activeMode: LearningMode = runtimeModeOverride ?? resolvedLearningMode ?? learningMode;
     const scopeKey = `${lessonId}:${activeStageKey}:${activeMode}`;
     const [toolbarSession, setToolbarSession] = useState<{ scopeKey: string; state: ToolbarState }>({
         scopeKey,
@@ -184,6 +185,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         const now = Date.now();
         progressSessionStartedAt.current = now;
         stageEnteredAtRef.current = now;
+        setRuntimeModeOverride(null);
     }, [lessonId]);
 
     useEffect(() => {
@@ -632,9 +634,18 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const handleReorientationSelect = (optionId: string) => {
         stopAllLessonTts();
         if (optionId.startsWith('alternative:')) {
+            const selectedMode = optionId.replace('alternative:', '');
+            const nextMode = normalizeLearningMode(selectedMode);
+            setRuntimeModeOverride(nextMode);
+            setLearningMode(nextMode);
+            setToolbarSession({
+                scopeKey: `${lessonId}:${activeStageKey}:${nextMode}`,
+                state: 'original',
+            });
             queueSignal({
-                signal_type: 'reorientation_alternative',
+                signal_type: 'mode_switch',
                 confidence_self_report: 1,
+                learning_mode_delivered: getDeliveredMode(nextMode),
             });
             setShowReorientationOverlay(false);
             return;
