@@ -77,6 +77,7 @@ function CoverageRow({ label, value }: { label: string; value: number }) {
 }
 
 export function InternalAiPanel() {
+  const [range, setRange] = useState<"today" | "week" | "month">("month");
   const [payload, setPayload] = useState<AiPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -85,15 +86,16 @@ export function InternalAiPanel() {
     let isActive = true;
     async function loadAiHealth() {
       try {
+        const query = new URLSearchParams({ range });
         const [healthRes, statsRes, cacheRes, eslRes, imagesRes, costRes, errorsRes] =
           await Promise.all([
             fetch("/api/internal/ai/health", { cache: "no-store" }),
-            fetch("/api/internal/ai/stats?range=month", { cache: "no-store" }),
+            fetch(`/api/internal/ai/stats?${query.toString()}`, { cache: "no-store" }),
             fetch("/api/internal/ai/cache", { cache: "no-store" }),
             fetch("/api/internal/ai/esl", { cache: "no-store" }),
             fetch("/api/internal/ai/images", { cache: "no-store" }),
-            fetch("/api/internal/ai/cost?range=today", { cache: "no-store" }),
-            fetch("/api/internal/ai/errors", { cache: "no-store" }),
+            fetch(`/api/internal/ai/cost?${query.toString()}`, { cache: "no-store" }),
+            fetch(`/api/internal/ai/errors?${query.toString()}`, { cache: "no-store" }),
           ]);
         if (!healthRes.ok || !statsRes.ok || !cacheRes.ok) {
           setError("AI performance is unavailable.");
@@ -142,7 +144,7 @@ export function InternalAiPanel() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [range]);
 
   if (loading) {
     return (
@@ -168,6 +170,27 @@ export function InternalAiPanel() {
 
   return (
     <div className="space-y-5 pb-24">
+      <section className="grid grid-cols-3 gap-2">
+        {[
+          ["today", "Today"],
+          ["week", "Week"],
+          ["month", "Month"],
+        ].map(([value, label]) => (
+          <button
+            className={`h-9 rounded-full text-[12px] ${
+              range === value
+                ? "bg-[#f7f1e6] text-[#3b3f6e]"
+                : "bg-[#2b2b2f99] text-[#f7f1e699]"
+            }`}
+            key={value}
+            onClick={() => setRange(value as typeof range)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </section>
+
       <section className="flex items-center justify-between rounded-[12px] bg-[#2b2b2fcc] px-4 py-3">
         {[
           ["Gemini", payload.health.gemini],

@@ -27,6 +27,7 @@ function formatDate(value?: string | null) {
 }
 
 export function InternalProductPanel() {
+  const [range, setRange] = useState<"today" | "week" | "month" | "all">("today");
   const [stats, setStats] = useState<InternalProductStats | null>(null);
   const [schools, setSchools] = useState<InternalProductSchool[]>([]);
   const [errors, setErrors] = useState<InternalProductError[]>([]);
@@ -38,11 +39,12 @@ export function InternalProductPanel() {
     let isActive = true;
     async function loadProductHealth() {
       try {
+        const query = new URLSearchParams({ range });
         const [statsRes, schoolsRes, errorsRes, connectivityRes] =
           await Promise.all([
-            fetch("/api/internal/product/stats", { cache: "no-store" }),
+            fetch(`/api/internal/product/stats?${query.toString()}`, { cache: "no-store" }),
             fetch("/api/internal/product/schools", { cache: "no-store" }),
-            fetch("/api/internal/product/errors", { cache: "no-store" }),
+            fetch(`/api/internal/product/errors?${query.toString()}`, { cache: "no-store" }),
             fetch("/api/internal/product/connectivity", { cache: "no-store" }),
           ]);
         if (!statsRes.ok || !schoolsRes.ok) {
@@ -71,7 +73,7 @@ export function InternalProductPanel() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [range]);
 
   const maxActivity = useMemo(() => {
     return Math.max(1, ...(stats?.session_activity_7d ?? []).map((item) => item.count));
@@ -101,10 +103,35 @@ export function InternalProductPanel() {
 
   return (
     <div className="space-y-5 pb-24">
+      <section className="grid grid-cols-4 gap-2">
+        {[
+          ["today", "Today"],
+          ["week", "Week"],
+          ["month", "Month"],
+          ["all", "All"],
+        ].map(([value, label]) => (
+          <button
+            className={`h-9 rounded-full text-[12px] ${
+              range === value
+                ? "bg-[#f7f1e6] text-[#3b3f6e]"
+                : "bg-[#2b2b2f99] text-[#f7f1e699]"
+            }`}
+            key={value}
+            onClick={() => setRange(value as typeof range)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </section>
+
       <section className="grid grid-cols-2 gap-2">
         <ProductCard label="Active schools" value={stats.active_schools} />
         <ProductCard label="Active students" value={stats.active_students} />
-        <ProductCard label="Sessions today" value={stats.sessions_today} />
+        <ProductCard
+          label={range === "today" ? "Sessions today" : `Sessions ${range}`}
+          value={stats.sessions_today}
+        />
         <ProductCard label="Lessons published" value={stats.lessons_published} />
       </section>
 
@@ -177,7 +204,7 @@ export function InternalProductPanel() {
           </div>
         ) : (
           <p className="mt-3 text-center text-[13px] text-[#7ab87a]">
-            No errors in the last 24 hours
+            No errors in this range
           </p>
         )}
       </section>
