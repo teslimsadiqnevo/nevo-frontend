@@ -26,6 +26,12 @@ function formatDate(value?: string | null) {
   return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
+function sessionLabel(range: "today" | "week" | "month" | "all") {
+  if (range === "today") return "Sessions today";
+  if (range === "all") return "Sessions all time";
+  return `Sessions this ${range}`;
+}
+
 export function InternalProductPanel() {
   const [range, setRange] = useState<"today" | "week" | "month" | "all">("today");
   const [stats, setStats] = useState<InternalProductStats | null>(null);
@@ -128,10 +134,7 @@ export function InternalProductPanel() {
       <section className="grid grid-cols-2 gap-2">
         <ProductCard label="Active schools" value={stats.active_schools} />
         <ProductCard label="Active students" value={stats.active_students} />
-        <ProductCard
-          label={range === "today" ? "Sessions today" : `Sessions ${range}`}
-          value={stats.sessions_today}
-        />
+        <ProductCard label={sessionLabel(range)} value={stats.sessions_today} />
         <ProductCard label="Lessons published" value={stats.lessons_published} />
       </section>
 

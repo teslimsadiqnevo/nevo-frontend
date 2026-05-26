@@ -168,6 +168,11 @@ export function InternalAiPanel() {
     );
   }
 
+  const hasCacheTelemetry =
+    payload.cache.cache_hit_rate > 0 ||
+    payload.cache.avg_cached_response_ms > 0 ||
+    payload.cache.avg_live_response_ms > 0;
+
   return (
     <div className="space-y-5 pb-24">
       <section className="grid grid-cols-3 gap-2">
@@ -208,7 +213,11 @@ export function InternalAiPanel() {
         <p className="mb-3 text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
           Pre-cache performance
         </p>
-        {payload.cache.cache_hit_rate < 70 ? (
+        {!hasCacheTelemetry ? (
+          <p className="mb-3 rounded-[10px] bg-[#9a9ccb22] p-3 text-[12px] text-[#f7f1e699]">
+            No cache hit or miss telemetry yet. This will populate as students use adaptive controls.
+          </p>
+        ) : payload.cache.cache_hit_rate < 70 ? (
           <p className="mb-3 rounded-[10px] bg-[#e8a84a22] p-3 text-[12px] text-[#e8a84a]">
             Run pre-cache before the next session. Current cache hit telemetry is below pilot target.
           </p>
