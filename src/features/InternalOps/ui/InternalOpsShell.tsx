@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
 import { InternalLivePanel } from "./InternalLivePanel";
 import { InternalPilotPanel } from "./InternalPilotPanel";
+import { InternalProductPanel } from "./InternalProductPanel";
 import type {
   InternalHealth,
   InternalOpsTab,
@@ -123,31 +124,6 @@ function FoundationMetric({
   );
 }
 
-function StatCard({
-  number,
-  label,
-  tone = "cream",
-}: {
-  number: string;
-  label: string;
-  tone?: "cream" | "green" | "amber";
-}) {
-  const color =
-    tone === "green"
-      ? "text-[#7ab87a]"
-      : tone === "amber"
-        ? "text-[#e8a84a]"
-        : "text-[#f7f1e6]";
-  return (
-    <article className="rounded-[12px] bg-[#2b2b2f99] p-4">
-      <p className={`text-[28px] font-bold leading-none ${color}`}>{number}</p>
-      <p className="mt-2 text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-        {label}
-      </p>
-    </article>
-  );
-}
-
 function PlaceholderCard({
   eyebrow,
   title,
@@ -186,21 +162,7 @@ function TabContent({
   }
 
   if (activeTab === "product") {
-    return (
-      <div className="space-y-5 pb-24">
-        <div className="grid grid-cols-2 gap-2">
-          <StatCard label="Active schools" number="0" />
-          <StatCard label="Sessions today" number="0" />
-          <StatCard label="Active students" number="0" />
-          <StatCard label="Lessons published" number="0" />
-        </div>
-        <PlaceholderCard
-          body="No product health feed is connected yet. Batch 8 will add school activity, errors, and connectivity data."
-          eyebrow="Product health"
-          title="No product events"
-        />
-      </div>
-    );
+    return <InternalProductPanel />;
   }
 
   return (

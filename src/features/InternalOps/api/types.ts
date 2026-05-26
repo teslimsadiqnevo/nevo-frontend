@@ -79,3 +79,41 @@ export type InternalPilotMetrics = {
     ignored: number;
   };
 };
+
+export type InternalProductStats = {
+  active_schools: number;
+  active_students: number;
+  sessions_today: number;
+  lessons_published: number;
+  session_activity_7d: Array<{
+    label: string;
+    date: string;
+    count: number;
+  }>;
+};
+
+export type InternalProductSchool = {
+  school_id: string;
+  school_name: string;
+  location?: string | null;
+  active_students: number;
+  teacher_count: number;
+  class_count: number;
+  last_session_date?: string | null;
+  completion_rate: number;
+  status: string;
+};
+
+export type InternalProductError = {
+  type: string;
+  timestamp: string;
+  details?: string | null;
+  severity: string;
+};
+
+export type InternalConnectivityEvent = {
+  timestamp: string;
+  duration_seconds: number;
+  sessions_affected: number;
+  details?: string | null;
+};
