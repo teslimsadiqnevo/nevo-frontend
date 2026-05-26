@@ -1,4 +1,5 @@
 export { InternalLoginScreen } from "./ui/InternalLoginScreen";
+export { InternalAiPanel } from "./ui/InternalAiPanel";
 export { InternalLogEntryForm } from "./ui/InternalLogEntryForm";
 export { InternalLivePanel } from "./ui/InternalLivePanel";
 export { InternalOpsShell } from "./ui/InternalOpsShell";

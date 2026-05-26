@@ -143,7 +143,7 @@ export function InternalProductPanel() {
                       {school.school_name}
                     </h2>
                     <p className="mt-1 text-[12px] text-[#f7f1e699]">
-                      {school.active_students} students · {school.teacher_count} teachers ·{" "}
+                      {school.active_students} students / {school.teacher_count} teachers /{" "}
                       {school.class_count} classes
                     </p>
                   </div>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
+import { InternalAiPanel } from "./InternalAiPanel";
 import { InternalLivePanel } from "./InternalLivePanel";
 import { InternalPilotPanel } from "./InternalPilotPanel";
 import { InternalProductPanel } from "./InternalProductPanel";
@@ -101,51 +102,6 @@ function OpsIcon({
   );
 }
 
-function statusColor(status?: string) {
-  if (status === "ok") return "bg-[#7ab87a]";
-  if (status === "down") return "bg-[#c0392b]";
-  return "bg-[#e8a84a]";
-}
-
-function FoundationMetric({
-  label,
-  status,
-}: {
-  label: string;
-  status?: string;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-2 rounded-full bg-[#2b2b2fcc] px-3 py-2">
-      <span className={`h-2 w-2 shrink-0 rounded-full ${statusColor(status)}`} />
-      <span className="truncate text-[11px] font-normal uppercase text-[#f7f1e699]">
-        {label}
-      </span>
-    </div>
-  );
-}
-
-function PlaceholderCard({
-  eyebrow,
-  title,
-  body,
-}: {
-  eyebrow: string;
-  title: string;
-  body: string;
-}) {
-  return (
-    <article className="rounded-[12px] bg-[#2b2b2f99] p-4">
-      <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-        {eyebrow}
-      </p>
-      <h2 className="mt-2 text-[17px] font-bold text-[#f7f1e6]">{title}</h2>
-      <p className="mt-2 text-[13px] font-normal leading-5 text-[#f7f1e6b3]">
-        {body}
-      </p>
-    </article>
-  );
-}
-
 function TabContent({
   activeTab,
   health,
@@ -165,25 +121,7 @@ function TabContent({
     return <InternalProductPanel />;
   }
 
-  return (
-    <div className="space-y-5 pb-24">
-      <section className="grid grid-cols-3 gap-2">
-        <FoundationMetric label="Gemini" status={health?.ai} />
-        <FoundationMetric label="Fallback" status={health?.ai} />
-        <FoundationMetric label="Cache" status={health?.cache} />
-      </section>
-      <PlaceholderCard
-        body="No AI performance metrics are connected yet. Batch 9 will add pre-cache hit rate, response times, ESL modifier performance, image fetch stats, cost, and AI errors."
-        eyebrow="Pre-cache performance"
-        title="Waiting for cache metrics"
-      />
-      <PlaceholderCard
-        body="The DB currently has adapted lessons and transform logs, but no live session signals yet. That is why this screen stays in foundation mode for Batch 1."
-        eyebrow="AI reality check"
-        title="Foundation ready"
-      />
-    </div>
-  );
+  return <InternalAiPanel />;
 }
 
 export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {

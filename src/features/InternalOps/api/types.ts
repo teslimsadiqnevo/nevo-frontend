@@ -117,3 +117,58 @@ export type InternalConnectivityEvent = {
   sessions_affected: number;
   details?: string | null;
 };
+
+export type InternalAiHealth = {
+  gemini: "ok" | "degraded" | "down" | string;
+  fallback: "ok" | "degraded" | "down" | string;
+  cache: "ok" | "degraded" | "down" | string;
+};
+
+export type InternalAiStats = {
+  avg_transform_time: number;
+  batch_success_rate: number;
+  failed_transformations: number;
+  response_times: Record<
+    "simplify" | "expand" | "slower" | "speed_up",
+    { avg_seconds: number; last_10: number[] }
+  >;
+};
+
+export type InternalAiCache = {
+  cache_hit_rate: number;
+  avg_cached_response_ms: number;
+  avg_live_response_ms: number;
+  coverage: {
+    simplify_pct: number;
+    expand_pct: number;
+    slower_pct: number;
+  };
+};
+
+export type InternalAiEsl = {
+  esl_student_count: number;
+  esl_pct_of_total: number;
+  esl_avg_comprehension_score?: number | null;
+  standard_avg_comprehension_score?: number | null;
+};
+
+export type InternalAiImages = {
+  image_fetch_success_rate: number;
+  avg_fetch_time: number;
+  cache_hit_rate: number;
+};
+
+export type InternalAiCost = {
+  cost_today_ngn: number;
+  cost_today_usd: number;
+  breakdown: Record<string, number>;
+  cost_week: number;
+  cost_month: number;
+};
+
+export type InternalAiError = {
+  type: string;
+  timestamp: string;
+  details?: string | null;
+  severity: string;
+};
