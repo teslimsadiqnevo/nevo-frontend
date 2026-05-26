@@ -1,17 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import type { InternalPilotSchool } from "../api/types";
 
 const today = new Date().toISOString().slice(0, 10);
 
 export function InternalLogEntryForm() {
   const router = useRouter();
+  const [schools, setSchools] = useState<InternalPilotSchool[]>([]);
   const [form, setForm] = useState({
     log_date: today,
+    school_id: "",
     school_name: "",
     location: "Lagos Island",
+    class_id: "",
     class_name: "",
     subject: "",
     teacher_name: "",
@@ -26,15 +30,51 @@ export function InternalLogEntryForm() {
     tts_activated: "0",
     esl_simplify_language_access: "0",
     pre_cache_performance: "mixed",
+    device_failures: "false",
+    device_failure_notes: "",
+    connectivity_issues: "false",
+    connectivity_notes: "",
+    app_errors: "false",
+    app_error_notes: "",
     notable_moments: "",
     teacher_confidence_level: "3",
     teacher_feedback: "",
+    struggled_and_recovered: "",
+    disengaged_throughout: "",
+    positive_reaction: "",
+    accommodation_working: "",
   });
   const [status, setStatus] = useState("");
   const [saving, setSaving] = useState(false);
 
   function updateField(name: string, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
+  }
+
+  useEffect(() => {
+    let isActive = true;
+    async function loadSchools() {
+      const response = await fetch("/api/internal/pilot/schools", {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const data = await response.json().catch(() => ({ schools: [] }));
+      if (isActive) setSchools(data.schools ?? []);
+    }
+    loadSchools();
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  function handleSchoolChange(schoolId: string) {
+    const selected = schools.find((school) => school.school_id === schoolId);
+    setForm((current) => ({
+      ...current,
+      school_id: schoolId,
+      school_name: selected?.school_name ?? "",
+      location: selected?.location ?? current.location,
+    }));
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -58,6 +98,9 @@ export function InternalLogEntryForm() {
         slower_used: Number(form.slower_used),
         tts_activated: Number(form.tts_activated),
         esl_simplify_language_access: Number(form.esl_simplify_language_access),
+        device_failures: form.device_failures === "true",
+        connectivity_issues: form.connectivity_issues === "true",
+        app_errors: form.app_errors === "true",
         teacher_confidence_level: Number(form.teacher_confidence_level),
       }),
     });
@@ -101,12 +144,26 @@ export function InternalLogEntryForm() {
             type="date"
             value={form.log_date}
           />
-          <input
+          <select
             className={inputClass}
-            onChange={(event) => updateField("school_name", event.target.value)}
-            placeholder="School"
-            value={form.school_name}
-          />
+            onChange={(event) => handleSchoolChange(event.target.value)}
+            value={form.school_id}
+          >
+            <option value="">Select school</option>
+            {schools.map((school) => (
+              <option key={school.school_id} value={school.school_id}>
+                {school.school_name}
+              </option>
+            ))}
+          </select>
+          {!schools.length ? (
+            <input
+              className={inputClass}
+              onChange={(event) => updateField("school_name", event.target.value)}
+              placeholder="School"
+              value={form.school_name}
+            />
+          ) : null}
           <select
             className={inputClass}
             onChange={(event) => updateField("location", event.target.value)}
@@ -133,6 +190,28 @@ export function InternalLogEntryForm() {
             placeholder="Teacher name"
             value={form.teacher_name}
           />
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              className={inputClass}
+              max="5"
+              min="1"
+              onChange={(event) => updateField("engagement_level", event.target.value)}
+              placeholder="Engagement 1-5"
+              type="number"
+              value={form.engagement_level}
+            />
+            <input
+              className={inputClass}
+              max="5"
+              min="1"
+              onChange={(event) =>
+                updateField("teacher_confidence_level", event.target.value)
+              }
+              placeholder="Teacher confidence 1-5"
+              type="number"
+              value={form.teacher_confidence_level}
+            />
+          </div>
 
           <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
             Completion
@@ -191,6 +270,34 @@ export function InternalLogEntryForm() {
             <option value="mixed">Mixed</option>
           </select>
 
+          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
+            Technical
+          </p>
+          {[
+            ["device_failures", "Device failures", "device_failure_notes"],
+            ["connectivity_issues", "Connectivity issues", "connectivity_notes"],
+            ["app_errors", "App errors", "app_error_notes"],
+          ].map(([toggleName, label, notesName]) => (
+            <div className="space-y-2" key={toggleName}>
+              <select
+                className={inputClass}
+                onChange={(event) => updateField(toggleName, event.target.value)}
+                value={form[toggleName as keyof typeof form]}
+              >
+                <option value="false">{label}: No</option>
+                <option value="true">{label}: Yes</option>
+              </select>
+              {form[toggleName as keyof typeof form] === "true" ? (
+                <textarea
+                  className={textareaClass}
+                  onChange={(event) => updateField(notesName, event.target.value)}
+                  placeholder={`${label} notes`}
+                  value={form[notesName as keyof typeof form]}
+                />
+              ) : null}
+            </div>
+          ))}
+
           <textarea
             className={textareaClass}
             onChange={(event) => updateField("notable_moments", event.target.value)}
@@ -203,6 +310,24 @@ export function InternalLogEntryForm() {
             placeholder="Teacher feedback"
             value={form.teacher_feedback}
           />
+
+          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
+            Student moments
+          </p>
+          {[
+            ["struggled_and_recovered", "Student who struggled and recovered"],
+            ["disengaged_throughout", "Student who was disengaged throughout"],
+            ["positive_reaction", "Unprompted positive reaction"],
+            ["accommodation_working", "Accommodation observed working"],
+          ].map(([name, placeholder]) => (
+            <textarea
+              className={textareaClass}
+              key={name}
+              onChange={(event) => updateField(name, event.target.value)}
+              placeholder={placeholder}
+              value={form[name as keyof typeof form]}
+            />
+          ))}
 
           {status ? <p className="text-[13px] text-[#c0392b]">{status}</p> : null}
           <button
