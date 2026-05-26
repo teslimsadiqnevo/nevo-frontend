@@ -63,28 +63,32 @@ export function InternalLivePanel({
   useEffect(() => {
     let isActive = true;
 
-    async function loadLiveData() {
+    async function loadLiveData(includeSignals = false) {
       try {
-        const [sessionResponse, signalsResponse, healthResponse] =
+        const [sessionResponse, healthResponse, signalsResponse] =
           await Promise.all([
             fetch("/api/internal/live/session", { cache: "no-store" }),
-            fetch("/api/internal/live/signals?limit=30", { cache: "no-store" }),
             fetch("/api/internal/live/health", { cache: "no-store" }),
+            includeSignals
+              ? fetch("/api/internal/live/signals?limit=30", { cache: "no-store" })
+              : Promise.resolve(null),
           ]);
 
         if (!isActive) return;
 
-        if (!sessionResponse.ok || !signalsResponse.ok) {
+        if (!sessionResponse.ok) {
           setError("Live monitor is degraded.");
           return;
         }
 
         const sessionData = await sessionResponse.json();
-        const signalsData = await signalsResponse.json();
         const healthData = healthResponse.ok ? await healthResponse.json() : null;
 
         setSession(sessionData);
-        setSignals(signalsData.events ?? []);
+        if (signalsResponse?.ok) {
+          const signalsData = await signalsResponse.json();
+          setSignals(signalsData.events ?? []);
+        }
         if (healthData) setHealth(healthData);
         setError("");
       } catch {
@@ -94,11 +98,27 @@ export function InternalLivePanel({
       }
     }
 
-    loadLiveData();
-    const interval = window.setInterval(loadLiveData, 10000);
+    loadLiveData(true);
+    const interval = window.setInterval(() => loadLiveData(false), 10000);
+    const source = new EventSource("/api/internal/live/signals/stream");
+    source.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (isActive && Array.isArray(payload.events)) {
+          setSignals(payload.events);
+          setError("");
+        }
+      } catch {
+        if (isActive) setError("Live signal stream is degraded.");
+      }
+    };
+    source.onerror = () => {
+      if (isActive) setError("Live signal stream is reconnecting.");
+    };
     return () => {
       isActive = false;
       window.clearInterval(interval);
+      source.close();
     };
   }, []);
 
