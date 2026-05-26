@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
+import { InternalLivePanel } from "./InternalLivePanel";
 import type {
   InternalHealth,
   InternalOpsTab,
@@ -176,35 +177,7 @@ function TabContent({
   health: InternalHealth | null;
 }) {
   if (activeTab === "live") {
-    return (
-      <div className="space-y-5 pb-24">
-        <section className="rounded-[12px] bg-[#2b2b2f99] p-4">
-          <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-            Current session
-          </p>
-          <div className="mt-3 rounded-[10px] border border-[#f7f1e633] px-4 py-5 text-center text-[14px] text-[#f7f1e680]">
-            No session running
-          </div>
-        </section>
-
-        <section>
-          <p className="mb-3 text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-            Live signals
-          </p>
-          <div className="rounded-[12px] bg-[#2b2b2f99] p-4 text-[13px] leading-5 text-[#f7f1e699]">
-            No live signals yet. Batch 4 will connect the session stream once
-            signal instrumentation is in place.
-          </div>
-        </section>
-
-        <section className="grid grid-cols-2 gap-2">
-          <FoundationMetric label="API" status={health?.api} />
-          <FoundationMetric label="DB" status={health?.db} />
-          <FoundationMetric label="AI" status={health?.ai} />
-          <FoundationMetric label="Cache" status={health?.cache} />
-        </section>
-      </div>
-    );
+    return <InternalLivePanel initialHealth={health} />;
   }
 
   if (activeTab === "pilot") {
@@ -343,7 +316,7 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
           <div>
             <NevoLogo alt="Nevo" height={24} variant="light" width={80} />
             <p className="mt-2 text-[12px] text-[#f7f1e680]">
-              {user ? `${user.name} · ${user.role}` : "Internal Dashboard"}
+              {user ? `${user.name} - ${user.role}` : "Internal Dashboard"}
             </p>
           </div>
           <span className="rounded-full bg-[#2b2b2f99] px-3 py-2 text-[12px] text-[#f7f1e699]">
