@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
 import { InternalLivePanel } from "./InternalLivePanel";
+import { InternalPilotPanel } from "./InternalPilotPanel";
 import type {
   InternalHealth,
   InternalOpsTab,
@@ -181,24 +182,7 @@ function TabContent({
   }
 
   if (activeTab === "pilot") {
-    return (
-      <div className="space-y-5 pb-24">
-        <div className="grid grid-cols-2 gap-2">
-          <StatCard label="Lessons completed" number="0" />
-          <StatCard label="Completion rate" number="0%" tone="amber" />
-        </div>
-        <PlaceholderCard
-          body="No pilot metrics are connected yet. Batch 6 will add completion, adaptive-control, ESL, and checkpoint accuracy metrics from the backend."
-          eyebrow="Completion and engagement"
-          title="Pre-pilot foundation"
-        />
-        <PlaceholderCard
-          body="No observation logs submitted yet. Batch 7 will add the daily log form and historical log cards."
-          eyebrow="Observation log"
-          title="No log entries"
-        />
-      </div>
-    );
+    return <InternalPilotPanel />;
   }
 
   if (activeTab === "product") {
