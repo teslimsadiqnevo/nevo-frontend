@@ -2,7 +2,11 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import type { InternalPilotMetrics } from "../api/types";
+import type {
+  InternalObservationLog,
+  InternalPilotMetrics,
+  InternalPilotSchool,
+} from "../api/types";
 
 function metricTone(value: number, good: number, okay: number) {
   if (value >= good) return "text-[#7ab87a]";
@@ -45,6 +49,10 @@ function MiniStat({ label, value }: { label: string; value: number }) {
 
 export function InternalPilotPanel() {
   const [metrics, setMetrics] = useState<InternalPilotMetrics | null>(null);
+  const [schools, setSchools] = useState<InternalPilotSchool[]>([]);
+  const [logs, setLogs] = useState<InternalObservationLog[]>([]);
+  const [selectedSchool, setSelectedSchool] = useState("all");
+  const [location, setLocation] = useState<"all" | "island" | "mainland">("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -53,16 +61,30 @@ export function InternalPilotPanel() {
 
     async function loadMetrics() {
       try {
-        const response = await fetch("/api/internal/pilot/metrics", {
-          cache: "no-store",
+        const params = new URLSearchParams({
+          school: selectedSchool,
+          location,
         });
-        if (!response.ok) {
+        const [metricsResponse, schoolsResponse, logsResponse] = await Promise.all([
+          fetch(`/api/internal/pilot/metrics?${params.toString()}`, {
+            cache: "no-store",
+          }),
+          fetch("/api/internal/pilot/schools", { cache: "no-store" }),
+          fetch("/api/internal/pilot/logs", { cache: "no-store" }),
+        ]);
+        if (!metricsResponse.ok) {
           setError("Pilot metrics are unavailable.");
           return;
         }
-        const data = await response.json();
+        const data = await metricsResponse.json();
+        const schoolsData = schoolsResponse.ok
+          ? await schoolsResponse.json()
+          : { schools: [] };
+        const logsData = logsResponse.ok ? await logsResponse.json() : { logs: [] };
         if (!isActive) return;
         setMetrics(data);
+        setSchools(schoolsData.schools ?? []);
+        setLogs(logsData.logs ?? []);
         setError("");
       } catch {
         if (isActive) setError("Pilot metrics are unavailable.");
@@ -75,7 +97,7 @@ export function InternalPilotPanel() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [location, selectedSchool]);
 
   if (loading) {
     return (
@@ -99,6 +121,44 @@ export function InternalPilotPanel() {
 
   return (
     <div className="space-y-5 pb-24">
+      <section className="rounded-[12px] bg-[#2b2b2f99] p-3">
+        <div className="grid grid-cols-1 gap-2">
+          <select
+            aria-label="School filter"
+            className="h-10 rounded-full border border-[#f7f1e633] bg-[#2b2b2fcc] px-3 text-[13px] text-[#f7f1e6] outline-none"
+            onChange={(event) => setSelectedSchool(event.target.value)}
+            value={selectedSchool}
+          >
+            <option value="all">All schools</option>
+            {schools.map((school) => (
+              <option key={school.school_id} value={school.school_id}>
+                {school.school_name}
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              ["all", "All"],
+              ["island", "Island"],
+              ["mainland", "Mainland"],
+            ].map(([value, label]) => (
+              <button
+                className={`h-9 rounded-full text-[12px] ${
+                  location === value
+                    ? "bg-[#f7f1e6] text-[#3b3f6e]"
+                    : "bg-[#2b2b2fcc] text-[#f7f1e699]"
+                }`}
+                key={value}
+                onClick={() => setLocation(value as typeof location)}
+                type="button"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section>
         <div className="mb-3 flex items-center justify-between">
           <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
@@ -136,6 +196,18 @@ export function InternalPilotPanel() {
           <MiniStat label="Slower" value={metrics.control_usage.slower} />
           <MiniStat label="TTS" value={metrics.control_usage.tts} />
         </div>
+      </section>
+
+      <section className="rounded-[12px] bg-[#2b2b2f99] p-4">
+        <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
+          Average session time
+        </p>
+        <p className="mt-3 text-[24px] font-bold text-[#f7f1e6]">
+          {metrics.avg_session_time} mins
+        </p>
+        <p className="mt-1 text-[12px] text-[#f7f1e666]">
+          Average across tracked lesson sessions for this filter.
+        </p>
       </section>
 
       <section className="rounded-[12px] bg-[#2b2b2f99] p-4">
@@ -232,6 +304,78 @@ export function InternalPilotPanel() {
                 : `${metrics.esl_breakdown.standard_avg_score}%`
             }
           />
+        </div>
+      </section>
+
+      <section className="rounded-[12px] bg-[#2b2b2f99] p-4">
+        <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
+          Feedback prompt response
+        </p>
+        <div className="mt-3 space-y-3">
+          {[
+            ["Accepted", metrics.feedback_prompt.accepted, "bg-[#9a9ccb]"],
+            ["Dismissed", metrics.feedback_prompt.dismissed, "bg-[#f7f1e633]"],
+            ["Ignored", metrics.feedback_prompt.ignored, "bg-[#2b2b2fcc]"],
+          ].map(([label, value, color]) => (
+            <div key={label as string}>
+              <div className="mb-1 flex justify-between text-[12px] text-[#f7f1e6b3]">
+                <span>{label}</span>
+                <span>{value as number}%</span>
+              </div>
+              <div className="h-2 rounded-full bg-[#2b2b2fcc]">
+                <div
+                  className={`h-2 rounded-full ${color as string}`}
+                  style={{ width: `${Math.min(100, Number(value))}%` }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
+            Observation log
+          </p>
+          <span className="rounded-full bg-[#7ab87a22] px-3 py-1 text-[12px] text-[#7ab87a]">
+            {logs.length ? `Logged ${logs[0].log_date}` : "No log yet"}
+          </span>
+        </div>
+        <div className="space-y-2">
+          {logs.length ? (
+            logs.slice(0, 5).map((log) => (
+              <article className="rounded-[12px] bg-[#2b2b2f99] p-4" key={log.id}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-[13px] font-semibold text-[#f7f1e6]">
+                      {new Date(log.log_date).toLocaleDateString([], {
+                        month: "short",
+                        day: "numeric",
+                      })}{" "}
+                      - {log.school_name}
+                    </h2>
+                    <p className="mt-1 text-[12px] text-[#f7f1e699]">
+                      {log.class_name}
+                      {log.location ? ` / ${log.location}` : ""}
+                    </p>
+                  </div>
+                  <span className="text-[12px] text-[#f7f1e680]">
+                    {log.engagement_level ?? 0}/5
+                  </span>
+                </div>
+                {log.notable_moments ? (
+                  <p className="mt-3 line-clamp-2 text-[12px] leading-5 text-[#f7f1e680]">
+                    {log.notable_moments}
+                  </p>
+                ) : null}
+              </article>
+            ))
+          ) : (
+            <div className="rounded-[12px] bg-[#2b2b2f99] p-4 text-center text-[13px] text-[#f7f1e666]">
+              No observation logs have been submitted yet.
+            </div>
+          )}
         </div>
       </section>
     </div>

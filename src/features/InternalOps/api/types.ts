@@ -80,6 +80,39 @@ export type InternalPilotMetrics = {
   };
 };
 
+export type InternalPilotSchool = {
+  school_id: string;
+  school_name: string;
+  location?: string | null;
+  active_students: number;
+  class_count: number;
+};
+
+export type InternalObservationLog = {
+  id: string;
+  log_date: string;
+  school_id?: string | null;
+  class_id?: string | null;
+  school_name: string;
+  location?: string | null;
+  class_name: string;
+  subject?: string | null;
+  teacher_name?: string | null;
+  students_present: number;
+  lessons_started: number;
+  lessons_completed: number;
+  average_session_time_minutes?: number | null;
+  engagement_level?: number | null;
+  notable_moments?: string | null;
+  simplify_used: number;
+  expand_used: number;
+  slower_used: number;
+  tts_activated: number;
+  esl_simplify_language_access: number;
+  pre_cache_performance?: string | null;
+  submitted_at: string;
+};
+
 export type InternalProductStats = {
   active_schools: number;
   active_students: number;
