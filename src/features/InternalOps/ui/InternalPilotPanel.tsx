@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { InternalPilotMetrics } from "../api/types";
 
 function metricTone(value: number, good: number, okay: number) {
@@ -99,9 +100,17 @@ export function InternalPilotPanel() {
   return (
     <div className="space-y-5 pb-24">
       <section>
-        <p className="mb-3 text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-          Completion and engagement
-        </p>
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
+            Completion and engagement
+          </p>
+          <Link
+            className="rounded-full bg-[#9a9ccb33] px-3 py-1 text-[12px] text-[#f7f1e6]"
+            href="/internal/log-entry"
+          >
+            Log today
+          </Link>
+        </div>
         <div className="grid grid-cols-2 gap-2">
           <MetricCard
             label="Lessons completed"
