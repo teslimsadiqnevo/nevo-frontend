@@ -9,11 +9,7 @@ import { InternalLivePanel } from "./InternalLivePanel";
 import { InternalPilotPanel } from "./InternalPilotPanel";
 import { InternalProductPanel } from "./InternalProductPanel";
 import { internalTheme } from "./internalOpsTheme";
-import type {
-  InternalHealth,
-  InternalOpsTab,
-  InternalOpsUser,
-} from "../api/types";
+import type { InternalHealth, InternalOpsTab } from "../api/types";
 
 const TAB_ITEMS: Array<{
   id: InternalOpsTab;
@@ -27,7 +23,6 @@ const TAB_ITEMS: Array<{
 ];
 
 let foundationCache: {
-  user: InternalOpsUser | null;
   health: InternalHealth | null;
   updatedAt: number;
 } | null = null;
@@ -133,9 +128,6 @@ function TabContent({
 
 export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
   const router = useRouter();
-  const [user, setUser] = useState<InternalOpsUser | null>(
-    foundationCache?.user ?? null,
-  );
   const [health, setHealth] = useState<InternalHealth | null>(
     foundationCache?.health ?? null,
   );
@@ -162,17 +154,14 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
         return;
       }
 
-      const sessionData = await sessionResponse.json().catch(() => ({}));
       const healthResponse = await fetch("/api/internal/health", {
         cache: "no-store",
       });
       const healthData = await healthResponse.json().catch(() => ({}));
 
       if (!isActive) return;
-      setUser(sessionData.user ?? null);
       setHealth(healthResponse.ok ? healthData : null);
       foundationCache = {
-        user: sessionData.user ?? null,
         health: healthResponse.ok ? healthData : null,
         updatedAt: Date.now(),
       };
@@ -199,7 +188,7 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
     <main className="min-h-dvh bg-[#f7f1e6] text-[#3b3f6e]">
       <section className="mx-auto flex min-h-dvh w-full max-w-[390px] flex-col">
         <header className="flex h-14 items-center justify-between px-4">
-          <h1 className="text-[18px] font-bold">{activeLabel}</h1>
+          <NevoLogo alt="Nevo" height={24} width={80} />
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-2 text-[12px] font-normal text-[#7ab87a]">
               <span className="h-2 w-2 animate-pulse rounded-full bg-[#7ab87a]" />
@@ -216,13 +205,8 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
           </div>
         </header>
 
-        <div className="flex items-center justify-between px-4 pb-4">
-          <div>
-            <NevoLogo alt="Nevo" height={24} width={80} />
-            <p className="mt-2 text-[12px] text-[#3b3f6e99]">
-              {user ? `${user.name} - ${user.role}` : "Internal Dashboard"}
-            </p>
-          </div>
+        <div className="flex items-center justify-between px-4 pb-4 pt-1">
+          <h1 className="text-[18px] font-bold">{activeLabel}</h1>
           <span className="rounded-full border border-[#3b3f6e22] bg-white/70 px-3 py-2 text-[12px] text-[#3b3f6e99]">
             {health?.environment ?? "env"}
           </span>
