@@ -370,3 +370,45 @@ export type InternalAdminLessonDetail = InternalAdminLessonSummary & {
   assignments: Array<Record<string, unknown>>;
   variants: Array<Record<string, unknown>>;
 };
+
+export type InternalSupportIssue = {
+  key: string;
+  label: string;
+  count: number;
+  severity: "ok" | "info" | "warning" | "error" | string;
+  description: string;
+};
+
+export type InternalSupportOverview = {
+  issues: InternalSupportIssue[];
+  last_event_at?: string | null;
+};
+
+export type InternalSupportAction = {
+  key: string;
+  label: string;
+  description: string;
+  target_type?: string | null;
+  requires_target: boolean;
+  supports_execute: boolean;
+  severity: "info" | "warning" | "error" | string;
+};
+
+export type InternalSupportActionResult = {
+  action: string;
+  dry_run: boolean;
+  status: string;
+  summary: string;
+  affected_count: number;
+  details: Record<string, unknown>;
+};
+
+export type InternalAuditEvent = {
+  id: string;
+  event_type: string;
+  severity: "info" | "warning" | "error" | string;
+  source: string;
+  description: string;
+  occurred_at: string;
+  details: Record<string, unknown>;
+};

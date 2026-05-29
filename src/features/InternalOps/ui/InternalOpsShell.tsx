@@ -16,6 +16,7 @@ import { InternalLivePanel } from "./InternalLivePanel";
 import { InternalPilotPanel } from "./InternalPilotPanel";
 import { InternalProductPanel } from "./InternalProductPanel";
 import { InternalSchoolsPanel } from "./InternalSchoolsPanel";
+import { InternalSupportPanel } from "./InternalSupportPanel";
 import { internalTheme } from "./internalOpsTheme";
 import type { InternalHealth, InternalOpsTab } from "../api/types";
 
@@ -237,6 +238,10 @@ function TabContent({
 
   if (activeTab === "lessons") {
     return <InternalLessonsPanel />;
+  }
+
+  if (activeTab === "support") {
+    return <InternalSupportPanel />;
   }
 
   return (
