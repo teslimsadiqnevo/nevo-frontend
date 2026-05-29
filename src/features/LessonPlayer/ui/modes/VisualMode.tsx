@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { StageShell } from '../StageShell';
+import { getRenderingPreferenceStyle } from '../renderingPreferences';
 import type { LessonPaceDensity, Stage, StagePhaseKey, ToolbarState } from '../../api/types';
 
 const STAGE_VISUAL_INTENT: Record<StagePhaseKey, string> = {
@@ -24,6 +25,7 @@ type VisualModeProps = {
     onToolbarChange: (state: ToolbarState) => void;
     headerAction?: ReactNode;
     paceDensity: LessonPaceDensity;
+    onImageViewed?: () => void;
 };
 
 export function VisualMode({
@@ -38,9 +40,9 @@ export function VisualMode({
     onToolbarChange,
     headerAction,
     paceDensity,
+    onImageViewed,
 }: VisualModeProps) {
     const content = stage.modes.visual;
-    const stageKey: StagePhaseKey = stage.phase;
     const label =
         toolbarState === 'simplified'
             ? stage.labelSimplified || stage.label
@@ -55,6 +57,7 @@ export function VisualMode({
               : content.body;
 
     const isCalmDensity = paceDensity === 'calm';
+    const renderingStyle = getRenderingPreferenceStyle(content.renderingPreferences);
     const visualContext = [
         stage.phase,
         stage.label,
@@ -181,12 +184,20 @@ export function VisualMode({
 
     const hasResolvedImage = Boolean(resolvedImageState.imageUrl);
 
+    useEffect(() => {
+        if (!hasResolvedImage) return;
+        onImageViewed?.();
+    }, [hasResolvedImage, onImageViewed, visualScopeKey]);
+
     return (
         <StageShell
             pillText={stage.pillText}
             label={label}
             body={
-                <p className={isCalmDensity ? 'text-[18px] leading-8 text-graphite' : 'text-[15px] leading-6 text-graphite'}>
+                <p
+                    className={isCalmDensity ? 'text-[18px] leading-8 text-graphite' : 'text-[15px] leading-6 text-graphite'}
+                    style={renderingStyle}
+                >
                     {body}
                 </p>
             }

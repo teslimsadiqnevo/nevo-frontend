@@ -1,6 +1,6 @@
 'use client';
 
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
     useRegistrationStore,
@@ -10,6 +10,10 @@ import {
 import { getDashboardPath, useApiTokenExpiryRedirect } from '@/shared/lib';
 import { AskNevoDrawer } from '@/widgets/AskNevoDrawer';
 import { getStudentProfile, updateLessonProgress } from '@/features/Dashboard/api/student';
+import {
+    fetchReorientationAlternatives,
+    type ReorientationAlternative,
+} from '../api/adaptiveControls';
 import { useLessonPlayer } from '../api/useLessonPlayer';
 import type { Stage, StageKey, ToolbarState } from '../api/types';
 import { VisualMode } from './modes/VisualMode';
@@ -24,6 +28,13 @@ import { LessonReorientationOverlay } from './LessonReorientationOverlay';
 import { LessonPlayerSkeleton } from './LessonPlayerSkeleton';
 import type { LessonPaceDensity } from '../api/types';
 import { preloadLessonTts, queueLessonTtsPreloadBatch, stopAllLessonTts } from '../api/useLessonTts';
+import {
+    ensureLessonSession,
+    getDeliveredMode,
+    getStageConceptId,
+    logLessonSessionSignal,
+    type LessonSessionSignalPayload,
+} from '../api/lessonSessionTelemetry';
 
 type LessonPlayerProps = {
     lessonId: string;
@@ -77,33 +88,143 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const [showPaceOverlay, setShowPaceOverlay] = useState(false);
     const [showReflectionOverlay, setShowReflectionOverlay] = useState(false);
     const [showReorientationOverlay, setShowReorientationOverlay] = useState(false);
+    const [reorientationOptions, setReorientationOptions] = useState<ReorientationAlternative[]>([]);
+    const [reorientationLoading, setReorientationLoading] = useState(false);
+    const [reorientationError, setReorientationError] = useState<string | null>(null);
     const [showAskNevoDrawer, setShowAskNevoDrawer] = useState(false);
     const [paceSelection, setPaceSelection] = useState<'slower' | 'steady' | 'faster'>('slower');
     const [paceDensity, setPaceDensity] = useState<LessonPaceDensity>('standard');
     const learningMode = useRegistrationStore((state) => state.learningMode);
     const setLearningMode = useRegistrationStore((state) => state.setLearningMode);
     const [resolvedLearningMode, setResolvedLearningMode] = useState<LearningMode | null>(null);
-    const progressSessionStartedAt = useRef(Date.now());
+    const [runtimeModeOverride, setRuntimeModeOverride] = useState<LearningMode | null>(null);
+    const progressSessionStartedAt = useRef(0);
     const lastProgressKey = useRef<string | null>(null);
-    const activeMode: LearningMode = resolvedLearningMode ?? learningMode;
+    const activeMode: LearningMode = runtimeModeOverride ?? resolvedLearningMode ?? learningMode;
     const scopeKey = `${lessonId}:${activeStageKey}:${activeMode}`;
     const [toolbarSession, setToolbarSession] = useState<{ scopeKey: string; state: ToolbarState }>({
         scopeKey,
         state: 'original',
     });
-    const stageOrder = data?.stageOrder ?? [];
+    const stageOrder = useMemo(() => data?.stageOrder ?? [], [data?.stageOrder]);
     const stageIndex = stageOrder.indexOf(activeStageKey);
-    const persistedLessonId = data?.originalLessonId || lessonId;
-    const progressIdCandidates = getLessonProgressIdCandidates(
-        lessonId,
-        data?.id,
-        data?.originalLessonId,
-        data?.adaptedLessonId,
+    const progressIdCandidates = useMemo(
+        () =>
+            getLessonProgressIdCandidates(
+                lessonId,
+                data?.id,
+                data?.originalLessonId,
+                data?.adaptedLessonId,
+            ),
+        [data?.adaptedLessonId, data?.id, data?.originalLessonId, lessonId],
+    );
+    const progressIdCandidateKey = progressIdCandidates.join('|');
+    const currentStageForSignal =
+        data && stageIndex >= 0
+            ? data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex]
+            : null;
+    const lessonSessionIdRef = useRef<string | null>(null);
+    const pendingSignalsRef = useRef<LessonSessionSignalPayload[]>([]);
+    const stageEnteredAtRef = useRef(0);
+    const stageToolCountsRef = useRef({ simplify: 0, expand: 0, slower: 0 });
+    const seenStageKeysRef = useRef<Set<string>>(new Set());
+    const loggedImageKeysRef = useRef<Set<string>>(new Set());
+    const loggedAudioKeysRef = useRef<Set<string>>(new Set());
+
+    const flushPendingSignals = useCallback(() => {
+        const sessionId = lessonSessionIdRef.current;
+        if (!sessionId || pendingSignalsRef.current.length === 0) return;
+
+        const pending = pendingSignalsRef.current.splice(0);
+        pending.forEach((signal) => {
+            void logLessonSessionSignal(sessionId, signal);
+        });
+    }, []);
+
+    const queueSignal = useCallback(
+        (
+            signal: Partial<LessonSessionSignalPayload> & { signal_type: string },
+            stageOverride?: Stage | null,
+        ) => {
+            const targetStage = stageOverride ?? currentStageForSignal;
+            if (!targetStage) return;
+
+            const elapsedSeconds = Math.max(
+                0,
+                Math.round((Date.now() - stageEnteredAtRef.current) / 1000),
+            );
+            const payload: LessonSessionSignalPayload = {
+                lesson_section: Math.max(0, targetStage.overallStepNumber || stageIndex + 1),
+                concept_id: getStageConceptId(targetStage),
+                learning_mode_delivered: getDeliveredMode(activeMode),
+                time_spent_seconds: elapsedSeconds,
+                simplify_count: stageToolCountsRef.current.simplify,
+                expand_count: stageToolCountsRef.current.expand,
+                slower_count: stageToolCountsRef.current.slower,
+                completion_status: 'active',
+                ...signal,
+                signal_type: signal.signal_type,
+            };
+
+            const sessionId = lessonSessionIdRef.current;
+            if (!sessionId) {
+                pendingSignalsRef.current.push(payload);
+                return;
+            }
+
+            void logLessonSessionSignal(sessionId, payload);
+        },
+        [activeMode, currentStageForSignal, stageIndex],
     );
 
     useEffect(() => {
         setActiveStageKey(stage);
     }, [stage]);
+
+    useEffect(() => {
+        const now = Date.now();
+        progressSessionStartedAt.current = now;
+        stageEnteredAtRef.current = now;
+        setRuntimeModeOverride(null);
+    }, [lessonId]);
+
+    useEffect(() => {
+        if (!data) return;
+
+        let cancelled = false;
+        const candidates = progressIdCandidateKey.split('|').filter(Boolean);
+
+        ensureLessonSession(lessonId, candidates).then((sessionId) => {
+            if (cancelled || !sessionId) return;
+            lessonSessionIdRef.current = sessionId;
+            flushPendingSignals();
+        });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [data, flushPendingSignals, lessonId, progressIdCandidateKey]);
+
+    useEffect(() => {
+        if (!currentStageForSignal || stageIndex < 0) return;
+
+        stageEnteredAtRef.current = Date.now();
+        stageToolCountsRef.current = { simplify: 0, expand: 0, slower: 0 };
+
+        const stageVisitKey = `${lessonId}:${currentStageForSignal.key}`;
+        const revisitCount = seenStageKeysRef.current.has(stageVisitKey) ? 1 : 0;
+        seenStageKeysRef.current.add(stageVisitKey);
+
+        queueSignal(
+            {
+                signal_type: revisitCount ? 'revisit' : 'concept_view',
+                revisit_count: revisitCount,
+                completion_status: 'started',
+                time_spent_seconds: 0,
+            },
+            currentStageForSignal,
+        );
+    }, [currentStageForSignal, lessonId, queueSignal, stageIndex]);
 
     useEffect(() => {
         const handlePopState = () => {
@@ -189,7 +310,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     }, [learningMode, setLearningMode]);
 
     useEffect(() => {
-        if (!data || activeMode !== 'audio' || stageIndex < 0) return;
+        if (!data || stageIndex < 0) return;
 
         const currentStage = data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex];
         const currentCacheBaseKey = getAudioCacheBaseKey(lessonId, currentStage);
@@ -243,6 +364,35 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     }, [activeMode, activeStageKey, data, lessonId, stageIndex]);
 
     useEffect(() => {
+        if (!showReorientationOverlay || !currentStageForSignal) return;
+
+        let cancelled = false;
+        setReorientationLoading(true);
+        setReorientationError(null);
+
+        fetchReorientationAlternatives(currentStageForSignal, activeMode)
+            .then((options) => {
+                if (cancelled) return;
+                setReorientationOptions(options);
+            })
+            .catch((err) => {
+                if (cancelled) return;
+                setReorientationError(
+                    err instanceof Error ? err.message : 'Could not load another approach.',
+                );
+                setReorientationOptions([]);
+            })
+            .finally(() => {
+                if (cancelled) return;
+                setReorientationLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [activeMode, currentStageForSignal, showReorientationOverlay]);
+
+    useEffect(() => {
         if (!data || stageIndex < 0) return;
 
         const previousStage = stageIndex > 0 ? stageOrder[stageIndex - 1] : null;
@@ -288,7 +438,7 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         );
     }
 
-    const currentStage = data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex];
+    const currentStage = currentStageForSignal ?? data.stages.find((current) => current.key === activeStageKey) ?? data.stages[stageIndex];
     const progress = ((stageIndex + 1) / Math.max(1, stageOrder.length)) * 100;
     const askContext = `You're on: ${data.title} · Section ${stageIndex + 1}`;
     const nextStage = stageIndex < stageOrder.length - 1 ? data.stages[stageIndex + 1] : null;
@@ -313,12 +463,21 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             return;
         }
 
+        queueSignal({
+            signal_type: 'stage_back',
+            revisit_count: 1,
+        });
         const previousStage = stageOrder[stageIndex - 1];
         navigateToStage(previousStage);
     };
 
     const goToNextStage = () => {
         stopAllLessonTts();
+        queueSignal({
+            signal_type: 'section_complete',
+            completion_status: 'complete',
+        });
+
         if (stageIndex >= stageOrder.length - 1) {
             const finalCheckpointIndex = data.microQuiz.findIndex((question) => question.isFinalCheckpoint);
             if (finalCheckpointIndex >= 0) {
@@ -347,6 +506,11 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const onToolbarChange = (nextState: ToolbarState) => {
         stopAllLessonTts();
         if ((nextState === 'simplified' || nextState === 'slower') && toolbarState === nextState) {
+            queueSignal({
+                signal_type: 'confusion',
+                simplify_count: nextState === 'simplified' ? stageToolCountsRef.current.simplify + 1 : stageToolCountsRef.current.simplify,
+                slower_count: nextState === 'slower' ? stageToolCountsRef.current.slower + 1 : stageToolCountsRef.current.slower,
+            });
             setShowReflectionOverlay(true);
             return;
         }
@@ -355,6 +519,22 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
             setPaceSelection(paceDensity === 'calm' ? 'slower' : 'steady');
             setShowPaceOverlay(true);
             return;
+        }
+
+        if (nextState === 'simplified') {
+            stageToolCountsRef.current.simplify += 1;
+            queueSignal({
+                signal_type: 'simplify',
+                simplify_count: stageToolCountsRef.current.simplify,
+            });
+        }
+
+        if (nextState === 'expanded') {
+            stageToolCountsRef.current.expand += 1;
+            queueSignal({
+                signal_type: 'expand',
+                expand_count: stageToolCountsRef.current.expand,
+            });
         }
 
         setToolbarSession({
@@ -380,10 +560,39 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         canGoForward: stageIndex < stageOrder.length - 1 || hasFinalCheckpoint,
     };
 
+    const logImageViewed = () => {
+        const imageKey = `${lessonId}:${currentStage.key}:${currentStage.modes.visual.conceptId}`;
+        if (loggedImageKeysRef.current.has(imageKey)) return;
+        loggedImageKeysRef.current.add(imageKey);
+        queueSignal({
+            signal_type: 'image_viewed',
+            image_viewed: true,
+        });
+    };
+
+    const logTtsActivated = () => {
+        const audioKey = `${lessonId}:${currentStage.key}:${toolbarState}`;
+        if (loggedAudioKeysRef.current.has(audioKey)) return;
+        loggedAudioKeysRef.current.add(audioKey);
+        queueSignal({
+            signal_type: 'tts',
+            tts_activated: true,
+            tts_completion_rate: 1,
+        });
+    };
+
     const applyPaceSelection = () => {
         stopAllLessonTts();
         const nextDensity: LessonPaceDensity = paceSelection === 'slower' ? 'calm' : 'standard';
         const nextToolbarState: ToolbarState = paceSelection === 'slower' ? 'slower' : 'original';
+
+        if (paceSelection === 'slower') {
+            stageToolCountsRef.current.slower += 1;
+            queueSignal({
+                signal_type: 'slower',
+                slower_count: stageToolCountsRef.current.slower,
+            });
+        }
 
         setPaceDensity(nextDensity);
         setToolbarSession({
@@ -396,29 +605,69 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
     const handleReflectionSelect = (optionId: string) => {
         stopAllLessonTts();
         if (optionId === 'thinking') {
+            queueSignal({
+                signal_type: 'reflection_pause',
+                confidence_self_report: 2,
+            });
             setShowReflectionOverlay(false);
             return;
         }
 
         if (optionId === 'simpler') {
+            queueSignal({
+                signal_type: 'ask_help',
+                confidence_self_report: 1,
+            });
             setShowReflectionOverlay(false);
             setShowReorientationOverlay(true);
             return;
         }
 
+        queueSignal({
+            signal_type: 'clarity',
+            confidence_self_report: 3,
+        });
         setShowReflectionOverlay(false);
         goToNextStage();
     };
 
     const handleReorientationSelect = (optionId: string) => {
         stopAllLessonTts();
+        if (optionId.startsWith('alternative:')) {
+            const selectedMode = optionId.replace('alternative:', '');
+            const nextMode = normalizeLearningMode(selectedMode);
+            setRuntimeModeOverride(nextMode);
+            setLearningMode(nextMode);
+            setToolbarSession({
+                scopeKey: `${lessonId}:${activeStageKey}:${nextMode}`,
+                state: 'original',
+            });
+            queueSignal({
+                signal_type: 'mode_switch',
+                confidence_self_report: 1,
+                learning_mode_delivered: getDeliveredMode(nextMode),
+            });
+            setShowReorientationOverlay(false);
+            return;
+        }
+
         if (optionId === 'skip') {
+            queueSignal({
+                signal_type: 'reorientation_dismissed',
+                confidence_self_report: 1,
+            });
             setShowReorientationOverlay(false);
             goToNextStage();
             return;
         }
 
         if (optionId === 'slow-down') {
+            stageToolCountsRef.current.slower += 1;
+            queueSignal({
+                signal_type: 'slower',
+                slower_count: stageToolCountsRef.current.slower,
+                confidence_self_report: 1,
+            });
             setPaceDensity('calm');
             setToolbarSession({
                 scopeKey,
@@ -427,6 +676,12 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         }
 
         if (optionId === 'simplify') {
+            stageToolCountsRef.current.simplify += 1;
+            queueSignal({
+                signal_type: 'simplify',
+                simplify_count: stageToolCountsRef.current.simplify,
+                confidence_self_report: 1,
+            });
             setToolbarSession({
                 scopeKey,
                 state: 'simplified',
@@ -434,6 +689,20 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
         }
 
         setShowReorientationOverlay(false);
+    };
+
+    const activeReorientationData = {
+        ...data.reorientation,
+        options: reorientationOptions.length
+            ? reorientationOptions.map((option) => ({
+                id: `alternative:${option.mode}`,
+                title: option.label,
+                description: `Try this as a ${option.mode === 'auditory' ? 'listening' : option.mode} explanation.`,
+                icon: option.mode === 'kinesthetic' ? ('hands' as const) : option.mode === 'visual' ? ('image' as const) : ('bookmark' as const),
+                mode: option.mode,
+                text: option.text,
+            }))
+            : data.reorientation.options,
     };
 
     return (
@@ -451,8 +720,12 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
                             onToolbarChange={onToolbarChange}
                         />
                     ) : null}
-                    {toolbarState !== 'slower' && activeMode === 'visual' ? <VisualMode {...shellProps} /> : null}
-                    {toolbarState !== 'slower' && activeMode === 'audio' ? <AudioMode {...shellProps} /> : null}
+                    {toolbarState !== 'slower' && activeMode === 'visual' ? (
+                        <VisualMode {...shellProps} onImageViewed={logImageViewed} />
+                    ) : null}
+                    {toolbarState !== 'slower' && activeMode === 'audio' ? (
+                        <AudioMode {...shellProps} onTtsActivated={logTtsActivated} />
+                    ) : null}
                     {toolbarState !== 'slower' && activeMode === 'action' ? <ActionMode {...shellProps} /> : null}
                     {toolbarState !== 'slower' && activeMode === 'reading' ? <ReadingMode {...shellProps} /> : null}
 
@@ -462,12 +735,14 @@ export function LessonPlayer({ lessonId, stage }: LessonPlayerProps) {
 
                     {showReorientationOverlay ? (
                         <LessonReorientationOverlay
-                            data={data.reorientation}
+                            data={activeReorientationData}
                             onSelect={handleReorientationSelect}
                             onAskNevo={() => {
                                 setShowReorientationOverlay(false);
                                 setShowAskNevoDrawer(true);
                             }}
+                            isLoading={reorientationLoading}
+                            error={reorientationError}
                         />
                     ) : null}
                 </div>

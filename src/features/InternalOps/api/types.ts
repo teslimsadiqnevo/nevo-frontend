@@ -1,0 +1,207 @@
+export type InternalOpsTab = "live" | "pilot" | "product" | "ai";
+
+export type InternalOpsUser = {
+  email: string;
+  name: string;
+  role: string;
+};
+
+export type InternalHealth = {
+  api?: "ok" | "degraded" | "down" | string;
+  db?: "ok" | "degraded" | "down" | string;
+  ai?: "ok" | "degraded" | "down" | string;
+  cache?: "ok" | "degraded" | "down" | string;
+  environment?: string;
+  internal_dashboard?: string;
+  planned_screens?: string[];
+};
+
+export type InternalLiveSession = {
+  active: boolean;
+  session_id?: string | null;
+  school_name?: string | null;
+  school_location?: string | null;
+  class_name?: string | null;
+  lesson_title?: string | null;
+  started_at?: string | null;
+  stats: {
+    students_active: number;
+    lessons_completed: number;
+    mins_running: number;
+  };
+};
+
+export type InternalLiveSignal = {
+  type: string;
+  description: string;
+  timestamp: string;
+  severity: "info" | "warning" | "error" | string;
+  source: string;
+  student_id_anon?: string | null;
+  concept_id?: string | null;
+  details?: Record<string, unknown>;
+};
+
+export type InternalPilotMetrics = {
+  completion_rate: number;
+  lessons_started: number;
+  lessons_completed: number;
+  avg_session_time: number;
+  control_usage: {
+    simplify: number;
+    expand: number;
+    slower: number;
+    speed_up: number;
+    tts: number;
+  };
+  pre_cache: {
+    hit_rate: number;
+    avg_cached_ms: number;
+    avg_live_ms: number;
+  };
+  avg_upload_time?: number | null;
+  avg_ease_score?: number | null;
+  would_upload_again_pct?: number | null;
+  checkpoint_accuracy?: number | null;
+  concept_accuracy: Array<{
+    concept_id: string;
+    accuracy: number;
+    attempts: number;
+  }>;
+  esl_breakdown: {
+    esl_avg_score?: number | null;
+    standard_avg_score?: number | null;
+    esl_student_count: number;
+  };
+  feedback_prompt: {
+    accepted: number;
+    dismissed: number;
+    ignored: number;
+  };
+};
+
+export type InternalPilotSchool = {
+  school_id: string;
+  school_name: string;
+  location?: string | null;
+  active_students: number;
+  class_count: number;
+};
+
+export type InternalObservationLog = {
+  id: string;
+  log_date: string;
+  school_id?: string | null;
+  class_id?: string | null;
+  school_name: string;
+  location?: string | null;
+  class_name: string;
+  subject?: string | null;
+  teacher_name?: string | null;
+  students_present: number;
+  lessons_started: number;
+  lessons_completed: number;
+  average_session_time_minutes?: number | null;
+  engagement_level?: number | null;
+  notable_moments?: string | null;
+  simplify_used: number;
+  expand_used: number;
+  slower_used: number;
+  tts_activated: number;
+  esl_simplify_language_access: number;
+  pre_cache_performance?: string | null;
+  submitted_at: string;
+};
+
+export type InternalProductStats = {
+  active_schools: number;
+  active_students: number;
+  sessions_today: number;
+  lessons_published: number;
+  session_activity_7d: Array<{
+    label: string;
+    date: string;
+    count: number;
+  }>;
+};
+
+export type InternalProductSchool = {
+  school_id: string;
+  school_name: string;
+  location?: string | null;
+  active_students: number;
+  teacher_count: number;
+  class_count: number;
+  last_session_date?: string | null;
+  completion_rate: number;
+  status: string;
+};
+
+export type InternalProductError = {
+  type: string;
+  timestamp: string;
+  details?: string | null;
+  severity: string;
+};
+
+export type InternalConnectivityEvent = {
+  timestamp: string;
+  duration_seconds: number;
+  sessions_affected: number;
+  details?: string | null;
+};
+
+export type InternalAiHealth = {
+  gemini: "ok" | "degraded" | "down" | string;
+  fallback: "ok" | "degraded" | "down" | string;
+  cache: "ok" | "degraded" | "down" | string;
+};
+
+export type InternalAiStats = {
+  avg_transform_time: number;
+  batch_success_rate: number;
+  failed_transformations: number;
+  response_times: Record<
+    "simplify" | "expand" | "slower" | "speed_up",
+    { avg_seconds: number; last_10: number[] }
+  >;
+};
+
+export type InternalAiCache = {
+  cache_hit_rate: number;
+  avg_cached_response_ms: number;
+  avg_live_response_ms: number;
+  coverage: {
+    simplify_pct: number;
+    expand_pct: number;
+    slower_pct: number;
+  };
+};
+
+export type InternalAiEsl = {
+  esl_student_count: number;
+  esl_pct_of_total: number;
+  esl_avg_comprehension_score?: number | null;
+  standard_avg_comprehension_score?: number | null;
+};
+
+export type InternalAiImages = {
+  image_fetch_success_rate: number;
+  avg_fetch_time: number;
+  cache_hit_rate: number;
+};
+
+export type InternalAiCost = {
+  cost_today_ngn: number;
+  cost_today_usd: number;
+  breakdown: Record<string, number>;
+  cost_week: number;
+  cost_month: number;
+};
+
+export type InternalAiError = {
+  type: string;
+  timestamp: string;
+  details?: string | null;
+  severity: string;
+};

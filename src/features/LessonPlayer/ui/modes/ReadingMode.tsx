@@ -2,6 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { StageShell } from '../StageShell';
+import { getRenderingPreferenceStyle } from '../renderingPreferences';
 import type { LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 
 type ReadingModeProps = {
@@ -47,6 +48,7 @@ export function ReadingMode({
         toolbarState === 'expanded'
             ? content.formulaExpanded || content.formula
             : content.formula;
+    const renderingStyle = getRenderingPreferenceStyle(content.renderingPreferences);
 
     return (
         <StageShell
@@ -78,7 +80,7 @@ export function ReadingMode({
                     <h3 className="mt-2 mb-3 text-[20px] font-semibold leading-7 text-graphite">
                         {content.keyTerm}
                     </h3>
-                    <p className="text-[14px] leading-[22px] text-graphite-80">
+                    <p className="text-[14px] leading-[22px] text-graphite-80" style={renderingStyle}>
                         {definition}
                     </p>
                 </div>

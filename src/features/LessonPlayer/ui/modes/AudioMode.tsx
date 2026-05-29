@@ -1,7 +1,8 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { StageShell } from '../StageShell';
+import { getRenderingPreferenceStyle } from '../renderingPreferences';
 import { useLessonTts } from '../../api/useLessonTts';
 import type { LessonPaceDensity, Stage, ToolbarState } from '../../api/types';
 
@@ -18,6 +19,7 @@ type AudioModeProps = {
     headerAction?: ReactNode;
     paceDensity: LessonPaceDensity;
     audioCacheBaseKey?: string;
+    onTtsActivated?: () => void;
 };
 
 export function AudioMode({
@@ -33,6 +35,7 @@ export function AudioMode({
     headerAction,
     paceDensity,
     audioCacheBaseKey,
+    onTtsActivated,
 }: AudioModeProps) {
     const content = stage.modes.audio;
     const label =
@@ -54,10 +57,28 @@ export function AudioMode({
               ? content.spokenBodyExpanded
               : content.spokenBody;
     const isCalmDensity = paceDensity === 'calm';
+    const renderingStyle = getRenderingPreferenceStyle(content.renderingPreferences);
     const { isLoading, isPlaying, error, togglePlayback, replay } = useLessonTts(spokenBody, null, {
         autoPlay: true,
         cacheKey: audioCacheBaseKey ? `${audioCacheBaseKey}:${toolbarState}` : undefined,
     });
+    const hasLoggedPlaybackRef = useRef(false);
+
+    useEffect(() => {
+        hasLoggedPlaybackRef.current = false;
+    }, [stage.key, toolbarState]);
+
+    useEffect(() => {
+        if (!isPlaying || hasLoggedPlaybackRef.current) return;
+        hasLoggedPlaybackRef.current = true;
+        onTtsActivated?.();
+    }, [isPlaying, onTtsActivated]);
+
+    const logPlaybackIntent = () => {
+        if (hasLoggedPlaybackRef.current) return;
+        hasLoggedPlaybackRef.current = true;
+        onTtsActivated?.();
+    };
 
     return (
         <StageShell
@@ -72,13 +93,17 @@ export function AudioMode({
                                 .map((line) => line.trim())
                                 .filter(Boolean)
                                 .map((line, index) => (
-                                    <p key={`${line}:${index}`} className="text-[20px] font-semibold leading-8 text-graphite">
+                                    <p
+                                        key={`${line}:${index}`}
+                                        className="text-[20px] font-semibold leading-8 text-graphite"
+                                        style={renderingStyle}
+                                    >
                                         {line.endsWith('.') ? line : `${line}.`}
                                     </p>
                                 ))}
                         </div>
                     ) : (
-                        <p className="text-[15px] leading-6 text-graphite">{body}</p>
+                        <p className="text-[15px] leading-6 text-graphite" style={renderingStyle}>{body}</p>
                     )}
 
                     {error ? (
@@ -102,6 +127,7 @@ export function AudioMode({
                         <button
                             type="button"
                             onClick={() => {
+                                logPlaybackIntent();
                                 void togglePlayback();
                             }}
                             className="flex h-12 w-[140px] items-center justify-center rounded-full bg-lavender cursor-pointer border-none"
@@ -128,6 +154,7 @@ export function AudioMode({
                         <button
                             type="button"
                             onClick={() => {
+                                logPlaybackIntent();
                                 void togglePlayback();
                             }}
                             className="flex items-center justify-center w-12 h-12 rounded-full bg-indigo cursor-pointer shrink-0 border-none"
@@ -162,6 +189,7 @@ export function AudioMode({
                         <button
                             type="button"
                             onClick={() => {
+                                logPlaybackIntent();
                                 void replay();
                             }}
                             className="flex items-center justify-center w-10 h-10 rounded-full bg-lavender-20 shrink-0 border-none cursor-pointer"

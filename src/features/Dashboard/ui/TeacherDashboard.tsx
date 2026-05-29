@@ -494,7 +494,7 @@ export function TeacherDashboard({ view = 'home', user }: { view?: string; user?
                 className={
                     view === 'insights'
                         ? 'ml-[220px] flex-1 overflow-y-auto p-0'
-                        : 'ml-[220px] flex-1 overflow-y-auto px-[48px] py-[48px]'
+                        : 'ml-[220px] flex-1 overflow-y-auto px-5 py-8 lg:px-[48px] lg:py-[48px]'
                 }
             >
                 {sessionIsStale ? (

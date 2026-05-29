@@ -30,10 +30,107 @@ type StudentOption = {
     initials: string;
 };
 
-function buildErrorMessage(data: any, fallback: string) {
-    if (typeof data?.detail === 'string') return data.detail;
-    if (typeof data?.message === 'string') return data.message;
-    if (typeof data?.error === 'string') return data.error;
+type LessonPackageReview = {
+    lesson_id?: string;
+    status: 'ready' | 'source_ready' | 'processing' | 'needs_attention' | 'not_started' | string;
+    concepts: Array<{
+        concept_id?: string | null;
+        key_term: string;
+        concept_text: string;
+        step_count: number;
+        checkpoint_question?: string | null;
+        learning_mode_delivered?: string | null;
+    }>;
+    lesson_package_quality?: {
+        score?: number;
+        status?: string;
+        warnings?: string[];
+        auto_repaired?: string[];
+        repaired_concepts?: number;
+        concept_count?: number;
+    } | null;
+    variant_summary?: {
+        ready?: number;
+        failed?: number;
+        running?: number;
+        source_concepts?: number;
+    };
+    review_summary?: {
+        summary?: string;
+        next_action?: string;
+        weak_areas?: string[];
+        concepts_covered?: string[];
+        generated_variants?: {
+            ready?: number;
+            failed?: number;
+            running?: number;
+        };
+    };
+    transform_job?: TransformJobStatus | null;
+    ai_debug?: {
+        model?: string | null;
+        generation_duration_ms?: number | null;
+        quality_score?: number | null;
+        auto_repaired_count?: number;
+        runtime?: {
+            primary_provider?: string;
+            fallback_provider?: string | null;
+            active_provider_configured?: boolean;
+            fallback_configured?: boolean | null;
+            image_search_configured?: boolean;
+        };
+        tts_preload?: {
+            status?: string;
+            concept_tts_texts?: number;
+            step_tts_texts?: number;
+            note?: string;
+        };
+    };
+};
+
+type TransformJobStatus = {
+    lesson_id?: string;
+    status?: string;
+    processed_students?: number;
+    total_students?: number;
+    processed_signatures?: number;
+    total_signatures?: number;
+    failed_students?: number;
+    failed_signatures?: number;
+    error_message?: string | null;
+};
+
+type AuthGuardableError = { authExpired?: boolean; error?: string };
+type ApiRecord = Record<string, unknown>;
+
+function isRecord(value: unknown): value is ApiRecord {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function stringValue(value: unknown, fallback = '') {
+    return typeof value === 'string' ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback = 0) {
+    const nextValue = Number(value ?? fallback);
+    return Number.isFinite(nextValue) ? nextValue : fallback;
+}
+
+function toGuardableError(error: unknown): AuthGuardableError {
+    if (isRecord(error)) {
+        return {
+            authExpired: error.authExpired === true,
+            error: stringValue(error.error) || (error instanceof Error ? error.message : undefined),
+        };
+    }
+    return { error: error instanceof Error ? error.message : undefined };
+}
+
+function buildErrorMessage(data: unknown, fallback: string) {
+    if (!isRecord(data)) return fallback;
+    if (typeof data.detail === 'string') return data.detail;
+    if (typeof data.message === 'string') return data.message;
+    if (typeof data.error === 'string') return data.error;
     return fallback;
 }
 
@@ -70,20 +167,20 @@ async function fetchTeacherLessons() {
         });
     }
 
-    const rawLessons = Array.isArray(data?.lessons) ? data.lessons : [];
+    const rawLessons = isRecord(data) && Array.isArray(data.lessons) ? data.lessons : [];
     return rawLessons
-        .filter((lesson: any) => String(lesson?.status || '').toLowerCase() === 'published')
-        .map((lesson: any): Lesson => {
-            const confusionCount = Number(lesson?.confusion_signal_count || 0);
-            const completionCount = Number(lesson?.completion_count || 0);
+        .filter((lesson): lesson is ApiRecord => isRecord(lesson) && String(lesson.status || '').toLowerCase() === 'published')
+        .map((lesson): Lesson => {
+            const confusionCount = numberValue(lesson.confusion_signal_count);
+            const completionCount = numberValue(lesson.completion_count);
             return {
                 id: String(lesson.id),
-                title: lesson.title || 'Untitled lesson',
-                subject: lesson.subject || lesson.topic || 'Not set',
-                level: lesson.education_level || 'Not set',
-                duration: Number(lesson.estimated_duration_minutes || 0),
+                title: stringValue(lesson.title, 'Untitled lesson'),
+                subject: stringValue(lesson.subject) || stringValue(lesson.topic, 'Not set'),
+                level: stringValue(lesson.education_level, 'Not set'),
+                duration: numberValue(lesson.estimated_duration_minutes),
                 status: 'Published',
-                lastUpdated: formatUpdatedDate(lesson.last_updated || lesson.created_at),
+                lastUpdated: formatUpdatedDate(stringValue(lesson.last_updated) || stringValue(lesson.created_at)),
                 signal:
                     confusionCount > 0
                         ? { type: 'warning', text: `Confusion signals from ${confusionCount} students` }
@@ -104,17 +201,17 @@ async function fetchTeacherClasses() {
     }
 
     const rawClasses = [
-        data?.classes,
-        data?.data?.classes,
-        data?.data?.data?.classes,
-        data?.results,
+        isRecord(data) ? data.classes : null,
+        isRecord(data) && isRecord(data.data) ? data.data.classes : null,
+        isRecord(data) && isRecord(data.data) && isRecord(data.data.data) ? data.data.data.classes : null,
+        isRecord(data) ? data.results : null,
         Array.isArray(data) ? data : null,
     ].find(Array.isArray) || [];
-    return rawClasses.map((item: any): ClassOption => ({
+    return rawClasses.filter(isRecord).map((item): ClassOption => ({
         id: String(item.id || item.class_id),
-        name: item.name || item.class_name || 'Class',
-        teacherName: item.teacher_name || undefined,
-        students: Number(item.student_count || 0),
+        name: stringValue(item.name) || stringValue(item.class_name, 'Class'),
+        teacherName: stringValue(item.teacher_name) || undefined,
+        students: numberValue(item.student_count),
     }));
 }
 
@@ -127,12 +224,12 @@ async function fetchAssignableStudents() {
         });
     }
 
-    const rawStudents = Array.isArray(data?.students) ? data.students : [];
-    return rawStudents.map((item: any): StudentOption => {
+    const rawStudents = isRecord(data) && Array.isArray(data.students) ? data.students : [];
+    return rawStudents.filter(isRecord).map((item): StudentOption => {
         const name =
-            item.name ||
-            `${item.first_name || ''} ${item.last_name || ''}`.trim() ||
-            item.email ||
+            stringValue(item.name) ||
+            `${stringValue(item.first_name)} ${stringValue(item.last_name)}`.trim() ||
+            stringValue(item.email) ||
             'Student';
         return {
             id: String(item.id),
@@ -148,7 +245,12 @@ async function assignLesson(payload: {
     classId?: string | null;
     studentIds?: string[];
     dueDate?: string;
-}) {
+}): Promise<{
+    assigned_count?: number;
+    skipped_count?: number;
+    message?: string;
+    transform_job?: TransformJobStatus | null;
+}> {
     const res = await fetch(`/api/teacher/lessons/${payload.lessonId}/assign`, {
         method: 'POST',
         headers: {
@@ -170,6 +272,39 @@ async function assignLesson(payload: {
     return data;
 }
 
+async function fetchLessonPackageReview(lessonId: string): Promise<LessonPackageReview> {
+    const res = await fetch(`/api/teacher/lessons/${lessonId}/package-review`, {
+        cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not load package review.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
+    return data as LessonPackageReview;
+}
+
+async function regenerateLessonPackage(lessonId: string): Promise<TransformJobStatus | null> {
+    const res = await fetch(`/api/teacher/lessons/${lessonId}/transform`, {
+        method: 'POST',
+        cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not regenerate package.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
+    return isRecord(data)
+        ? {
+            lesson_id: String(data.lesson_id || lessonId),
+            status: stringValue(data.status, 'pending'),
+            total_students: numberValue(data.total_students),
+        }
+        : null;
+}
+
 export function AssignLessonWizard({
     onClose,
     initialLessonId,
@@ -181,6 +316,7 @@ export function AssignLessonWizard({
     const [step, setStep] = useState(1);
     const [showSuccess, setShowSuccess] = useState(false);
     const [successCount, setSuccessCount] = useState(0);
+    const [successTransformJob, setSuccessTransformJob] = useState<TransformJobStatus | null>(null);
     const TOTAL_STEPS = 4;
 
     const [lessons, setLessons] = useState<Lesson[]>([]);
@@ -190,6 +326,9 @@ export function AssignLessonWizard({
     const [loadError, setLoadError] = useState<string | null>(null);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [assigning, setAssigning] = useState(false);
+    const [packageReview, setPackageReview] = useState<LessonPackageReview | null>(null);
+    const [packageReviewLoading, setPackageReviewLoading] = useState(false);
+    const [packageReviewError, setPackageReviewError] = useState<string | null>(null);
 
     const [selectedLessonId, setSelectedLessonId] = useState<string | null>(
         initialLessonId ? String(initialLessonId) : null,
@@ -219,7 +358,7 @@ export function AssignLessonWizard({
                 // Lessons are required — if they fail, show an error
                 if (lessonResult.status === 'rejected') {
                     const err = lessonResult.reason;
-                    if (guardAuth(err as any)) return;
+                    if (guardAuth(toGuardableError(err))) return;
                     setLoadError(err instanceof Error ? err.message : 'Could not load lessons.');
                     return;
                 }
@@ -229,7 +368,7 @@ export function AssignLessonWizard({
                 setStudents(studentResult.status === 'fulfilled' ? studentResult.value : []);
             } catch (error) {
                 if (!mounted) return;
-                if (guardAuth(error as any)) return;
+                if (guardAuth(toGuardableError(error))) return;
                 setLoadError(error instanceof Error ? error.message : 'Could not load assignment data.');
             } finally {
                 if (mounted) setLoading(false);
@@ -239,7 +378,7 @@ export function AssignLessonWizard({
         return () => {
             mounted = false;
         };
-    }, []);
+    }, [guardAuth]);
 
     const selectedLesson = useMemo(
         () => lessons.find((lesson) => lesson.id === selectedLessonId),
@@ -255,6 +394,38 @@ export function AssignLessonWizard({
         () => students.filter((student) => selectedStudents.includes(student.id)),
         [students, selectedStudents],
     );
+
+    useEffect(() => {
+        if (!selectedLessonId) {
+            setPackageReview(null);
+            setPackageReviewError(null);
+            setPackageReviewLoading(false);
+            return;
+        }
+
+        let mounted = true;
+        setPackageReviewLoading(true);
+        setPackageReviewError(null);
+
+        fetchLessonPackageReview(selectedLessonId)
+            .then((review) => {
+                if (!mounted) return;
+                setPackageReview(review);
+            })
+            .catch((error) => {
+                if (!mounted) return;
+                if (guardAuth(toGuardableError(error))) return;
+                setPackageReview(null);
+                setPackageReviewError(error instanceof Error ? error.message : 'Could not load package review.');
+            })
+            .finally(() => {
+                if (mounted) setPackageReviewLoading(false);
+            });
+
+        return () => {
+            mounted = false;
+        };
+    }, [guardAuth, selectedLessonId]);
 
     const handleBack = () => {
         setSubmitError(null);
@@ -286,9 +457,20 @@ export function AssignLessonWizard({
             });
 
             setSuccessCount(Number(result?.assigned_count || 0));
+            setSuccessTransformJob(result?.transform_job || null);
+            if (result?.transform_job) {
+                setPackageReview((current) => ({
+                    ...(current || {
+                        lesson_id: selectedLessonId,
+                        concepts: [],
+                    }),
+                    status: 'processing',
+                    transform_job: result.transform_job,
+                } as LessonPackageReview));
+            }
             setShowSuccess(true);
         } catch (error) {
-            if (guardAuth(error as any)) {
+            if (guardAuth(toGuardableError(error))) {
                 setAssigning(false);
                 return;
             }
@@ -309,12 +491,14 @@ export function AssignLessonWizard({
         setSubmitError(null);
         setShowSuccess(false);
         setSuccessCount(0);
+        setSuccessTransformJob(null);
     };
 
     if (showSuccess) {
         return (
             <AssignmentSuccess
                 recipientCount={successCount}
+                transformJob={successTransformJob}
                 onView={onClose}
                 onAssignAnother={resetWizard}
                 onBack={onClose}
@@ -341,8 +525,8 @@ export function AssignLessonWizard({
     }
 
     return (
-        <div className="flex flex-col h-full w-full max-w-[900px] pb-12">
-            <div className="flex items-center mb-6">
+        <div className="flex h-full min-h-0 w-full max-w-[900px] flex-col pb-6 sm:pb-8 lg:pb-12">
+            <div className="mb-6 flex shrink-0 items-center">
                 <button
                     onClick={handleBack}
                     className="p-1 hover:bg-white/40 rounded-lg transition-colors cursor-pointer"
@@ -395,6 +579,10 @@ export function AssignLessonWizard({
                     onAssign={handleAssign}
                     assigning={assigning}
                     submitError={submitError}
+                    packageReview={packageReview}
+                    packageReviewLoading={packageReviewLoading}
+                    packageReviewError={packageReviewError}
+                    onPackageReviewUpdated={setPackageReview}
                 />
             ) : null}
         </div>
@@ -431,7 +619,7 @@ function Step1Lesson({
     const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId);
 
     return (
-        <div className="flex flex-col h-full flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">Which lesson?</h2>
 
             {!isSelectingLesson && selectedLesson ? (
@@ -526,15 +714,13 @@ function Step1Lesson({
                 </>
             )}
 
-            <div className="flex-1" />
-
             <button
                 disabled={!selectedLessonId}
                 onClick={() => {
                     setIsSelectingLesson(false);
                     onContinue();
                 }}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
+                className={`mt-4 w-full shrink-0 rounded-2xl py-3.5 text-[14px] font-semibold transition-all cursor-pointer ${
                     selectedLessonId
                         ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
                         : 'bg-[#B0ADAD] text-white cursor-not-allowed'
@@ -611,10 +797,10 @@ function Step2Recipients({
                 : false;
 
     return (
-        <div className="flex flex-col h-full flex-1">
-            <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-6">Who receives this lesson?</h2>
+        <div className="flex min-h-0 flex-1 flex-col">
+            <h2 className="mb-6 text-[20px] font-semibold text-[#3B3F6E]">Who receives this lesson?</h2>
 
-            <div className="flex gap-2 mb-8">
+            <div className="mb-8 flex shrink-0 flex-wrap gap-2">
                 <button
                     onClick={() => {
                         setRecipientMode('class');
@@ -752,12 +938,10 @@ function Step2Recipients({
                 </div>
             ) : null}
 
-            <div className="flex-1" />
-
             <button
                 disabled={!canContinue}
                 onClick={onContinue}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 ${
+                className={`mt-4 w-full shrink-0 rounded-2xl py-3.5 text-[14px] font-semibold transition-all cursor-pointer ${
                     canContinue
                         ? 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
                         : 'bg-[#B0ADAD] text-white cursor-not-allowed'
@@ -799,7 +983,7 @@ function Step3Scheduling({
         : '';
 
     return (
-        <div className="flex flex-col h-full flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">When should students complete this?</h2>
             <p className="text-[13px] text-graphite-60 mb-8">A due date is optional.</p>
 
@@ -863,11 +1047,9 @@ function Step3Scheduling({
                 </div>
             </div>
 
-            <div className="flex-1" />
-
             <button
                 onClick={onContinue}
-                className="w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer mt-4 bg-[#3B3F6E] text-white hover:bg-[#2E3259]"
+                className="mt-auto w-full shrink-0 rounded-2xl bg-[#3B3F6E] py-3.5 text-[14px] font-semibold text-white transition-all cursor-pointer hover:bg-[#2E3259]"
             >
                 Continue
             </button>
@@ -884,6 +1066,10 @@ function Step4Summary({
     onAssign,
     assigning,
     submitError,
+    packageReview,
+    packageReviewLoading,
+    packageReviewError,
+    onPackageReviewUpdated,
 }: {
     lesson?: Lesson;
     recipientMode: 'class' | 'students' | null;
@@ -893,6 +1079,10 @@ function Step4Summary({
     onAssign: () => void;
     assigning: boolean;
     submitError: string | null;
+    packageReview: LessonPackageReview | null;
+    packageReviewLoading: boolean;
+    packageReviewError: string | null;
+    onPackageReviewUpdated: (review: LessonPackageReview) => void;
 }) {
     const recipientLabel =
         recipientMode === 'class'
@@ -907,7 +1097,7 @@ function Step4Summary({
     };
 
     return (
-        <div className="flex flex-col h-full flex-1">
+        <div className="flex min-h-0 flex-1 flex-col">
             <h2 className="text-[20px] font-semibold text-[#3B3F6E] mb-1">Ready to assign.</h2>
             <p className="text-[13px] text-graphite-60 mb-8">Review the details before sending.</p>
 
@@ -928,18 +1118,24 @@ function Step4Summary({
                 </div>
             </div>
 
+            <PackageReviewCard
+                lessonId={lesson?.id}
+                review={packageReview}
+                loading={packageReviewLoading}
+                error={packageReviewError}
+                onReviewUpdated={onPackageReviewUpdated}
+            />
+
             {submitError ? (
                 <div className="mb-5 rounded-xl border border-[#F1C5BF] bg-[#FFF6F4] px-4 py-3 text-[13px] text-[#B54708]">
                     {submitError}
                 </div>
             ) : null}
 
-            <div className="flex-1" />
-
             <button
                 onClick={onAssign}
                 disabled={assigning}
-                className={`w-full py-3.5 rounded-2xl font-semibold text-[14px] transition-all cursor-pointer ${
+                className={`mt-auto w-full shrink-0 rounded-2xl py-3.5 text-[14px] font-semibold transition-all cursor-pointer ${
                     assigning
                         ? 'bg-[#B0ADAD] text-white cursor-not-allowed'
                         : 'bg-[#3B3F6E] text-white hover:bg-[#2E3259]'
@@ -947,6 +1143,266 @@ function Step4Summary({
             >
                 {assigning ? 'Assigning...' : 'Assign lesson'}
             </button>
+        </div>
+    );
+}
+
+function PackageReviewCard({
+    lessonId,
+    review,
+    loading,
+    error,
+    onReviewUpdated,
+}: {
+    lessonId?: string;
+    review: LessonPackageReview | null;
+    loading: boolean;
+    error: string | null;
+    onReviewUpdated: (review: LessonPackageReview) => void;
+}) {
+    const [ttsStatus, setTtsStatus] = useState<{ configured?: boolean; status?: string; detail?: string } | null>(null);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const [regenerating, setRegenerating] = useState(false);
+    const [regenerateError, setRegenerateError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let mounted = true;
+        fetch('/api/tts', { cache: 'no-store' })
+            .then((res) => res.json())
+            .then((data) => {
+                if (mounted) setTtsStatus(data);
+            })
+            .catch(() => {
+                if (mounted) setTtsStatus({ configured: false, status: 'unavailable' });
+            });
+        return () => {
+            mounted = false;
+        };
+    }, []);
+
+    const qualityScore =
+        review?.lesson_package_quality?.score ??
+        review?.ai_debug?.quality_score ??
+        null;
+    const autoRepaired =
+        review?.lesson_package_quality?.auto_repaired?.length ??
+        review?.lesson_package_quality?.repaired_concepts ??
+        review?.ai_debug?.auto_repaired_count ??
+        0;
+    const conceptCount =
+        review?.lesson_package_quality?.concept_count ??
+        review?.concepts.length ??
+        review?.variant_summary?.source_concepts ??
+        0;
+    const readyCount = review?.variant_summary?.ready ?? 0;
+    const failedCount = review?.variant_summary?.failed ?? 0;
+    const runningCount = review?.variant_summary?.running ?? 0;
+    const runtime = review?.ai_debug?.runtime;
+    const ttsPreload = review?.ai_debug?.tts_preload;
+    const weakAreas = review?.review_summary?.weak_areas || review?.lesson_package_quality?.warnings || [];
+    const previewConcept = review?.concepts?.[0] || null;
+    const canRegenerate = Boolean(lessonId) && !loading && !regenerating;
+
+    const statusLabel = loading
+        ? 'Checking package...'
+        : error
+            ? 'Review unavailable'
+            : review?.status === 'ready'
+                ? 'Ready for students'
+                : review?.status === 'source_ready'
+                    ? 'Source concepts ready'
+                : review?.status === 'needs_attention'
+                    ? 'Needs attention'
+                    : 'Preparing adaptive package';
+    const statusTone = review?.status === 'needs_attention' || error
+        ? 'border-[#F1C5BF] bg-[#FFF8F4] text-[#B54708]'
+        : review?.status === 'ready'
+            ? 'border-[#CDE8D4] bg-[#F4FBF5] text-[#2E7D32]'
+            : 'border-[#E8E2D4] bg-[#FDFBF9] text-[#3B3F6E]';
+
+    const handleRegenerate = async () => {
+        if (!lessonId || regenerating) return;
+
+        setRegenerating(true);
+        setRegenerateError(null);
+        try {
+            const transformJob = await regenerateLessonPackage(lessonId);
+            onReviewUpdated({
+                ...(review || {
+                    lesson_id: lessonId,
+                    concepts: [],
+                }),
+                lesson_id: lessonId,
+                status: 'processing',
+                transform_job: transformJob,
+            } as LessonPackageReview);
+
+            const refreshedReview = await fetchLessonPackageReview(lessonId);
+            onReviewUpdated(refreshedReview);
+        } catch (err) {
+            setRegenerateError(err instanceof Error ? err.message : 'Could not regenerate package.');
+        } finally {
+            setRegenerating(false);
+        }
+    };
+
+    return (
+        <div className={`mb-8 rounded-xl border px-5 py-4 ${statusTone}`}>
+            <div className="mb-3 flex items-start justify-between gap-4">
+                <div>
+                    <span className="block text-[13px] font-bold">Smart package review</span>
+                    <p className="mt-1 text-[12px] opacity-75">
+                        {error || (review?.status === 'source_ready'
+                            ? 'Concepts are extracted. Student-specific variants are generated after assignment.'
+                            : 'Nevo checks concept coverage and generated lesson quality before assignment.')}
+                    </p>
+                </div>
+                <span className="shrink-0 rounded-full bg-white/70 px-3 py-1 text-[11px] font-bold uppercase tracking-[0.08em]">
+                    {statusLabel}
+                </span>
+            </div>
+
+            {loading ? (
+                <div className="grid grid-cols-3 gap-3">
+                    {[0, 1, 2].map((item) => (
+                        <div key={item} className="h-14 rounded-lg bg-[#E8E2D4]" />
+                    ))}
+                </div>
+            ) : (
+                <div className="grid grid-cols-3 gap-3">
+                    <PackageReviewMetric label="Quality" value={qualityScore !== null ? `${Math.round(qualityScore)}%` : 'Pending'} />
+                    <PackageReviewMetric label="Concepts" value={conceptCount ? String(conceptCount) : 'No concepts yet'} />
+                    <PackageReviewMetric
+                        label="Variants"
+                        value={
+                            review?.status === 'source_ready'
+                                ? 'After assign'
+                                : failedCount
+                                    ? `${readyCount} ready, ${failedCount} failed`
+                                    : runningCount
+                                        ? `${readyCount} ready, ${runningCount} running`
+                                        : `${readyCount} ready`
+                        }
+                    />
+                </div>
+            )}
+
+            {!loading ? (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
+                        <span className="font-semibold">AI:</span>{' '}
+                        {runtime?.primary_provider || 'provider'}{runtime?.fallback_provider ? ` -> ${runtime.fallback_provider}` : ''}
+                        {runtime?.active_provider_configured === false ? ' (primary key missing)' : ''}
+                    </div>
+                    <div className="rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
+                        <span className="font-semibold">TTS:</span>{' '}
+                        {ttsStatus?.configured
+                            ? `ready (${ttsPreload?.step_tts_texts || 0} step texts)`
+                            : ttsStatus?.detail || 'not configured for this deployment'}
+                    </div>
+                </div>
+            ) : null}
+
+            {!loading && review?.review_summary?.summary ? (
+                <div className="mt-3 rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
+                    <span className="font-semibold">What Nevo prepared:</span>{' '}
+                    {review.review_summary.summary}
+                    {review.review_summary.next_action ? (
+                        <span className="mt-1 block opacity-75">{review.review_summary.next_action}</span>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {!loading && review?.concepts?.length ? (
+                <div className="mt-4 flex flex-wrap gap-2">
+                    {review.concepts.slice(0, 4).map((concept) => (
+                        <span
+                            key={concept.concept_id || concept.key_term}
+                            className="rounded-full bg-white/70 px-3 py-1 text-[12px] font-medium text-[#3B3F6E]"
+                        >
+                            {concept.key_term}
+                        </span>
+                    ))}
+                    {autoRepaired > 0 ? (
+                        <span className="rounded-full bg-[#FFF3CD] px-3 py-1 text-[12px] font-medium text-[#A66A00]">
+                            {autoRepaired} auto-fixed
+                        </span>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {!loading && weakAreas.length ? (
+                <div className="mt-3 rounded-lg border border-[#F5D0A1] bg-[#FFF8EA] px-3 py-2 text-[12px] leading-5 text-[#9A6412]">
+                    <span className="font-semibold">Weak areas to review:</span>{' '}
+                    {weakAreas.slice(0, 3).join(' ')}
+                </div>
+            ) : null}
+
+            {!loading && previewOpen && previewConcept ? (
+                <div className="mt-3 rounded-xl border border-[#E0D9CE] bg-white/70 px-4 py-3 text-[#3B3F6E]">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#6E74AA]">
+                            Student preview
+                        </span>
+                        <span className="text-[11px] text-graphite-40">
+                            {previewConcept.learning_mode_delivered || 'adaptive'}
+                        </span>
+                    </div>
+                    <p className="text-[13px] font-semibold">{previewConcept.key_term}</p>
+                    <p className="mt-1 line-clamp-3 text-[12px] leading-5 text-graphite-60">
+                        {previewConcept.concept_text}
+                    </p>
+                    {previewConcept.checkpoint_question ? (
+                        <p className="mt-2 rounded-lg bg-[#F7F1E6] px-3 py-2 text-[12px] leading-5 text-graphite-60">
+                            Quick check: {previewConcept.checkpoint_question}
+                        </p>
+                    ) : null}
+                </div>
+            ) : null}
+
+            {!loading ? (
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        disabled={!previewConcept}
+                        onClick={() => setPreviewOpen((current) => !current)}
+                        className={`h-10 flex-1 rounded-xl border text-[13px] font-semibold transition-colors ${
+                            previewConcept
+                                ? 'border-[#3B3F6E] bg-white/60 text-[#3B3F6E] hover:bg-white cursor-pointer'
+                                : 'border-[#E0D9CE] bg-white/30 text-graphite-40 cursor-not-allowed'
+                        }`}
+                    >
+                        {previewOpen ? 'Hide student preview' : 'Preview as student'}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={!canRegenerate}
+                        onClick={handleRegenerate}
+                        className={`h-10 flex-1 rounded-xl border text-[13px] font-semibold transition-colors ${
+                            canRegenerate
+                                ? 'border-[#3B3F6E] bg-[#3B3F6E] text-white hover:bg-[#2E3259] cursor-pointer'
+                                : 'border-[#E0D9CE] bg-[#B0ADAD] text-white cursor-not-allowed'
+                        }`}
+                    >
+                        {regenerating ? 'Regenerating...' : 'Regenerate package'}
+                    </button>
+                </div>
+            ) : null}
+
+            {regenerateError ? (
+                <p className="mt-2 rounded-lg bg-[#FFF3CD] px-3 py-2 text-[12px] leading-5 text-[#9A6412]">
+                    {regenerateError}
+                </p>
+            ) : null}
+        </div>
+    );
+}
+
+function PackageReviewMetric({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="rounded-lg bg-white/70 px-3 py-2">
+            <span className="block text-[11px] font-bold uppercase tracking-[0.08em] opacity-60">{label}</span>
+            <span className="mt-1 block text-[13px] font-semibold">{value}</span>
         </div>
     );
 }
@@ -973,15 +1429,24 @@ function Tag({ label }: { label: string }) {
 
 function AssignmentSuccess({
     recipientCount,
+    transformJob,
     onView,
     onAssignAnother,
     onBack,
 }: {
     recipientCount: number;
+    transformJob: TransformJobStatus | null;
     onView: () => void;
     onAssignAnother: () => void;
     onBack: () => void;
 }) {
+    const packageCopy =
+        transformJob?.status === 'failed'
+            ? 'Smart package generation needs a retry before every profile is ready.'
+            : transformJob
+                ? 'Nevo is preparing student-specific smart packages in the background.'
+                : 'Students will see it in their lessons tab.';
+
     return (
         <div className="flex flex-col h-full flex-1 relative items-center justify-center -mt-16">
             <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-[#3B3F6E] text-white text-[13px] font-medium px-6 py-3 rounded-lg shadow-sm whitespace-nowrap">
@@ -995,7 +1460,25 @@ function AssignmentSuccess({
             </div>
 
             <h2 className="text-[24px] font-bold text-[#2B2B2F] mb-3">Lesson assigned.</h2>
-            <p className="text-[14px] text-graphite-60 mb-8">Students will see it in their lessons tab.</p>
+            <p className="max-w-[360px] text-center text-[14px] text-graphite-60 mb-4">{packageCopy}</p>
+            {transformJob ? (
+                <div className="mb-8 w-full max-w-[360px] rounded-xl border border-[#E0D9CE] bg-white/70 px-4 py-3 text-left">
+                    <div className="flex items-center justify-between gap-3">
+                        <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#6E74AA]">
+                            Smart package
+                        </span>
+                        <span className="rounded-full bg-[#E8E6F5] px-3 py-1 text-[11px] font-semibold text-[#3B3F6E]">
+                            {transformJob.status || 'queued'}
+                        </span>
+                    </div>
+                    <p className="mt-2 text-[12px] leading-5 text-graphite-60">
+                        {Number(transformJob.processed_signatures || 0)} of {Number(transformJob.total_signatures || 0)} profile types ready.
+                    </p>
+                    {transformJob.error_message ? (
+                        <p className="mt-2 text-[12px] leading-5 text-[#B54708]">{transformJob.error_message}</p>
+                    ) : null}
+                </div>
+            ) : null}
 
             <button
                 onClick={onView}

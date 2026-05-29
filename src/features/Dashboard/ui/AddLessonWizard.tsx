@@ -33,6 +33,26 @@ interface LessonReviewData {
   keyConcepts?: string[];
 }
 
+interface LessonPackageQuality {
+  score?: number;
+  passed?: boolean;
+  warnings?: string[];
+  repaired_concepts?: number;
+  duplicate_step_repairs?: number;
+}
+
+interface TransformJobStatus {
+  job_id?: string;
+  status: 'not_started' | 'pending' | 'running' | 'completed' | 'failed' | string;
+  processed_students?: number;
+  failed_students?: number;
+  total_students?: number;
+  processed_signatures?: number;
+  failed_signatures?: number;
+  total_signatures?: number;
+  lesson_package_quality?: LessonPackageQuality | null;
+}
+
 const SUBJECTS = ['Mathematics', 'English', 'Science', 'History', 'Geography', 'Arts', 'Physical Education', 'Other'];
 const LEVELS = ['Primary', 'Secondary', 'Tertiary'];
 const DURATIONS = ['Under 15 mins', '15-30 mins', '30+ mins'];
@@ -207,7 +227,7 @@ async function saveAdaptation(lessonId: string, settings: AdaptationSettings): P
   return { data };
 }
 
-async function publishLesson(lessonId: string): Promise<ClientResult> {
+async function publishLesson(lessonId: string): Promise<ClientResult<{ transform_job?: TransformJobStatus | null }>> {
   const res = await fetch(`/api/teacher/lessons/${lessonId}/publish`, {
     method: 'POST',
   });
@@ -216,6 +236,23 @@ async function publishLesson(lessonId: string): Promise<ClientResult> {
   if (!res.ok) {
     return {
       error: buildErrorMessage(data, 'Could not publish lesson.'),
+      authExpired: res.status === 401 || res.status === 403,
+    };
+  }
+
+  return { data };
+}
+
+async function getTransformStatus(lessonId: string): Promise<ClientResult<TransformJobStatus>> {
+  const res = await fetch(`/api/teacher/lessons/${lessonId}/transform/status`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    return {
+      error: buildErrorMessage(data, 'Could not load lesson processing status.'),
       authExpired: res.status === 401 || res.status === 403,
     };
   }
@@ -255,6 +292,7 @@ export function AddLessonWizard({
   const [isPublishing, setIsPublishing] = useState(false);
   const [stepError, setStepError] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [transformStatus, setTransformStatus] = useState<TransformJobStatus | null>(null);
 
   const canContinueStep1 = meta.title.trim() && meta.subject && meta.educationLevel;
 
@@ -441,6 +479,7 @@ export function AddLessonWizard({
       return;
     }
 
+    setTransformStatus(result.data.transform_job || null);
     setIsPublishing(false);
     setShowSuccess(true);
   };
@@ -453,7 +492,10 @@ export function AddLessonWizard({
   if (showSuccess && lessonId) {
     return (
       <SuccessScreen
+        lessonId={lessonId}
         title={meta.title}
+        initialTransformStatus={transformStatus}
+        onTransformStatusChange={setTransformStatus}
         onAssign={() => (onAssign ? onAssign(lessonId) : onClose())}
         onViewLesson={() => {
           onCreated?.(lessonId);
@@ -1279,16 +1321,66 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
 }
 
 function SuccessScreen({
+  lessonId,
   title,
+  initialTransformStatus,
+  onTransformStatusChange,
   onAssign,
   onViewLesson,
   onBackToLibrary,
 }: {
+  lessonId: string;
   title: string;
+  initialTransformStatus: TransformJobStatus | null;
+  onTransformStatusChange: (status: TransformJobStatus | null) => void;
   onAssign: () => void;
   onViewLesson: () => void;
   onBackToLibrary: () => void;
 }) {
+  const [status, setStatus] = useState<TransformJobStatus | null>(initialTransformStatus);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timeoutId: number | null = null;
+
+    const poll = async () => {
+      const result = await getTransformStatus(lessonId);
+      if (cancelled) return;
+
+      if ('data' in result) {
+        setStatus(result.data);
+        onTransformStatusChange(result.data);
+
+        if (result.data.status === 'pending' || result.data.status === 'running') {
+          timeoutId = window.setTimeout(poll, 2500);
+        }
+      }
+    };
+
+    if (!status || status.status === 'pending' || status.status === 'running') {
+      timeoutId = window.setTimeout(poll, 800);
+    }
+
+    return () => {
+      cancelled = true;
+      if (timeoutId !== null) window.clearTimeout(timeoutId);
+    };
+  }, [lessonId, onTransformStatusChange, status]);
+
+  const quality = status?.lesson_package_quality || null;
+  const processed = Number(status?.processed_signatures || 0);
+  const total = Number(status?.total_signatures || 0);
+  const isBuilding = status?.status === 'pending' || status?.status === 'running';
+  const statusCopy = isBuilding
+    ? total > 0
+      ? `Building smart lesson packages (${processed}/${total} profile types ready).`
+      : 'Building the smart lesson package in the background.'
+    : status?.status === 'failed'
+      ? 'Nevo published the lesson, but some smart package generation needs retrying.'
+      : quality
+        ? `Smart package checked: ${quality.score ?? 0}% quality score.`
+        : 'Your lesson is ready to assign to students.';
+
   return (
     <div className="flex min-h-[calc(100vh-96px)] w-full flex-col items-center px-4 pt-4 pb-10 md:px-8">
       <div className="mb-8 rounded-lg bg-[#3B3F6E] px-5 py-3 text-center text-[13px] font-normal text-[#F7F1E6] shadow-sm">
@@ -1321,9 +1413,34 @@ function SuccessScreen({
             {title || "New lesson"}
           </p>
 
-          <p className="mb-8 max-w-[380px] px-2 text-[15px] leading-[22px] text-[#2B2B2F]/65">
-            Your lesson is ready to assign to students.
+          <p className="mb-4 max-w-[380px] px-2 text-[15px] leading-[22px] text-[#2B2B2F]/65">
+            {statusCopy}
           </p>
+
+          <div className="mb-8 w-full rounded-2xl border border-[#E0DDD8] bg-white px-4 py-3 text-left">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <span className="text-[12px] font-bold uppercase tracking-wider text-[#6E74AA]">Playable package</span>
+              <span
+                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                  status?.status === 'failed'
+                    ? 'bg-[#FFF3CD] text-[#B54708]'
+                    : isBuilding
+                      ? 'bg-[#E8E6F5] text-[#6E74AA]'
+                      : 'bg-[#E8F5E9] text-[#2E7D32]'
+                }`}
+              >
+                {isBuilding ? 'Processing' : status?.status === 'failed' ? 'Needs retry' : 'Ready'}
+              </span>
+            </div>
+            <p className="text-[12.5px] leading-5 text-[#2B2B2F]/65">
+              Nevo validates unique concept steps, action-mode instructions, checks, and speech text before students play it.
+            </p>
+            {quality?.warnings && quality.warnings.length > 0 ? (
+              <p className="mt-2 text-[12px] leading-5 text-[#6E74AA]">
+                Auto-repaired {quality.repaired_concepts ?? 0} weak section{quality.repaired_concepts === 1 ? '' : 's'}.
+              </p>
+            ) : null}
+          </div>
 
           <div className="flex w-full flex-col gap-3">
             <button
