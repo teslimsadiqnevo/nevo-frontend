@@ -1,4 +1,14 @@
-export type InternalOpsTab = "live" | "pilot" | "product" | "ai";
+export type InternalOpsTab =
+  | "live"
+  | "pilot"
+  | "product"
+  | "ai"
+  | "schools"
+  | "classes"
+  | "teachers"
+  | "students"
+  | "lessons"
+  | "support";
 
 export type InternalOpsUser = {
   email: string;
