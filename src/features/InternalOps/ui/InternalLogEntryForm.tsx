@@ -115,12 +115,12 @@ export function InternalLogEntryForm() {
   }
 
   const inputClass =
-    "h-[48px] rounded-[12px] border border-[#f7f1e633] bg-[#2b2b2f99] px-3 text-[14px] text-[#f7f1e6] outline-none placeholder:text-[#f7f1e64d]";
+    "h-[48px] rounded-[12px] border border-[#3b3f6e22] bg-white/80 px-3 text-[14px] text-[#3b3f6e] outline-none placeholder:text-[#3b3f6e66]";
   const textareaClass =
-    "min-h-[96px] rounded-[12px] border border-[#f7f1e633] bg-[#2b2b2f99] px-3 py-3 text-[14px] text-[#f7f1e6] outline-none placeholder:text-[#f7f1e64d]";
+    "min-h-[96px] rounded-[12px] border border-[#3b3f6e22] bg-white/80 px-3 py-3 text-[14px] text-[#3b3f6e] outline-none placeholder:text-[#3b3f6e66]";
 
   return (
-    <main className="min-h-dvh bg-[#3b3f6e] text-[#f7f1e6]">
+    <main className="min-h-dvh bg-[#f7f1e6] text-[#3b3f6e]">
       <section className="mx-auto min-h-dvh w-full max-w-[390px] px-4 pb-8">
         <header className="flex h-14 items-center justify-between">
           <Link className="text-[22px]" href="/internal/pilot">
@@ -128,7 +128,7 @@ export function InternalLogEntryForm() {
           </Link>
           <h1 className="text-[17px] font-semibold">Log entry</h1>
           <button
-            className="rounded-full bg-[#f7f1e6] px-4 py-2 text-[13px] font-semibold text-[#3b3f6e] disabled:opacity-50"
+            className="rounded-full bg-[#3b3f6e] px-4 py-2 text-[13px] font-semibold text-[#f7f1e6] disabled:opacity-50"
             disabled={saving || !form.school_name || !form.class_name}
             form="internal-log-form"
             type="submit"
@@ -213,7 +213,7 @@ export function InternalLogEntryForm() {
             />
           </div>
 
-          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
+          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#3b3f6e99]">
             Completion
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -235,7 +235,7 @@ export function InternalLogEntryForm() {
             ))}
           </div>
 
-          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
+          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#3b3f6e99]">
             Adaptive controls
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -270,7 +270,7 @@ export function InternalLogEntryForm() {
             <option value="mixed">Mixed</option>
           </select>
 
-          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
+          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#3b3f6e99]">
             Technical
           </p>
           {[
@@ -311,7 +311,7 @@ export function InternalLogEntryForm() {
             value={form.teacher_feedback}
           />
 
-          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#f7f1e680]">
+          <p className="pt-2 text-[11px] uppercase tracking-[0.08em] text-[#3b3f6e99]">
             Student moments
           </p>
           {[
@@ -331,7 +331,7 @@ export function InternalLogEntryForm() {
 
           {status ? <p className="text-[13px] text-[#c0392b]">{status}</p> : null}
           <button
-            className="h-[52px] w-full rounded-[12px] bg-[#f7f1e6] text-[15px] font-semibold text-[#3b3f6e] disabled:opacity-50"
+            className="h-[52px] w-full rounded-[12px] bg-[#3b3f6e] text-[15px] font-semibold text-[#f7f1e6] disabled:opacity-50"
             disabled={saving || !form.school_name || !form.class_name}
             type="submit"
           >

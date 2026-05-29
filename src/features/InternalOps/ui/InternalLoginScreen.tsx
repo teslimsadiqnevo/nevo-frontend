@@ -66,16 +66,16 @@ export function InternalLoginScreen() {
     }
   }
 
-  const fieldClassName = `h-[52px] w-full rounded-[12px] border bg-[#2b2b2fcc] px-4 text-[15px] text-[#f7f1e6] outline-none transition placeholder:text-[#f7f1e64d] focus:border-[#f7f1e6] ${
-    error ? "border-[#c0392b]" : "border-[#f7f1e633]"
+  const fieldClassName = `h-[52px] w-full rounded-[12px] border bg-white/80 px-4 text-[15px] text-[#3b3f6e] outline-none transition placeholder:text-[#3b3f6e66] focus:border-[#3b3f6e] ${
+    error ? "border-[#c0392b]" : "border-[#3b3f6e22]"
   }`;
 
   return (
-    <main className="min-h-dvh bg-[#3b3f6e] text-[#f7f1e6]">
+    <main className="min-h-dvh bg-[#f7f1e6] text-[#3b3f6e]">
       <section className="mx-auto flex min-h-dvh w-full max-w-[390px] flex-col px-4">
         <div className="flex flex-col items-center pt-16">
-          <NevoLogo alt="Nevo" height={28} variant="light" width={93} />
-          <p className="mt-2 text-[12px] font-normal text-[#f7f1e666]">
+          <NevoLogo alt="Nevo" height={28} width={93} />
+          <p className="mt-2 text-[12px] font-normal text-[#3b3f6e66]">
             Internal Dashboard
           </p>
         </div>
@@ -109,7 +109,7 @@ export function InternalLoginScreen() {
             />
             <button
               aria-label={showPassword ? "Hide password" : "Show password"}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#f7f1e6]"
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#3b3f6e]"
               onClick={() => setShowPassword((current) => !current)}
               type="button"
             >
@@ -124,7 +124,7 @@ export function InternalLoginScreen() {
           ) : null}
 
           <button
-            className="mt-6 h-[52px] w-full rounded-[12px] bg-[#f7f1e6] text-[15px] font-semibold text-[#3b3f6e] transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-6 h-[52px] w-full rounded-[12px] bg-[#3b3f6e] text-[15px] font-semibold text-[#f7f1e6] transition hover:bg-[#4a5080] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={isSubmitting || !email || !password}
             type="submit"
           >

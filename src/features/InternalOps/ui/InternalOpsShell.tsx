@@ -176,7 +176,7 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
   }
 
   return (
-    <main className="min-h-dvh bg-[#3b3f6e] text-[#f7f1e6]">
+    <main className="min-h-dvh bg-[#f7f1e6] text-[#3b3f6e]">
       <section className="mx-auto flex min-h-dvh w-full max-w-[390px] flex-col">
         <header className="flex h-14 items-center justify-between px-4">
           <h1 className="text-[18px] font-bold">{activeLabel}</h1>
@@ -187,7 +187,7 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
             </span>
             <button
               aria-label="Sign out"
-              className="rounded-full p-1 text-[#f7f1e680] transition hover:text-[#f7f1e6]"
+              className="rounded-full p-1 text-[#3b3f6e99] transition hover:text-[#3b3f6e]"
               onClick={handleLogout}
               type="button"
             >
@@ -198,12 +198,12 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
 
         <div className="flex items-center justify-between px-4 pb-4">
           <div>
-            <NevoLogo alt="Nevo" height={24} variant="light" width={80} />
-            <p className="mt-2 text-[12px] text-[#f7f1e680]">
+            <NevoLogo alt="Nevo" height={24} width={80} />
+            <p className="mt-2 text-[12px] text-[#3b3f6e99]">
               {user ? `${user.name} - ${user.role}` : "Internal Dashboard"}
             </p>
           </div>
-          <span className="rounded-full bg-[#2b2b2f99] px-3 py-2 text-[12px] text-[#f7f1e699]">
+          <span className="rounded-full border border-[#3b3f6e22] bg-white/70 px-3 py-2 text-[12px] text-[#3b3f6e99]">
             {health?.environment ?? "env"}
           </span>
         </div>
@@ -211,22 +211,22 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
         <div className="flex-1 overflow-y-auto px-4">
           {loading ? (
             <div className="space-y-3 pb-24 pt-2">
-              <div className="h-28 rounded-[12px] bg-[#2b2b2f99]" />
-              <div className="h-16 rounded-[12px] bg-[#2b2b2f99]" />
-              <div className="h-16 rounded-[12px] bg-[#2b2b2f99]" />
+              <div className="h-28 rounded-[12px] bg-[#e8e2d4]" />
+              <div className="h-16 rounded-[12px] bg-[#e8e2d4]" />
+              <div className="h-16 rounded-[12px] bg-[#e8e2d4]" />
             </div>
           ) : (
             <TabContent activeTab={activeTab} health={health} />
           )}
         </div>
 
-        <nav className="fixed bottom-0 left-1/2 z-10 grid h-14 w-full max-w-[390px] -translate-x-1/2 grid-cols-4 border-t border-[#f7f1e633] bg-[#3b3f6e]">
+        <nav className="fixed bottom-0 left-1/2 z-10 grid h-14 w-full max-w-[390px] -translate-x-1/2 grid-cols-4 border-t border-[#3b3f6e22] bg-[#f7f1e6]/95 backdrop-blur">
           {TAB_ITEMS.map((item) => {
             const isActive = item.id === activeTab;
             return (
               <Link
                 className={`flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition ${
-                  isActive ? "text-[#f7f1e6]" : "text-[#f7f1e666]"
+                  isActive ? "text-[#3b3f6e]" : "text-[#3b3f6e66]"
                 }`}
                 href={`/internal/${item.id}`}
                 key={item.id}
