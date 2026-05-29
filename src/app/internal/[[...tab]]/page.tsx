@@ -3,7 +3,18 @@ import { redirect } from "next/navigation";
 import { InternalOpsShell, type InternalOpsTab } from "@/features/InternalOps";
 
 const INTERNAL_TOKEN_COOKIE = "internal_ops_token";
-const INTERNAL_TABS: InternalOpsTab[] = ["live", "pilot", "product", "ai"];
+const INTERNAL_TABS: InternalOpsTab[] = [
+  "live",
+  "pilot",
+  "product",
+  "ai",
+  "schools",
+  "classes",
+  "teachers",
+  "students",
+  "lessons",
+  "support",
+];
 
 export default async function InternalOpsPage({
   params,

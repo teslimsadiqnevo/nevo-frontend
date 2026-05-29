@@ -1,4 +1,14 @@
-export type InternalOpsTab = "live" | "pilot" | "product" | "ai";
+export type InternalOpsTab =
+  | "live"
+  | "pilot"
+  | "product"
+  | "ai"
+  | "schools"
+  | "classes"
+  | "teachers"
+  | "students"
+  | "lessons"
+  | "support";
 
 export type InternalOpsUser = {
   email: string;
@@ -204,4 +214,201 @@ export type InternalAiError = {
   timestamp: string;
   details?: string | null;
   severity: string;
+};
+
+export type InternalAdminPerson = {
+  id: string;
+  name: string;
+  email?: string | null;
+  is_active: boolean;
+};
+
+export type InternalAdminClassSummary = {
+  class_id: string;
+  class_name: string;
+  school_id: string;
+  school_name: string;
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+  student_count: number;
+  assigned_lessons: number;
+  completed_sessions: number;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminClassDetail = InternalAdminClassSummary & {
+  class_code?: string | null;
+  education_level?: string | null;
+  subjects: string[];
+  academic_year_term?: string | null;
+  students: InternalAdminPerson[];
+  teacher_options: InternalAdminPerson[];
+};
+
+export type InternalAdminSchoolSummary = {
+  school_id: string;
+  school_name: string;
+  location?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  school_type?: string | null;
+  active_students: number;
+  teacher_count: number;
+  class_count: number;
+  lesson_count: number;
+  last_session_date?: string | null;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminSchoolDetail = InternalAdminSchoolSummary & {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  website?: string | null;
+  subscription_tier?: string | null;
+  max_teachers: number;
+  max_students: number;
+  messaging_enabled: boolean;
+  offline_access_enabled: boolean;
+  classes: InternalAdminClassSummary[];
+  teachers: InternalAdminPerson[];
+};
+
+export type InternalAdminTeacherSummary = {
+  teacher_id: string;
+  teacher_name: string;
+  email?: string | null;
+  school_id?: string | null;
+  school_name?: string | null;
+  assigned_classes: number;
+  uploaded_lessons: number;
+  active_assignments: number;
+  completed_sessions: number;
+  last_login_at?: string | null;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminTeacherDetail = InternalAdminTeacherSummary & {
+  phone_number?: string | null;
+  subjects: string[];
+  education_levels: string[];
+  classes: InternalAdminClassSummary[];
+  lessons: Array<Record<string, unknown>>;
+};
+
+export type InternalAdminStudentSummary = {
+  student_id: string;
+  student_name: string;
+  nevo_id?: string | null;
+  school_id?: string | null;
+  school_name?: string | null;
+  class_id?: string | null;
+  class_name?: string | null;
+  learning_preference?: string | null;
+  is_esl_learner: boolean;
+  lessons_completed: number;
+  assigned_lessons: number;
+  completed_sessions: number;
+  last_activity_at?: string | null;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminStudentDetail = InternalAdminStudentSummary & {
+  email?: string | null;
+  age?: number | null;
+  adapt_automatically: boolean;
+  voice_guidance: boolean;
+  large_text: boolean;
+  extra_spacing: boolean;
+  average_score: number;
+  total_time_spent_seconds: number;
+  current_streak_days: number;
+  reading_level?: string | null;
+  complexity_tolerance?: string | null;
+  class_options: InternalAdminClassSummary[];
+  recent_lessons: Array<Record<string, unknown>>;
+};
+
+export type InternalAdminLessonSummary = {
+  lesson_id: string;
+  title: string;
+  subject?: string | null;
+  topic?: string | null;
+  status: string;
+  school_id?: string | null;
+  school_name?: string | null;
+  teacher_id: string;
+  teacher_name?: string | null;
+  concept_count: number;
+  assignment_count: number;
+  completed_assignments: number;
+  sessions_count: number;
+  adapted_variants: number;
+  failed_jobs: number;
+  latest_job_status?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  relationship_status: string;
+};
+
+export type InternalAdminLessonDetail = InternalAdminLessonSummary & {
+  description?: string | null;
+  target_grade_level: number;
+  estimated_duration_minutes: number;
+  objectives: string[];
+  key_concepts: string[];
+  simplify_enabled: boolean;
+  expand_enabled: boolean;
+  max_difficulty: number;
+  processed_at?: string | null;
+  jobs: Array<Record<string, unknown>>;
+  assignments: Array<Record<string, unknown>>;
+  variants: Array<Record<string, unknown>>;
+};
+
+export type InternalSupportIssue = {
+  key: string;
+  label: string;
+  count: number;
+  severity: "ok" | "info" | "warning" | "error" | string;
+  description: string;
+};
+
+export type InternalSupportOverview = {
+  issues: InternalSupportIssue[];
+  last_event_at?: string | null;
+};
+
+export type InternalSupportAction = {
+  key: string;
+  label: string;
+  description: string;
+  target_type?: string | null;
+  requires_target: boolean;
+  supports_execute: boolean;
+  severity: "info" | "warning" | "error" | string;
+};
+
+export type InternalSupportActionResult = {
+  action: string;
+  dry_run: boolean;
+  status: string;
+  summary: string;
+  affected_count: number;
+  details: Record<string, unknown>;
+};
+
+export type InternalAuditEvent = {
+  id: string;
+  event_type: string;
+  severity: "info" | "warning" | "error" | string;
+  source: string;
+  description: string;
+  occurred_at: string;
+  details: Record<string, unknown>;
 };
