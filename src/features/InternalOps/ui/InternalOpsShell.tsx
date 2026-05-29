@@ -6,9 +6,11 @@ import { useEffect, useMemo, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
 import { InternalAdminPlaceholderPanel } from "./InternalAdminPlaceholderPanel";
 import { InternalAiPanel } from "./InternalAiPanel";
+import { InternalClassesPanel } from "./InternalClassesPanel";
 import { InternalLivePanel } from "./InternalLivePanel";
 import { InternalPilotPanel } from "./InternalPilotPanel";
 import { InternalProductPanel } from "./InternalProductPanel";
+import { InternalSchoolsPanel } from "./InternalSchoolsPanel";
 import { internalTheme } from "./internalOpsTheme";
 import type { InternalHealth, InternalOpsTab } from "../api/types";
 
@@ -210,6 +212,14 @@ function TabContent({
 
   if (activeTab === "ai") {
     return <InternalAiPanel />;
+  }
+
+  if (activeTab === "schools") {
+    return <InternalSchoolsPanel />;
+  }
+
+  if (activeTab === "classes") {
+    return <InternalClassesPanel />;
   }
 
   return (

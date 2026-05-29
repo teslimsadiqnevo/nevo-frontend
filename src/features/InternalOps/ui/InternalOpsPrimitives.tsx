@@ -78,14 +78,24 @@ export function InternalListCard({
   );
 }
 
-export function InternalSearchInput({ placeholder }: { placeholder: string }) {
+export function InternalSearchInput({
+  onChange,
+  placeholder,
+  value,
+}: {
+  onChange?: (value: string) => void;
+  placeholder: string;
+  value?: string;
+}) {
   return (
     <label className="block">
       <span className="sr-only">{placeholder}</span>
       <input
         className="h-11 w-full rounded-[12px] border border-[#e0d9ce] bg-white px-4 text-[14px] text-[#3b3f6e] outline-none placeholder:text-[#2b2b2f66] focus:border-[#3b3f6e]"
+        onChange={(event) => onChange?.(event.target.value)}
         placeholder={placeholder}
         type="search"
+        value={value}
       />
     </label>
   );

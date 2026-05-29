@@ -215,3 +215,64 @@ export type InternalAiError = {
   details?: string | null;
   severity: string;
 };
+
+export type InternalAdminPerson = {
+  id: string;
+  name: string;
+  email?: string | null;
+  is_active: boolean;
+};
+
+export type InternalAdminClassSummary = {
+  class_id: string;
+  class_name: string;
+  school_id: string;
+  school_name: string;
+  teacher_id?: string | null;
+  teacher_name?: string | null;
+  student_count: number;
+  assigned_lessons: number;
+  completed_sessions: number;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminClassDetail = InternalAdminClassSummary & {
+  class_code?: string | null;
+  education_level?: string | null;
+  subjects: string[];
+  academic_year_term?: string | null;
+  students: InternalAdminPerson[];
+  teacher_options: InternalAdminPerson[];
+};
+
+export type InternalAdminSchoolSummary = {
+  school_id: string;
+  school_name: string;
+  location?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  school_type?: string | null;
+  active_students: number;
+  teacher_count: number;
+  class_count: number;
+  lesson_count: number;
+  last_session_date?: string | null;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminSchoolDetail = InternalAdminSchoolSummary & {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  website?: string | null;
+  subscription_tier?: string | null;
+  max_teachers: number;
+  max_students: number;
+  messaging_enabled: boolean;
+  offline_access_enabled: boolean;
+  classes: InternalAdminClassSummary[];
+  teachers: InternalAdminPerson[];
+};
