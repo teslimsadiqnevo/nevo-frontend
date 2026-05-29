@@ -145,3 +145,97 @@ export function InternalConfirmDialog({
     </div>
   );
 }
+
+export function InternalPagination({
+  onPageChange,
+  page,
+  pageCount,
+  pageSize,
+  total,
+}: {
+  onPageChange: (page: number) => void;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+  total: number;
+}) {
+  if (pageCount <= 1) return null;
+
+  const start = (page - 1) * pageSize + 1;
+  const end = Math.min(total, page * pageSize);
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-[12px] border border-[#e0d9ce] bg-white px-3 py-2 text-[12px] text-[#3b3f6e] shadow-sm">
+      <p className={internalTheme.faint}>
+        Showing {start}-{end} of {total}
+      </p>
+      <div className="flex items-center gap-2">
+        <button
+          className="h-8 rounded-[9px] border border-[#3b3f6e33] px-3 font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={page <= 1}
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          type="button"
+        >
+          Prev
+        </button>
+        <span className="min-w-12 text-center font-semibold">
+          {page}/{pageCount}
+        </span>
+        <button
+          className="h-8 rounded-[9px] border border-[#3b3f6e33] px-3 font-semibold disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={page >= pageCount}
+          onClick={() => onPageChange(Math.min(pageCount, page + 1))}
+          type="button"
+        >
+          Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function InternalModal({
+  children,
+  description,
+  onClose,
+  title,
+}: {
+  children: ReactNode;
+  description?: string;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <div
+      aria-modal="true"
+      className="fixed inset-0 z-40 flex items-end bg-[#2b2b2f66] px-3 pb-3 pt-16 backdrop-blur-sm md:items-center md:justify-center md:p-6"
+      role="dialog"
+    >
+      <div className="max-h-[82vh] w-full max-w-[620px] overflow-hidden rounded-[20px] border border-[#e0d9ce] bg-[#f7f1e6] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-[#e0d9ce] bg-white px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-[16px] font-bold text-[#3b3f6e]">
+              {title}
+            </h3>
+            {description ? (
+              <p className={`mt-1 text-[12px] ${internalTheme.faint}`}>
+                {description}
+              </p>
+            ) : null}
+          </div>
+          <button
+            aria-label="Close details"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[#e0d9ce] text-[20px] leading-none text-[#3b3f6e]"
+            onClick={onClose}
+            type="button"
+          >
+            ×
+          </button>
+        </div>
+        <div className="max-h-[calc(82vh-64px)] overflow-y-auto p-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}

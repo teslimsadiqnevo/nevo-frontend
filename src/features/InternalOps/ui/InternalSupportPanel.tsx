@@ -10,6 +10,7 @@ import type {
 import {
   InternalEmptyState,
   InternalPageHeader,
+  InternalPagination,
   InternalStatCard,
 } from "./InternalOpsPrimitives";
 import { InternalRefreshPill, internalTheme } from "./internalOpsTheme";
@@ -27,6 +28,7 @@ const EMPTY_OVERVIEW: InternalSupportOverview = {
   issues: [],
   last_event_at: null,
 };
+const AUDIT_PAGE_SIZE = 10;
 
 function severityClass(severity: string) {
   if (severity === "ok") return "bg-[#d4edda] text-[#2f7d32]";
@@ -57,6 +59,66 @@ function formatTime(value?: string | null) {
   }).format(new Date(value));
 }
 
+function humanizeKey(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function describeRecord(value: Record<string, unknown>) {
+  const preferredKeys = [
+    "name",
+    "title",
+    "school_name",
+    "class_name",
+    "student_name",
+    "teacher_name",
+    "lesson_title",
+    "status",
+    "count",
+  ];
+  const parts = preferredKeys
+    .map((key) => value[key])
+    .filter((item) => item !== null && item !== undefined && item !== "")
+    .map(String)
+    .slice(0, 3);
+
+  if (parts.length) return parts.join(" - ");
+
+  return Object.entries(value)
+    .filter(([, item]) => typeof item !== "object" && item !== null && item !== "")
+    .slice(0, 3)
+    .map(([key, item]) => `${humanizeKey(key)}: ${String(item)}`)
+    .join(" - ");
+}
+
+function describeDetailValue(value: unknown) {
+  if (Array.isArray(value)) {
+    if (!value.length) return "No records";
+    const preview = value
+      .slice(0, 2)
+      .map((item) =>
+        item && typeof item === "object"
+          ? describeRecord(item as Record<string, unknown>)
+          : String(item),
+      )
+      .filter(Boolean)
+      .join("; ");
+    return `${value.length} record${value.length === 1 ? "" : "s"}${
+      preview ? ` - ${preview}` : ""
+    }`;
+  }
+
+  if (value && typeof value === "object") {
+    const summary = describeRecord(value as Record<string, unknown>);
+    return summary || "Details available";
+  }
+
+  if (value === null || value === undefined || value === "") return "None";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
 function resultPreview(result: InternalSupportActionResult | null) {
   if (!result) return null;
   const detailRows = Object.entries(result.details).slice(0, 4);
@@ -83,8 +145,8 @@ function resultPreview(result: InternalSupportActionResult | null) {
               className="rounded-[10px] bg-[#f3eadc] px-3 py-2 text-[12px] text-[#3b3f6e]"
               key={key}
             >
-              <span className="font-semibold">{key}: </span>
-              {JSON.stringify(value).slice(0, 180)}
+              <span className="font-semibold">{humanizeKey(key)}: </span>
+              {describeDetailValue(value)}
             </p>
           ))}
         </div>
@@ -177,6 +239,14 @@ function SupportActionCard({
 }
 
 function AuditList({ events }: { events: InternalAuditEvent[] }) {
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(events.length / AUDIT_PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageEvents = events.slice(
+    (safePage - 1) * AUDIT_PAGE_SIZE,
+    safePage * AUDIT_PAGE_SIZE,
+  );
+
   if (!events.length) {
     return (
       <InternalEmptyState
@@ -188,7 +258,7 @@ function AuditList({ events }: { events: InternalAuditEvent[] }) {
 
   return (
     <div className="space-y-2">
-      {events.map((event) => (
+      {pageEvents.map((event) => (
         <article className={internalTheme.cardCompact} key={event.id}>
           <div className="flex items-start gap-3">
             <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${dotClass(event.severity)}`} />
@@ -203,6 +273,13 @@ function AuditList({ events }: { events: InternalAuditEvent[] }) {
           </div>
         </article>
       ))}
+      <InternalPagination
+        onPageChange={setPage}
+        page={safePage}
+        pageCount={pageCount}
+        pageSize={AUDIT_PAGE_SIZE}
+        total={events.length}
+      />
     </div>
   );
 }

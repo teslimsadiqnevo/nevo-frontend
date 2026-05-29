@@ -7,7 +7,9 @@ import type {
 } from "../api/types";
 import {
   InternalEmptyState,
+  InternalModal,
   InternalPageHeader,
+  InternalPagination,
   InternalSearchInput,
   InternalStatCard,
 } from "./InternalOpsPrimitives";
@@ -20,6 +22,7 @@ type SchoolListCache = {
 
 const schoolListCache = new Map<string, SchoolListCache>();
 const schoolDetailCache = new Map<string, InternalAdminSchoolDetail>();
+const PAGE_SIZE = 10;
 
 function relationshipCopy(status: string) {
   if (status === "no_classes") return "No classes";
@@ -53,14 +56,14 @@ export function InternalSchoolsPanel() {
   const [schools, setSchools] = useState<InternalAdminSchoolSummary[]>(
     initialCache?.schools ?? [],
   );
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialCache?.schools[0]?.school_id ?? null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<InternalAdminSchoolDetail | null>(
     selectedId ? (schoolDetailCache.get(selectedId) ?? null) : null,
   );
+  const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(!initialCache);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -105,7 +108,8 @@ export function InternalSchoolsPanel() {
           if (current && nextSchools.some((school) => school.school_id === current)) {
             return current;
           }
-          return nextSchools[0]?.school_id ?? null;
+          setDetailOpen(false);
+          return null;
         });
         setError(response.ok ? "" : "Schools could not be loaded.");
       } catch {
@@ -123,6 +127,10 @@ export function InternalSchoolsPanel() {
       isActive = false;
     };
   }, [cacheKey, deferredSearch]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [cacheKey]);
 
   useEffect(() => {
     let isActive = true;
@@ -177,6 +185,14 @@ export function InternalSchoolsPanel() {
     return { active, needsReview, students, classes };
   }, [schools]);
 
+  const pageCount = Math.max(1, Math.ceil(schools.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageSchools = schools.slice(
+    (safePage - 1) * PAGE_SIZE,
+    safePage * PAGE_SIZE,
+  );
+  const selectedSchool = schools.find((school) => school.school_id === selectedId);
+
   async function patchSchool(payload: Record<string, unknown>) {
     if (!selectedId) return;
     setSaving(true);
@@ -205,6 +221,97 @@ export function InternalSchoolsPanel() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function renderDetailContent() {
+    if (detailLoading) {
+      return (
+        <div className="space-y-3">
+          <div className={`h-5 ${internalTheme.skeleton}`} />
+          <div className={`h-20 ${internalTheme.skeleton}`} />
+          <div className={`h-28 ${internalTheme.skeleton}`} />
+        </div>
+      );
+    }
+
+    if (!detail) {
+      return (
+        <p className={`text-[13px] ${internalTheme.faint}`}>
+          Select a school to inspect its details.
+        </p>
+      );
+    }
+
+    return (
+      <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-[16px] font-bold text-[#3b3f6e]">
+              {detail.school_name}
+            </h3>
+            <p className={`mt-1 text-[12px] ${internalTheme.faint}`}>
+              {detail.address || detail.location || "No address saved"}
+            </p>
+          </div>
+          <span
+            className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+              detail.is_active
+                ? "bg-[#d4edda] text-[#2f7d32]"
+                : "bg-[#f3eadc] text-[#2b2b2f99]"
+            }`}
+          >
+            {detail.is_active ? "Active" : "Inactive"}
+          </span>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <DetailMetric label="Students" value={detail.active_students} />
+          <DetailMetric label="Teachers" value={detail.teacher_count} />
+          <DetailMetric label="Classes" value={detail.class_count} />
+          <DetailMetric label="Lessons" value={detail.lesson_count} />
+        </div>
+
+        <div className="mt-4 space-y-2 text-[12px] text-[#2b2b2f99]">
+          <p>Email: {detail.email || "Not set"}</p>
+          <p>Phone: {detail.phone_number || "Not set"}</p>
+          <p>Last session: {formatDate(detail.last_session_date)}</p>
+          <p>Status: {relationshipCopy(detail.relationship_status)}</p>
+        </div>
+
+        <div className="mt-4">
+          <p className={internalTheme.label}>Teachers</p>
+          <div className="mt-2 space-y-1">
+            {detail.teachers.length ? (
+              detail.teachers.slice(0, 4).map((teacher) => (
+                <p
+                  className="rounded-[9px] bg-[#f3eadc] px-3 py-2 text-[12px] text-[#3b3f6e]"
+                  key={teacher.id}
+                >
+                  {teacher.name}
+                </p>
+              ))
+            ) : (
+              <p className={`text-[12px] ${internalTheme.faint}`}>
+                No teachers linked yet.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <button
+          className="mt-4 h-10 w-full rounded-[10px] bg-[#3b3f6e] text-[13px] font-semibold text-[#f7f1e6] disabled:opacity-50"
+          disabled={saving}
+          onClick={() => patchSchool({ is_active: !detail.is_active })}
+          type="button"
+        >
+          {saving
+            ? "Saving..."
+            : detail.is_active
+              ? "Mark inactive"
+              : "Reactivate school"}
+        </button>
+      </div>
+    );
   }
 
   if (loading) {
@@ -255,9 +362,9 @@ export function InternalSchoolsPanel() {
           description="Try another search term or clear the filter to see all internal school records."
         />
       ) : (
-        <section className="grid gap-3 md:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="space-y-3">
           <div className="space-y-2">
-            {schools.map((school) => {
+            {pageSchools.map((school) => {
               const active = selectedId === school.school_id;
               return (
                 <button
@@ -267,7 +374,10 @@ export function InternalSchoolsPanel() {
                       : "border-[#e0d9ce] hover:border-[#9a9ccb]"
                   }`}
                   key={school.school_id}
-                  onClick={() => setSelectedId(school.school_id)}
+                  onClick={() => {
+                    setSelectedId(school.school_id);
+                    setDetailOpen(true);
+                  }}
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -295,91 +405,24 @@ export function InternalSchoolsPanel() {
               );
             })}
           </div>
-
-          <aside className={internalTheme.card}>
-            {detailLoading ? (
-              <div className="space-y-3">
-                <div className={`h-5 ${internalTheme.skeleton}`} />
-                <div className={`h-20 ${internalTheme.skeleton}`} />
-                <div className={`h-28 ${internalTheme.skeleton}`} />
-              </div>
-            ) : detail ? (
-              <div>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <h3 className="text-[16px] font-bold text-[#3b3f6e]">
-                      {detail.school_name}
-                    </h3>
-                    <p className={`mt-1 text-[12px] ${internalTheme.faint}`}>
-                      {detail.address || detail.location || "No address saved"}
-                    </p>
-                  </div>
-                  <span
-                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                      detail.is_active
-                        ? "bg-[#d4edda] text-[#2f7d32]"
-                        : "bg-[#f3eadc] text-[#2b2b2f99]"
-                    }`}
-                  >
-                    {detail.is_active ? "Active" : "Inactive"}
-                  </span>
-                </div>
-
-                <div className="mt-4 grid grid-cols-2 gap-2">
-                  <DetailMetric label="Students" value={detail.active_students} />
-                  <DetailMetric label="Teachers" value={detail.teacher_count} />
-                  <DetailMetric label="Classes" value={detail.class_count} />
-                  <DetailMetric label="Lessons" value={detail.lesson_count} />
-                </div>
-
-                <div className="mt-4 space-y-2 text-[12px] text-[#2b2b2f99]">
-                  <p>Email: {detail.email || "Not set"}</p>
-                  <p>Phone: {detail.phone_number || "Not set"}</p>
-                  <p>Last session: {formatDate(detail.last_session_date)}</p>
-                  <p>Status: {relationshipCopy(detail.relationship_status)}</p>
-                </div>
-
-                <div className="mt-4">
-                  <p className={internalTheme.label}>Teachers</p>
-                  <div className="mt-2 space-y-1">
-                    {detail.teachers.length ? (
-                      detail.teachers.slice(0, 4).map((teacher) => (
-                        <p
-                          className="rounded-[9px] bg-[#f3eadc] px-3 py-2 text-[12px] text-[#3b3f6e]"
-                          key={teacher.id}
-                        >
-                          {teacher.name}
-                        </p>
-                      ))
-                    ) : (
-                      <p className={`text-[12px] ${internalTheme.faint}`}>
-                        No teachers linked yet.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  className="mt-4 h-10 w-full rounded-[10px] bg-[#3b3f6e] text-[13px] font-semibold text-[#f7f1e6] disabled:opacity-50"
-                  disabled={saving}
-                  onClick={() => patchSchool({ is_active: !detail.is_active })}
-                  type="button"
-                >
-                  {saving
-                    ? "Saving..."
-                    : detail.is_active
-                      ? "Mark inactive"
-                      : "Reactivate school"}
-                </button>
-              </div>
-            ) : (
-              <p className={`text-[13px] ${internalTheme.faint}`}>
-                Select a school to inspect its details.
-              </p>
-            )}
-          </aside>
+          <InternalPagination
+            onPageChange={setPage}
+            page={safePage}
+            pageCount={pageCount}
+            pageSize={PAGE_SIZE}
+            total={schools.length}
+          />
         </section>
       )}
+
+      {detailOpen ? (
+        <InternalModal
+          onClose={() => setDetailOpen(false)}
+          title={selectedSchool?.school_name ?? "School details"}
+        >
+          {renderDetailContent()}
+        </InternalModal>
+      ) : null}
     </div>
   );
 }

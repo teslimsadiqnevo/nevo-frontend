@@ -12,7 +12,9 @@ import type {
 } from "../api/types";
 import {
   InternalEmptyState,
+  InternalModal,
   InternalPageHeader,
+  InternalPagination,
   InternalSearchInput,
   InternalStatCard,
 } from "./InternalOpsPrimitives";
@@ -26,6 +28,7 @@ const studentListCache = new Map<string, CacheEntry<InternalAdminStudentSummary>
 const studentDetailCache = new Map<string, InternalAdminStudentDetail>();
 const lessonListCache = new Map<string, CacheEntry<InternalAdminLessonSummary>>();
 const lessonDetailCache = new Map<string, InternalAdminLessonDetail>();
+const PAGE_SIZE = 10;
 
 type ResourceConfig<TSummary, TDetail> = {
   basePath: string;
@@ -83,14 +86,14 @@ function AdminResourcePanel<TSummary, TDetail>({
   const cacheKey = deferredSearch.toLowerCase();
   const initialCache = config.listCache.get(cacheKey);
   const [items, setItems] = useState<TSummary[]>(initialCache?.items ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialCache?.items[0] ? config.getId(initialCache.items[0]) : null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<TDetail | null>(
     selectedId ? (config.detailCache.get(selectedId) ?? null) : null,
   );
+  const [detailOpen, setDetailOpen] = useState(false);
   const [loading, setLoading] = useState(!initialCache);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [page, setPage] = useState(1);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -133,7 +136,8 @@ function AdminResourcePanel<TSummary, TDetail>({
           if (current && nextItems.some((item) => config.getId(item) === current)) {
             return current;
           }
-          return nextItems[0] ? config.getId(nextItems[0]) : null;
+          setDetailOpen(false);
+          return null;
         });
         setError(response.ok ? "" : `${config.title} could not be loaded.`);
       } catch {
@@ -151,6 +155,10 @@ function AdminResourcePanel<TSummary, TDetail>({
       isActive = false;
     };
   }, [cacheKey, config, deferredSearch]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [cacheKey]);
 
   useEffect(() => {
     let isActive = true;
@@ -189,6 +197,10 @@ function AdminResourcePanel<TSummary, TDetail>({
   }, [config, selectedId]);
 
   const stats = useMemo(() => config.stats(items), [config, items]);
+  const pageCount = Math.max(1, Math.ceil(items.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const pageItems = items.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const selectedItem = items.find((item) => config.getId(item) === selectedId);
 
   async function patch(payload: Record<string, unknown>) {
     if (!selectedId) return;
@@ -268,9 +280,9 @@ function AdminResourcePanel<TSummary, TDetail>({
           title={config.emptyTitle}
         />
       ) : (
-        <section className="grid gap-3 md:grid-cols-[minmax(0,1fr)_380px]">
+        <section className="space-y-3">
           <div className="space-y-2">
-            {items.map((item) => {
+            {pageItems.map((item) => {
               const id = config.getId(item);
               const active = selectedId === id;
               const relationshipStatus = String(
@@ -284,7 +296,10 @@ function AdminResourcePanel<TSummary, TDetail>({
                       : "border-[#e0d9ce] hover:border-[#9a9ccb]"
                   }`}
                   key={id}
-                  onClick={() => setSelectedId(id)}
+                  onClick={() => {
+                    setSelectedId(id);
+                    setDetailOpen(true);
+                  }}
                   type="button"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -309,24 +324,40 @@ function AdminResourcePanel<TSummary, TDetail>({
               );
             })}
           </div>
-
-          <aside className={internalTheme.card}>
-            {detailLoading ? (
-              <div className="space-y-3">
-                <div className={`h-5 ${internalTheme.skeleton}`} />
-                <div className={`h-20 ${internalTheme.skeleton}`} />
-                <div className={`h-28 ${internalTheme.skeleton}`} />
-              </div>
-            ) : detail ? (
-              config.renderDetail({ detail, patch, saving })
-            ) : (
-              <p className={`text-[13px] ${internalTheme.faint}`}>
-                Select a record to inspect its details.
-              </p>
-            )}
-          </aside>
+          <InternalPagination
+            onPageChange={setPage}
+            page={safePage}
+            pageCount={pageCount}
+            pageSize={PAGE_SIZE}
+            total={items.length}
+          />
         </section>
       )}
+
+      {detailOpen ? (
+        <InternalModal
+          onClose={() => setDetailOpen(false)}
+          title={
+            selectedItem
+              ? config.getTitle(selectedItem)
+              : `${config.title} details`
+          }
+        >
+          {detailLoading ? (
+            <div className="space-y-3">
+              <div className={`h-5 ${internalTheme.skeleton}`} />
+              <div className={`h-20 ${internalTheme.skeleton}`} />
+              <div className={`h-28 ${internalTheme.skeleton}`} />
+            </div>
+          ) : detail ? (
+            config.renderDetail({ detail, patch, saving })
+          ) : (
+            <p className={`text-[13px] ${internalTheme.faint}`}>
+              Select a record to inspect its details.
+            </p>
+          )}
+        </InternalModal>
+      ) : null}
     </div>
   );
 }

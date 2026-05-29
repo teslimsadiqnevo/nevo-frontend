@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
 import { InternalAdminPlaceholderPanel } from "./InternalAdminPlaceholderPanel";
 import {
@@ -263,6 +263,17 @@ function InternalNavigation({
   activeTab: InternalOpsTab;
   variant: "mobile" | "desktop";
 }) {
+  const activeMobileTabRef = useRef<HTMLAnchorElement | null>(null);
+
+  useEffect(() => {
+    if (variant !== "mobile") return;
+    activeMobileTabRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeTab, variant]);
+
   if (variant === "mobile") {
     return (
       <nav className="fixed bottom-0 left-1/2 z-10 flex h-16 w-full max-w-[390px] -translate-x-1/2 gap-1 overflow-x-auto border-t border-[#3b3f6e22] bg-[#f7f1e6]/95 px-2 backdrop-blur md:hidden">
@@ -275,6 +286,7 @@ function InternalNavigation({
               }`}
               href={`/internal/${item.id}`}
               key={item.id}
+              ref={isActive ? activeMobileTabRef : undefined}
             >
               <OpsIcon className="h-5 w-5" name={item.icon} />
               {item.label}
@@ -321,11 +333,6 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
     foundationCache?.health ?? null,
   );
   const [loading, setLoading] = useState(!foundationCache);
-
-  const activeLabel = useMemo(
-    () => TAB_ITEMS.find((item) => item.id === activeTab)?.label ?? "Live",
-    [activeTab],
-  );
 
   useEffect(() => {
     let isActive = true;
@@ -417,15 +424,10 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
             </div>
           </header>
 
-          <div className="flex items-center justify-between px-4 pb-4 pt-1 md:border-b md:border-[#e0d9ce] md:px-6 md:py-5">
-            <div>
-              <h1 className="text-[18px] font-bold md:text-[24px]">
-                {activeLabel}
-              </h1>
-              <p className="mt-1 hidden text-[13px] text-[#2b2b2f99] md:block">
-                Internal operations dashboard
-              </p>
-            </div>
+          <div className="flex items-center justify-between px-4 pb-3 pt-1 md:border-b md:border-[#e0d9ce] md:px-6 md:py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#3b3f6e99]">
+              Internal ops
+            </p>
             <span className="rounded-full border border-[#3b3f6e22] bg-white/70 px-3 py-2 text-[12px] text-[#3b3f6e99]">
               {health?.environment ?? "env"}
             </span>
