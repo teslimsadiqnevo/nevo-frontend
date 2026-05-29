@@ -460,7 +460,7 @@ export function InternalStudentsPanel() {
       searchPlaceholder: "Search students...",
       stats: (items) => [
         { label: "Active students", value: items.filter((item) => item.is_active).length },
-        { label: "ESL inferred", value: items.filter((item) => item.is_esl_learner).length },
+        { label: "ESL learners", value: items.filter((item) => item.is_esl_learner).length },
         {
           label: "Completed",
           value: items.reduce((total, item) => total + item.lessons_completed, 0),
@@ -524,6 +524,11 @@ function StudentDetail({
         </select>
       </label>
       <div className="mt-4 grid grid-cols-2 gap-2">
+        <ToggleButton
+          active={detail.is_esl_learner}
+          label="ESL learner"
+          onClick={() => patch({ is_esl_learner: !detail.is_esl_learner })}
+        />
         <ToggleButton
           active={detail.adapt_automatically}
           label="Auto adapt"
