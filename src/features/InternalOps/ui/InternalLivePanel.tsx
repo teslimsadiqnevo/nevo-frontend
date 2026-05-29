@@ -7,6 +7,13 @@ import type {
   InternalLiveSession,
   InternalLiveSignal,
 } from "../api/types";
+import { internalTheme } from "./internalOpsTheme";
+
+let liveCache: {
+  session: InternalLiveSession | null;
+  signals: InternalLiveSignal[];
+  health: InternalHealth | null;
+} | null = null;
 
 function statusColor(status?: string) {
   if (status === "ok") return "bg-[#7ab87a]";
@@ -28,11 +35,13 @@ function formatTime(value: string) {
 
 function HealthStrip({ health }: { health: InternalHealth | null }) {
   return (
-    <section className="fixed bottom-14 left-1/2 z-10 grid h-10 w-full max-w-[390px] -translate-x-1/2 grid-cols-4 bg-[#2b2b2fcc] px-4">
+    <section className="fixed bottom-14 left-1/2 z-10 grid h-10 w-full max-w-[390px] -translate-x-1/2 grid-cols-4 border-t border-[#e0d9ce] bg-white px-4 shadow-[0_-8px_24px_rgba(59,63,110,0.08)]">
       {(["api", "db", "ai", "cache"] as const).map((key) => (
         <div className="flex items-center justify-center gap-2" key={key}>
-          <span className={`h-2 w-2 rounded-full ${statusColor(health?.[key])}`} />
-          <span className="text-[11px] font-normal uppercase text-[#f7f1e699]">
+          <span
+            className={`h-2 w-2 rounded-full ${statusColor(health?.[key])}`}
+          />
+          <span className="text-[11px] font-normal uppercase text-[#3b3f6e99]">
             {key}
           </span>
         </div>
@@ -43,7 +52,7 @@ function HealthStrip({ health }: { health: InternalHealth | null }) {
 
 function StatPill({ children }: { children: ReactNode }) {
   return (
-    <span className="rounded-full bg-[#2b2b2fcc] px-3 py-2 text-[12px] font-normal text-[#f7f1e6]">
+    <span className="rounded-full bg-[#f3eadc] px-3 py-2 text-[12px] font-normal text-[#3b3f6e]">
       {children}
     </span>
   );
@@ -54,11 +63,17 @@ export function InternalLivePanel({
 }: {
   initialHealth: InternalHealth | null;
 }) {
-  const [session, setSession] = useState<InternalLiveSession | null>(null);
-  const [signals, setSignals] = useState<InternalLiveSignal[]>([]);
-  const [health, setHealth] = useState<InternalHealth | null>(initialHealth);
+  const [session, setSession] = useState<InternalLiveSession | null>(
+    liveCache?.session ?? null,
+  );
+  const [signals, setSignals] = useState<InternalLiveSignal[]>(
+    liveCache?.signals ?? [],
+  );
+  const [health, setHealth] = useState<InternalHealth | null>(
+    liveCache?.health ?? initialHealth,
+  );
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!liveCache);
 
   useEffect(() => {
     let isActive = true;
@@ -70,7 +85,9 @@ export function InternalLivePanel({
             fetch("/api/internal/live/session", { cache: "no-store" }),
             fetch("/api/internal/live/health", { cache: "no-store" }),
             includeSignals
-              ? fetch("/api/internal/live/signals?limit=30", { cache: "no-store" })
+              ? fetch("/api/internal/live/signals?limit=30", {
+                  cache: "no-store",
+                })
               : Promise.resolve(null),
           ]);
 
@@ -82,14 +99,21 @@ export function InternalLivePanel({
         }
 
         const sessionData = await sessionResponse.json();
-        const healthData = healthResponse.ok ? await healthResponse.json() : null;
+        const healthData = healthResponse.ok
+          ? await healthResponse.json()
+          : null;
+        const nextSignals = signalsResponse?.ok
+          ? ((await signalsResponse.json()).events ?? [])
+          : (liveCache?.signals ?? []);
 
         setSession(sessionData);
-        if (signalsResponse?.ok) {
-          const signalsData = await signalsResponse.json();
-          setSignals(signalsData.events ?? []);
-        }
+        if (signalsResponse?.ok) setSignals(nextSignals);
         if (healthData) setHealth(healthData);
+        liveCache = {
+          session: sessionData,
+          signals: nextSignals,
+          health: healthData ?? liveCache?.health ?? initialHealth,
+        };
         setError("");
       } catch {
         if (isActive) setError("Live monitor is degraded.");
@@ -106,6 +130,11 @@ export function InternalLivePanel({
         const payload = JSON.parse(event.data);
         if (isActive && Array.isArray(payload.events)) {
           setSignals(payload.events);
+          liveCache = {
+            session: liveCache?.session ?? null,
+            signals: payload.events,
+            health: liveCache?.health ?? initialHealth,
+          };
           setError("");
         }
       } catch {
@@ -120,29 +149,27 @@ export function InternalLivePanel({
       window.clearInterval(interval);
       source.close();
     };
-  }, []);
+  }, [initialHealth]);
 
   const isActiveSession = Boolean(session?.active);
 
   return (
     <div className="space-y-5 pb-36">
-      <section className="rounded-[12px] bg-[#2b2b2f99] p-4">
-        <p className="text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-          Current session
-        </p>
+      <section className={internalTheme.card}>
+        <p className={internalTheme.label}>Current session</p>
         {loading ? (
-          <div className="mt-3 h-[118px] rounded-[10px] bg-[#2b2b2fcc]" />
+          <div className={`mt-3 h-[118px] ${internalTheme.skeleton}`} />
         ) : isActiveSession ? (
           <div className="mt-3">
-            <h2 className="text-[17px] font-bold text-[#f7f1e6]">
+            <h2 className="text-[17px] font-bold text-[#3b3f6e]">
               {session?.school_name}
             </h2>
             {session?.school_location ? (
-              <span className="mt-2 inline-flex rounded-full bg-[#9a9ccb33] px-3 py-1 text-[11px] text-[#f7f1e6]">
+              <span className="mt-2 inline-flex rounded-full bg-[#9a9ccb33] px-3 py-1 text-[11px] text-[#3b3f6e]">
                 {session.school_location}
               </span>
             ) : null}
-            <p className="mt-2 text-[14px] text-[#f7f1e6b3]">
+            <p className={`mt-2 text-[14px] ${internalTheme.muted}`}>
               {session?.class_name ?? "Class"} -{" "}
               {session?.lesson_title ?? "Lesson"}
             </p>
@@ -153,26 +180,30 @@ export function InternalLivePanel({
               <StatPill>
                 {session?.stats.lessons_completed ?? 0} lessons completed
               </StatPill>
-              <StatPill>{session?.stats.mins_running ?? 0} mins running</StatPill>
+              <StatPill>
+                {session?.stats.mins_running ?? 0} mins running
+              </StatPill>
             </div>
           </div>
         ) : (
-          <div className="mt-3 rounded-[10px] px-4 py-5 text-center text-[14px] text-[#f7f1e680]">
+          <div
+            className={`mt-3 rounded-[10px] px-4 py-5 text-center text-[14px] ${internalTheme.faint}`}
+          >
             No session running
           </div>
         )}
       </section>
 
       <section>
-        <p className="mb-3 text-[11px] font-normal uppercase tracking-[0.08em] text-[#f7f1e680]">
-          Live signals
-        </p>
+        <p className={`mb-3 ${internalTheme.label}`}>Live signals</p>
         {error ? (
-          <div className="rounded-[12px] bg-[#2b2b2f99] p-4 text-[13px] leading-5 text-[#c0392b]">
+          <div
+            className={`${internalTheme.card} text-[13px] leading-5 text-[#c0392b]`}
+          >
             API error - {error}
           </div>
         ) : signals.length > 0 ? (
-          <div className="max-h-[430px] space-y-1 overflow-y-auto rounded-[12px] bg-[#2b2b2f99] p-2">
+          <div className="max-h-[430px] space-y-1 overflow-y-auto rounded-[12px] border border-[#e0d9ce] bg-white p-2 shadow-sm">
             {signals.map((signal, index) => (
               <article
                 className="grid grid-cols-[16px_1fr_auto] items-center gap-2 rounded-[8px] px-2 py-3"
@@ -181,17 +212,21 @@ export function InternalLivePanel({
                 <span
                   className={`h-2.5 w-2.5 rounded-full ${eventColor(signal.severity)}`}
                 />
-                <p className="min-w-0 text-[13px] leading-5 text-[#f7f1e6cc]">
+                <p
+                  className={`min-w-0 text-[13px] leading-5 ${internalTheme.muted}`}
+                >
                   {signal.description}
                 </p>
-                <time className="text-[11px] text-[#f7f1e666]">
+                <time className={`text-[11px] ${internalTheme.faint}`}>
                   {formatTime(signal.timestamp)}
                 </time>
               </article>
             ))}
           </div>
         ) : (
-          <div className="rounded-[12px] bg-[#2b2b2f99] p-4 text-center text-[13px] leading-5 text-[#f7f1e666]">
+          <div
+            className={`${internalTheme.card} text-center text-[13px] leading-5 ${internalTheme.faint}`}
+          >
             No live signals yet.
           </div>
         )}

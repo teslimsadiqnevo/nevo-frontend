@@ -8,6 +8,7 @@ import { InternalAiPanel } from "./InternalAiPanel";
 import { InternalLivePanel } from "./InternalLivePanel";
 import { InternalPilotPanel } from "./InternalPilotPanel";
 import { InternalProductPanel } from "./InternalProductPanel";
+import { internalTheme } from "./internalOpsTheme";
 import type {
   InternalHealth,
   InternalOpsTab,
@@ -24,6 +25,12 @@ const TAB_ITEMS: Array<{
   { id: "product", label: "Product", icon: "grid" },
   { id: "ai", label: "AI", icon: "spark" },
 ];
+
+let foundationCache: {
+  user: InternalOpsUser | null;
+  health: InternalHealth | null;
+  updatedAt: number;
+} | null = null;
 
 function OpsIcon({
   name,
@@ -126,9 +133,13 @@ function TabContent({
 
 export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
   const router = useRouter();
-  const [user, setUser] = useState<InternalOpsUser | null>(null);
-  const [health, setHealth] = useState<InternalHealth | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState<InternalOpsUser | null>(
+    foundationCache?.user ?? null,
+  );
+  const [health, setHealth] = useState<InternalHealth | null>(
+    foundationCache?.health ?? null,
+  );
+  const [loading, setLoading] = useState(!foundationCache);
 
   const activeLabel = useMemo(
     () => TAB_ITEMS.find((item) => item.id === activeTab)?.label ?? "Live",
@@ -139,6 +150,10 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
     let isActive = true;
 
     async function loadFoundation() {
+      const shouldRefresh =
+        !foundationCache || Date.now() - foundationCache.updatedAt > 60000;
+      if (!shouldRefresh) return;
+
       const sessionResponse = await fetch("/api/internal/auth/session", {
         cache: "no-store",
       });
@@ -156,6 +171,11 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
       if (!isActive) return;
       setUser(sessionData.user ?? null);
       setHealth(healthResponse.ok ? healthData : null);
+      foundationCache = {
+        user: sessionData.user ?? null,
+        health: healthResponse.ok ? healthData : null,
+        updatedAt: Date.now(),
+      };
       setLoading(false);
     }
 
@@ -211,9 +231,9 @@ export function InternalOpsShell({ activeTab }: { activeTab: InternalOpsTab }) {
         <div className="flex-1 overflow-y-auto px-4">
           {loading ? (
             <div className="space-y-3 pb-24 pt-2">
-              <div className="h-28 rounded-[12px] bg-[#e8e2d4]" />
-              <div className="h-16 rounded-[12px] bg-[#e8e2d4]" />
-              <div className="h-16 rounded-[12px] bg-[#e8e2d4]" />
+              <div className={`h-28 ${internalTheme.skeleton}`} />
+              <div className={`h-16 ${internalTheme.skeleton}`} />
+              <div className={`h-16 ${internalTheme.skeleton}`} />
             </div>
           ) : (
             <TabContent activeTab={activeTab} health={health} />
