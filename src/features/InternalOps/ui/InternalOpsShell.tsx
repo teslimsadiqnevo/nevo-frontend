@@ -5,6 +5,11 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
 import { InternalAdminPlaceholderPanel } from "./InternalAdminPlaceholderPanel";
+import {
+  InternalLessonsPanel,
+  InternalStudentsPanel,
+  InternalTeachersPanel,
+} from "./InternalAdminResourcePanels";
 import { InternalAiPanel } from "./InternalAiPanel";
 import { InternalClassesPanel } from "./InternalClassesPanel";
 import { InternalLivePanel } from "./InternalLivePanel";
@@ -220,6 +225,18 @@ function TabContent({
 
   if (activeTab === "classes") {
     return <InternalClassesPanel />;
+  }
+
+  if (activeTab === "teachers") {
+    return <InternalTeachersPanel />;
+  }
+
+  if (activeTab === "students") {
+    return <InternalStudentsPanel />;
+  }
+
+  if (activeTab === "lessons") {
+    return <InternalLessonsPanel />;
   }
 
   return (

@@ -276,3 +276,97 @@ export type InternalAdminSchoolDetail = InternalAdminSchoolSummary & {
   classes: InternalAdminClassSummary[];
   teachers: InternalAdminPerson[];
 };
+
+export type InternalAdminTeacherSummary = {
+  teacher_id: string;
+  teacher_name: string;
+  email?: string | null;
+  school_id?: string | null;
+  school_name?: string | null;
+  assigned_classes: number;
+  uploaded_lessons: number;
+  active_assignments: number;
+  completed_sessions: number;
+  last_login_at?: string | null;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminTeacherDetail = InternalAdminTeacherSummary & {
+  phone_number?: string | null;
+  subjects: string[];
+  education_levels: string[];
+  classes: InternalAdminClassSummary[];
+  lessons: Array<Record<string, unknown>>;
+};
+
+export type InternalAdminStudentSummary = {
+  student_id: string;
+  student_name: string;
+  nevo_id?: string | null;
+  school_id?: string | null;
+  school_name?: string | null;
+  class_id?: string | null;
+  class_name?: string | null;
+  learning_preference?: string | null;
+  is_esl_learner: boolean;
+  lessons_completed: number;
+  assigned_lessons: number;
+  completed_sessions: number;
+  last_activity_at?: string | null;
+  is_active: boolean;
+  relationship_status: string;
+};
+
+export type InternalAdminStudentDetail = InternalAdminStudentSummary & {
+  email?: string | null;
+  age?: number | null;
+  adapt_automatically: boolean;
+  voice_guidance: boolean;
+  large_text: boolean;
+  extra_spacing: boolean;
+  average_score: number;
+  total_time_spent_seconds: number;
+  current_streak_days: number;
+  reading_level?: string | null;
+  complexity_tolerance?: string | null;
+  class_options: InternalAdminClassSummary[];
+  recent_lessons: Array<Record<string, unknown>>;
+};
+
+export type InternalAdminLessonSummary = {
+  lesson_id: string;
+  title: string;
+  subject?: string | null;
+  topic?: string | null;
+  status: string;
+  school_id?: string | null;
+  school_name?: string | null;
+  teacher_id: string;
+  teacher_name?: string | null;
+  concept_count: number;
+  assignment_count: number;
+  completed_assignments: number;
+  sessions_count: number;
+  adapted_variants: number;
+  failed_jobs: number;
+  latest_job_status?: string | null;
+  published_at?: string | null;
+  created_at?: string | null;
+  relationship_status: string;
+};
+
+export type InternalAdminLessonDetail = InternalAdminLessonSummary & {
+  description?: string | null;
+  target_grade_level: number;
+  estimated_duration_minutes: number;
+  objectives: string[];
+  key_concepts: string[];
+  simplify_enabled: boolean;
+  expand_enabled: boolean;
+  max_difficulty: number;
+  processed_at?: string | null;
+  jobs: Array<Record<string, unknown>>;
+  assignments: Array<Record<string, unknown>>;
+  variants: Array<Record<string, unknown>>;
+};
