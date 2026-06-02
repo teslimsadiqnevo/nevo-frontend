@@ -1440,6 +1440,19 @@ function AssignmentSuccess({
     onAssignAnother: () => void;
     onBack: () => void;
 }) {
+    const processedProfiles = Number(transformJob?.processed_signatures || 0);
+    const totalProfiles = Number(transformJob?.total_signatures || 0);
+    const processedStudents = Number(transformJob?.processed_students || 0);
+    const totalStudents = Number(transformJob?.total_students || 0);
+    const hasProfileTargets = totalProfiles > 0;
+    const hasStudentTargets = totalStudents > 0;
+    const packageProgressCopy = transformJob?.status === 'failed'
+        ? 'Package generation failed for this assignment. Regenerate or retry before testing as a student.'
+        : hasProfileTargets
+            ? `${processedProfiles} of ${totalProfiles} profile type${totalProfiles === 1 ? '' : 's'} ready.`
+            : hasStudentTargets
+                ? `${processedStudents} of ${totalStudents} student package${totalStudents === 1 ? '' : 's'} processed.`
+                : 'Source concepts are ready. Student-specific packages will start once profile targets are available.';
     const packageCopy =
         transformJob?.status === 'failed'
             ? 'Smart package generation needs a retry before every profile is ready.'
@@ -1472,7 +1485,7 @@ function AssignmentSuccess({
                         </span>
                     </div>
                     <p className="mt-2 text-[12px] leading-5 text-graphite-60">
-                        {Number(transformJob.processed_signatures || 0)} of {Number(transformJob.total_signatures || 0)} profile types ready.
+                        {packageProgressCopy}
                     </p>
                     {transformJob.error_message ? (
                         <p className="mt-2 text-[12px] leading-5 text-[#B54708]">{transformJob.error_message}</p>
