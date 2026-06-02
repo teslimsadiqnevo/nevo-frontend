@@ -89,6 +89,7 @@ type LessonPackageReview = {
 };
 
 type TransformJobStatus = {
+    job_id?: string;
     lesson_id?: string;
     status?: string;
     processed_students?: number;
@@ -98,6 +99,12 @@ type TransformJobStatus = {
     failed_students?: number;
     failed_signatures?: number;
     error_message?: string | null;
+};
+
+type TransformPackageTarget = {
+    recipientMode: 'class' | 'students' | null;
+    classId?: string | null;
+    studentIds?: string[];
 };
 
 type AuthGuardableError = { authExpired?: boolean; error?: string };
@@ -285,9 +292,22 @@ async function fetchLessonPackageReview(lessonId: string): Promise<LessonPackage
     return data as LessonPackageReview;
 }
 
-async function regenerateLessonPackage(lessonId: string): Promise<TransformJobStatus | null> {
+async function regenerateLessonPackage(
+    lessonId: string,
+    target?: TransformPackageTarget,
+): Promise<TransformJobStatus | null> {
+    const requestBody =
+        target?.recipientMode === 'class'
+            ? { target: 'class', class_id: target.classId || null, student_ids: [] }
+            : target?.recipientMode === 'students'
+                ? { target: 'individual', class_id: null, student_ids: target.studentIds || [] }
+                : null;
     const res = await fetch(`/api/teacher/lessons/${lessonId}/transform`, {
         method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: requestBody ? JSON.stringify(requestBody) : undefined,
         cache: 'no-store',
     });
     const data = await res.json().catch(() => ({}));
@@ -298,9 +318,16 @@ async function regenerateLessonPackage(lessonId: string): Promise<TransformJobSt
     }
     return isRecord(data)
         ? {
+            job_id: stringValue(data.job_id),
             lesson_id: String(data.lesson_id || lessonId),
             status: stringValue(data.status, 'pending'),
             total_students: numberValue(data.total_students),
+            processed_students: numberValue(data.processed_students),
+            failed_students: numberValue(data.failed_students),
+            total_signatures: numberValue(data.total_signatures),
+            processed_signatures: numberValue(data.processed_signatures),
+            failed_signatures: numberValue(data.failed_signatures),
+            error_message: stringValue(data.error_message) || null,
         }
         : null;
 }
@@ -1120,6 +1147,9 @@ function Step4Summary({
 
             <PackageReviewCard
                 lessonId={lesson?.id}
+                recipientMode={recipientMode}
+                selectedClassId={selectedClass?.id ?? null}
+                selectedStudentIds={selectedStudents.map((student) => student.id)}
                 review={packageReview}
                 loading={packageReviewLoading}
                 error={packageReviewError}
@@ -1149,12 +1179,18 @@ function Step4Summary({
 
 function PackageReviewCard({
     lessonId,
+    recipientMode,
+    selectedClassId,
+    selectedStudentIds,
     review,
     loading,
     error,
     onReviewUpdated,
 }: {
     lessonId?: string;
+    recipientMode: 'class' | 'students' | null;
+    selectedClassId?: string | null;
+    selectedStudentIds: string[];
     review: LessonPackageReview | null;
     loading: boolean;
     error: string | null;
@@ -1226,7 +1262,11 @@ function PackageReviewCard({
         setRegenerating(true);
         setRegenerateError(null);
         try {
-            const transformJob = await regenerateLessonPackage(lessonId);
+            const transformJob = await regenerateLessonPackage(lessonId, {
+                recipientMode,
+                classId: selectedClassId,
+                studentIds: selectedStudentIds,
+            });
             onReviewUpdated({
                 ...(review || {
                     lesson_id: lessonId,
