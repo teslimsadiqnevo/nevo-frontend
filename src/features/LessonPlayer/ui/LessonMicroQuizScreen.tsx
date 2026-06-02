@@ -140,7 +140,7 @@ export function LessonMicroQuizScreen({ lessonId, data, index, returnStageKey }:
     const activePrompt = activePromptIndex !== null ? question.feedbackPrompts[activePromptIndex] : null;
 
     return (
-        <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+        <div className="flex min-h-screen justify-center bg-parchment px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
             <div className="relative flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                 <div className="h-1 w-full bg-[#E0D9CE]">
                     <div className="h-full bg-indigo" style={{ width: `${question.progressPercent}%` }} />

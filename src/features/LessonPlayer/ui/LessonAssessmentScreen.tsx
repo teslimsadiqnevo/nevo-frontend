@@ -334,7 +334,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
 
     if (view === 'correct') {
         return (
-            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+            <div className="flex min-h-screen justify-center bg-parchment px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
                 <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-[#F0FAF0] shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-[#F0FAF0]">
                         <div className="h-full rounded-full bg-indigo" style={{ width: `${Math.min(100, progressPercent + 20)}%` }} />
@@ -372,7 +372,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
 
     if (view === 'incorrect') {
         return (
-            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+            <div className="flex min-h-screen justify-center bg-parchment px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
                 <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-parchment">
                         <div className="h-full rounded-full bg-indigo" style={{ width: `${Math.min(100, progressPercent)}%` }} />
@@ -424,7 +424,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
 
     if (view === 'correction') {
         return (
-            <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+            <div className="flex min-h-screen justify-center bg-parchment px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
                 <div className="flex min-h-screen w-full max-w-[1024px] flex-col bg-parchment shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px]">
                     <div className="h-1 w-full bg-parchment">
                         <div className="h-full rounded-full bg-indigo" style={{ width: `${Math.min(100, progressPercent + 10)}%` }} />
@@ -475,7 +475,7 @@ export function LessonAssessmentScreen({ lessonId, data }: LessonAssessmentScree
     }
 
     return (
-        <div className="flex min-h-screen justify-center bg-white px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
+        <div className="flex min-h-screen justify-center bg-parchment px-0 py-0 sm:px-4 sm:py-6 lg:px-6 lg:py-10">
             <div className="flex min-h-screen w-full max-w-[1024px] flex-col items-center bg-parchment px-4 pb-16 pt-10 shadow-[0_0_0_1px_rgba(224,217,206,0.4)] sm:min-h-[900px] sm:px-8 sm:pb-24 sm:pt-12 lg:px-12 lg:pb-[331px]">
                 <div className="mb-4 flex flex-col items-center">
                     <span className="text-[12px] font-medium leading-4 text-indigo/60">

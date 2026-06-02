@@ -20,7 +20,7 @@ async function teacherAuthHeader() {
 }
 
 export async function POST(
-  _req: Request,
+  req: Request,
   context: { params: Promise<{ lessonId: string }> },
 ) {
   try {
@@ -30,9 +30,14 @@ export async function POST(
     }
 
     const { lessonId } = await context.params;
+    const body = await req.json().catch(() => null);
     const backendRes = await fetch(`${API_BASE_URL}/lessons/${lessonId}/transform`, {
       method: "POST",
-      headers: authHeader,
+      headers: {
+        ...authHeader,
+        "Content-Type": "application/json",
+      },
+      body: body ? JSON.stringify(body) : undefined,
       cache: "no-store",
     });
 
