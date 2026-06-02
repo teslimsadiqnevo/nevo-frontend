@@ -36,6 +36,7 @@ type BackendConcept = {
     concept_id: string;
     concept_text: string;
     tts_text?: string;
+    format_type?: string | null;
     learning_mode_delivered?: string;
     image_url?: string | null;
     image_alt_text?: string | null;
@@ -149,6 +150,18 @@ function normalizeLearningMode(mode?: string | null): LearningMode {
     }
 
     return 'visual';
+}
+
+function conceptUsesActionSteps(concept: BackendConcept) {
+    const modeText = [
+        concept.learning_mode_delivered,
+        concept.format_type,
+    ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+    return /(action|kinesthetic|kinaesthetic|hands on|hands-on|doing|movement|practical|tactile|procedural)/.test(modeText);
 }
 
 function normalizeRenderingPreferences(
@@ -342,7 +355,7 @@ function chunkArray<T>(items: T[], size: number) {
 
 function buildConceptStepTexts(concept: BackendConcept) {
     const sourceSteps =
-        Array.isArray(concept.steps) && concept.steps.length > 0
+        conceptUsesActionSteps(concept) && Array.isArray(concept.steps) && concept.steps.length > 0
             ? concept.steps
                   .map((step, index) => step.text?.trim() || step.step_text?.trim() || `Step ${index + 1}`)
                   .filter(Boolean)
