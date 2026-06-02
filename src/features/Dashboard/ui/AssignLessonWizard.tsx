@@ -123,6 +123,18 @@ function numberValue(value: unknown, fallback = 0) {
     return Number.isFinite(nextValue) ? nextValue : fallback;
 }
 
+function shouldPollPackageReview(review: LessonPackageReview | null) {
+    if (!review) return false;
+    const reviewStatus = String(review.status || '').toLowerCase();
+    const jobStatus = String(review.transform_job?.status || '').toLowerCase();
+    return (
+        reviewStatus === 'processing' ||
+        jobStatus === 'pending' ||
+        jobStatus === 'running' ||
+        jobStatus === 'processing'
+    );
+}
+
 function toGuardableError(error: unknown): AuthGuardableError {
     if (isRecord(error)) {
         return {
@@ -453,6 +465,40 @@ export function AssignLessonWizard({
             mounted = false;
         };
     }, [guardAuth, selectedLessonId]);
+
+    useEffect(() => {
+        if (!selectedLessonId || !shouldPollPackageReview(packageReview)) return;
+
+        let cancelled = false;
+        let attempts = 0;
+        const maxAttempts = 30;
+
+        const pollPackageReview = async () => {
+            if (cancelled) return;
+            attempts += 1;
+            try {
+                const review = await fetchLessonPackageReview(selectedLessonId);
+                if (cancelled) return;
+                setPackageReview(review);
+                setPackageReviewError(null);
+                if (shouldPollPackageReview(review) && attempts < maxAttempts) {
+                    window.setTimeout(pollPackageReview, 3000);
+                }
+            } catch (error) {
+                if (cancelled) return;
+                if (guardAuth(toGuardableError(error))) return;
+                if (attempts < maxAttempts) {
+                    window.setTimeout(pollPackageReview, 5000);
+                }
+            }
+        };
+
+        const timeoutId = window.setTimeout(pollPackageReview, 3000);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeoutId);
+        };
+    }, [guardAuth, packageReview, selectedLessonId]);
 
     const handleBack = () => {
         setSubmitError(null);
