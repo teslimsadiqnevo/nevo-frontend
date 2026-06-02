@@ -123,15 +123,34 @@ function numberValue(value: unknown, fallback = 0) {
     return Number.isFinite(nextValue) ? nextValue : fallback;
 }
 
+function parseTransformJobStatus(data: unknown, lessonId: string): TransformJobStatus | null {
+    if (!isRecord(data)) return null;
+    return {
+        job_id: stringValue(data.job_id),
+        lesson_id: String(data.lesson_id || lessonId),
+        status: stringValue(data.status, 'pending'),
+        total_students: numberValue(data.total_students),
+        processed_students: numberValue(data.processed_students),
+        failed_students: numberValue(data.failed_students),
+        total_signatures: numberValue(data.total_signatures),
+        processed_signatures: numberValue(data.processed_signatures),
+        failed_signatures: numberValue(data.failed_signatures),
+        error_message: stringValue(data.error_message || data.error) || null,
+    };
+}
+
+function isTransformInProgress(job: TransformJobStatus | null | undefined) {
+    const status = String(job?.status || '').toLowerCase();
+    return status === 'pending' || status === 'running' || status === 'processing';
+}
+
 function shouldPollPackageReview(review: LessonPackageReview | null) {
     if (!review) return false;
     const reviewStatus = String(review.status || '').toLowerCase();
     const jobStatus = String(review.transform_job?.status || '').toLowerCase();
     return (
         reviewStatus === 'processing' ||
-        jobStatus === 'pending' ||
-        jobStatus === 'running' ||
-        jobStatus === 'processing'
+        isTransformInProgress({ status: jobStatus })
     );
 }
 
@@ -328,20 +347,20 @@ async function regenerateLessonPackage(
             authExpired: res.status === 401 || res.status === 403,
         });
     }
-    return isRecord(data)
-        ? {
-            job_id: stringValue(data.job_id),
-            lesson_id: String(data.lesson_id || lessonId),
-            status: stringValue(data.status, 'pending'),
-            total_students: numberValue(data.total_students),
-            processed_students: numberValue(data.processed_students),
-            failed_students: numberValue(data.failed_students),
-            total_signatures: numberValue(data.total_signatures),
-            processed_signatures: numberValue(data.processed_signatures),
-            failed_signatures: numberValue(data.failed_signatures),
-            error_message: stringValue(data.error_message) || null,
-        }
-        : null;
+    return parseTransformJobStatus(data, lessonId);
+}
+
+async function fetchTransformJobStatus(lessonId: string): Promise<TransformJobStatus | null> {
+    const res = await fetch(`/api/teacher/lessons/${lessonId}/transform/status`, {
+        cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw Object.assign(new Error(buildErrorMessage(data, 'Could not load package status.')), {
+            authExpired: res.status === 401 || res.status === 403,
+        });
+    }
+    return parseTransformJobStatus(data, lessonId);
 }
 
 export function AssignLessonWizard({
@@ -368,6 +387,8 @@ export function AssignLessonWizard({
     const [packageReview, setPackageReview] = useState<LessonPackageReview | null>(null);
     const [packageReviewLoading, setPackageReviewLoading] = useState(false);
     const [packageReviewError, setPackageReviewError] = useState<string | null>(null);
+    const [packageWarmupLoading, setPackageWarmupLoading] = useState(false);
+    const warmedTargetKeysRef = useRef<Set<string>>(new Set());
 
     const [selectedLessonId, setSelectedLessonId] = useState<string | null>(
         initialLessonId ? String(initialLessonId) : null,
@@ -433,6 +454,15 @@ export function AssignLessonWizard({
         () => students.filter((student) => selectedStudents.includes(student.id)),
         [students, selectedStudents],
     );
+
+    const packageWarmupTargetKey = useMemo(() => {
+        if (!selectedLessonId || !recipientMode) return null;
+        if (recipientMode === 'class') {
+            return selectedClassId ? `${selectedLessonId}:class:${selectedClassId}` : null;
+        }
+        if (selectedStudents.length === 0) return null;
+        return `${selectedLessonId}:students:${[...selectedStudents].sort().join(',')}`;
+    }, [recipientMode, selectedClassId, selectedLessonId, selectedStudents]);
 
     useEffect(() => {
         if (!selectedLessonId) {
@@ -500,6 +530,72 @@ export function AssignLessonWizard({
         };
     }, [guardAuth, packageReview, selectedLessonId]);
 
+    useEffect(() => {
+        if (
+            step !== 4 ||
+            !selectedLessonId ||
+            !packageWarmupTargetKey ||
+            warmedTargetKeysRef.current.has(packageWarmupTargetKey)
+        ) {
+            return;
+        }
+
+        let cancelled = false;
+        warmedTargetKeysRef.current.add(packageWarmupTargetKey);
+        setPackageWarmupLoading(true);
+        setPackageReview((current) => ({
+            ...(current || {
+                lesson_id: selectedLessonId,
+                concepts: [],
+            }),
+            status: 'processing',
+            transform_job: current?.transform_job || {
+                lesson_id: selectedLessonId,
+                status: 'pending',
+                total_students: recipientMode === 'class' ? selectedClass?.students || 0 : selectedStudents.length,
+            },
+        } as LessonPackageReview));
+
+        regenerateLessonPackage(selectedLessonId, {
+            recipientMode,
+            classId: selectedClassId,
+            studentIds: selectedStudents,
+        })
+            .then((transformJob) => {
+                if (cancelled) return;
+                setPackageReview((current) => ({
+                    ...(current || {
+                        lesson_id: selectedLessonId,
+                        concepts: [],
+                    }),
+                    status: 'processing',
+                    transform_job: transformJob,
+                } as LessonPackageReview));
+            })
+            .catch((error) => {
+                if (cancelled) return;
+                warmedTargetKeysRef.current.delete(packageWarmupTargetKey);
+                if (guardAuth(toGuardableError(error))) return;
+                setPackageReviewError(error instanceof Error ? error.message : 'Could not start smart package preparation.');
+            })
+            .finally(() => {
+                if (!cancelled) setPackageWarmupLoading(false);
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, [
+        guardAuth,
+        packageWarmupTargetKey,
+        recipientMode,
+        selectedClass?.students,
+        selectedClassId,
+        selectedLessonId,
+        selectedStudents,
+        step,
+    ]);
+
     const handleBack = () => {
         setSubmitError(null);
         if (step === 1) {
@@ -562,9 +658,11 @@ export function AssignLessonWizard({
         setSelectedStudents([]);
         setDueDate('');
         setSubmitError(null);
+        setPackageWarmupLoading(false);
         setShowSuccess(false);
         setSuccessCount(0);
         setSuccessTransformJob(null);
+        warmedTargetKeysRef.current.clear();
     };
 
     if (showSuccess) {
@@ -654,6 +752,7 @@ export function AssignLessonWizard({
                     submitError={submitError}
                     packageReview={packageReview}
                     packageReviewLoading={packageReviewLoading}
+                    packageWarmupLoading={packageWarmupLoading}
                     packageReviewError={packageReviewError}
                     onPackageReviewUpdated={setPackageReview}
                 />
@@ -1141,6 +1240,7 @@ function Step4Summary({
     submitError,
     packageReview,
     packageReviewLoading,
+    packageWarmupLoading,
     packageReviewError,
     onPackageReviewUpdated,
 }: {
@@ -1154,6 +1254,7 @@ function Step4Summary({
     submitError: string | null;
     packageReview: LessonPackageReview | null;
     packageReviewLoading: boolean;
+    packageWarmupLoading: boolean;
     packageReviewError: string | null;
     onPackageReviewUpdated: (review: LessonPackageReview) => void;
 }) {
@@ -1198,6 +1299,7 @@ function Step4Summary({
                 selectedStudentIds={selectedStudents.map((student) => student.id)}
                 review={packageReview}
                 loading={packageReviewLoading}
+                warmupLoading={packageWarmupLoading}
                 error={packageReviewError}
                 onReviewUpdated={onPackageReviewUpdated}
             />
@@ -1230,6 +1332,7 @@ function PackageReviewCard({
     selectedStudentIds,
     review,
     loading,
+    warmupLoading,
     error,
     onReviewUpdated,
 }: {
@@ -1239,6 +1342,7 @@ function PackageReviewCard({
     selectedStudentIds: string[];
     review: LessonPackageReview | null;
     loading: boolean;
+    warmupLoading: boolean;
     error: string | null;
     onReviewUpdated: (review: LessonPackageReview) => void;
 }) {
@@ -1279,6 +1383,19 @@ function PackageReviewCard({
     const readyCount = review?.variant_summary?.ready ?? 0;
     const failedCount = review?.variant_summary?.failed ?? 0;
     const runningCount = review?.variant_summary?.running ?? 0;
+    const transformJob = review?.transform_job || null;
+    const transformPending = warmupLoading || isTransformInProgress(transformJob) || review?.status === 'processing';
+    const transformTotal = Math.max(
+        Number(transformJob?.total_students || 0),
+        Number(transformJob?.total_signatures || 0),
+        readyCount + runningCount + failedCount,
+    );
+    const transformDone = Math.max(
+        Number(transformJob?.processed_students || 0),
+        Number(transformJob?.processed_signatures || 0),
+        readyCount,
+    );
+    const transformProgress = transformTotal > 0 ? Math.min(100, Math.round((transformDone / transformTotal) * 100)) : 12;
     const runtime = review?.ai_debug?.runtime;
     const ttsPreload = review?.ai_debug?.tts_preload;
     const weakAreas = review?.review_summary?.weak_areas || review?.lesson_package_quality?.warnings || [];
@@ -1291,6 +1408,8 @@ function PackageReviewCard({
             ? 'Review unavailable'
             : review?.status === 'ready'
                 ? 'Ready for students'
+                : transformPending
+                    ? 'Preparing packages'
                 : review?.status === 'source_ready'
                     ? 'Source concepts ready'
                 : review?.status === 'needs_attention'
@@ -1300,6 +1419,8 @@ function PackageReviewCard({
         ? 'border-[#F1C5BF] bg-[#FFF8F4] text-[#B54708]'
         : review?.status === 'ready'
             ? 'border-[#CDE8D4] bg-[#F4FBF5] text-[#2E7D32]'
+            : transformPending
+                ? 'border-[#D8D4F0] bg-[#FAF9FF] text-[#3B3F6E]'
             : 'border-[#E8E2D4] bg-[#FDFBF9] text-[#3B3F6E]';
 
     const handleRegenerate = async () => {
@@ -1338,7 +1459,9 @@ function PackageReviewCard({
                 <div>
                     <span className="block text-[13px] font-bold">Smart package review</span>
                     <p className="mt-1 text-[12px] opacity-75">
-                        {error || (review?.status === 'source_ready'
+                        {error || (transformPending
+                            ? 'Nevo is preparing student-specific variants for the selected recipients. You can still assign while this continues.'
+                            : review?.status === 'source_ready'
                             ? 'Concepts are extracted. Student-specific variants are generated after assignment.'
                             : 'Nevo checks concept coverage and generated lesson quality before assignment.')}
                     </p>
@@ -1372,6 +1495,36 @@ function PackageReviewCard({
                     />
                 </div>
             )}
+
+            {!loading && transformPending ? (
+                <div className="mt-3 rounded-xl border border-[#E8E6F5] bg-white/75 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <span className="block text-[12px] font-semibold">Preparing adaptive packages</span>
+                            <span className="mt-0.5 block text-[11px] opacity-65">
+                                {transformTotal > 0
+                                    ? `${transformDone} of ${transformTotal} package target${transformTotal === 1 ? '' : 's'} ready`
+                                    : 'Starting profile analysis'}
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-1.5" aria-hidden="true">
+                            {[0, 1, 2].map((dot) => (
+                                <span
+                                    key={dot}
+                                    className="h-2 w-2 animate-bounce rounded-full bg-[#8E86C8]"
+                                    style={{ animationDelay: `${dot * 140}ms` }}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                    <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#E8E6F5]">
+                        <div
+                            className="h-full rounded-full bg-[#3B3F6E] transition-all duration-500"
+                            style={{ width: `${transformProgress}%` }}
+                        />
+                    </div>
+                </div>
+            ) : null}
 
             {!loading ? (
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1526,24 +1679,72 @@ function AssignmentSuccess({
     onAssignAnother: () => void;
     onBack: () => void;
 }) {
-    const processedProfiles = Number(transformJob?.processed_signatures || 0);
-    const totalProfiles = Number(transformJob?.total_signatures || 0);
-    const processedStudents = Number(transformJob?.processed_students || 0);
-    const totalStudents = Number(transformJob?.total_students || 0);
+    const [displayJob, setDisplayJob] = useState<TransformJobStatus | null>(transformJob);
+
+    useEffect(() => {
+        setDisplayJob(transformJob);
+    }, [transformJob]);
+
+    useEffect(() => {
+        const lessonId = displayJob?.lesson_id;
+        if (!lessonId || !isTransformInProgress(displayJob)) return;
+
+        let cancelled = false;
+        let attempts = 0;
+        const maxAttempts = 30;
+
+        const pollJob = async () => {
+            if (cancelled) return;
+            attempts += 1;
+            try {
+                const latestJob = await fetchTransformJobStatus(lessonId);
+                if (cancelled) return;
+                if (latestJob) setDisplayJob(latestJob);
+                if (latestJob && isTransformInProgress(latestJob) && attempts < maxAttempts) {
+                    window.setTimeout(pollJob, 3000);
+                }
+            } catch {
+                if (!cancelled && attempts < maxAttempts) {
+                    window.setTimeout(pollJob, 5000);
+                }
+            }
+        };
+
+        const timeoutId = window.setTimeout(pollJob, 3000);
+        return () => {
+            cancelled = true;
+            window.clearTimeout(timeoutId);
+        };
+    }, [displayJob]);
+
+    const processedProfiles = Number(displayJob?.processed_signatures || 0);
+    const totalProfiles = Number(displayJob?.total_signatures || 0);
+    const processedStudents = Number(displayJob?.processed_students || 0);
+    const totalStudents = Number(displayJob?.total_students || 0);
+    const packageInProgress = isTransformInProgress(displayJob);
+    const progressTotal = Math.max(totalProfiles, totalStudents);
+    const progressDone = Math.max(processedProfiles, processedStudents);
+    const progressPercent = progressTotal > 0 ? Math.min(100, Math.round((progressDone / progressTotal) * 100)) : 12;
     const hasProfileTargets = totalProfiles > 0;
     const hasStudentTargets = totalStudents > 0;
-    const packageProgressCopy = transformJob?.status === 'failed'
+    const packageProgressCopy = displayJob?.status === 'failed'
         ? 'Package generation failed for this assignment. Regenerate or retry before testing as a student.'
+        : packageInProgress
+            ? hasStudentTargets
+                ? `${progressDone} of ${progressTotal} package target${progressTotal === 1 ? '' : 's'} ready. This continues in the background.`
+                : 'Nevo is starting profile analysis for this assignment.'
         : hasProfileTargets
             ? `${processedProfiles} of ${totalProfiles} profile type${totalProfiles === 1 ? '' : 's'} ready.`
             : hasStudentTargets
                 ? `${processedStudents} of ${totalStudents} student package${totalStudents === 1 ? '' : 's'} processed.`
                 : 'Source concepts are ready. Student-specific packages will start once profile targets are available.';
     const packageCopy =
-        transformJob?.status === 'failed'
+        displayJob?.status === 'failed'
             ? 'Smart package generation needs a retry before every profile is ready.'
-            : transformJob
-                ? 'Nevo is preparing student-specific smart packages in the background.'
+            : packageInProgress
+                ? 'Nevo is preparing student-specific smart packages. You can leave this screen; it will continue.'
+            : displayJob
+                ? 'Student-specific smart packages are ready for this assignment.'
                 : 'Students will see it in their lessons tab.';
 
     return (
@@ -1560,21 +1761,46 @@ function AssignmentSuccess({
 
             <h2 className="text-[24px] font-bold text-[#2B2B2F] mb-3">Lesson assigned.</h2>
             <p className="max-w-[360px] text-center text-[14px] text-graphite-60 mb-4">{packageCopy}</p>
-            {transformJob ? (
+            {displayJob ? (
                 <div className="mb-8 w-full max-w-[360px] rounded-xl border border-[#E0D9CE] bg-white/70 px-4 py-3 text-left">
                     <div className="flex items-center justify-between gap-3">
                         <span className="text-[12px] font-bold uppercase tracking-[0.08em] text-[#6E74AA]">
                             Smart package
                         </span>
-                        <span className="rounded-full bg-[#E8E6F5] px-3 py-1 text-[11px] font-semibold text-[#3B3F6E]">
-                            {transformJob.status || 'queued'}
+                        <span className={`rounded-full px-3 py-1 text-[11px] font-semibold ${
+                            packageInProgress
+                                ? 'bg-[#E8E6F5] text-[#3B3F6E]'
+                                : displayJob.status === 'failed'
+                                    ? 'bg-[#FFF3CD] text-[#B54708]'
+                                    : 'bg-[#E8F5E9] text-[#2E7D32]'
+                        }`}>
+                            {packageInProgress ? 'preparing' : displayJob.status || 'queued'}
                         </span>
                     </div>
                     <p className="mt-2 text-[12px] leading-5 text-graphite-60">
                         {packageProgressCopy}
                     </p>
-                    {transformJob.error_message ? (
-                        <p className="mt-2 text-[12px] leading-5 text-[#B54708]">{transformJob.error_message}</p>
+                    {packageInProgress ? (
+                        <div className="mt-3">
+                            <div className="mb-2 flex items-center gap-1.5">
+                                {[0, 1, 2].map((dot) => (
+                                    <span
+                                        key={dot}
+                                        className="h-2 w-2 animate-bounce rounded-full bg-[#8E86C8]"
+                                        style={{ animationDelay: `${dot * 140}ms` }}
+                                    />
+                                ))}
+                            </div>
+                            <div className="h-2 overflow-hidden rounded-full bg-[#E8E6F5]">
+                                <div
+                                    className="h-full rounded-full bg-[#3B3F6E] transition-all duration-500"
+                                    style={{ width: `${progressPercent}%` }}
+                                />
+                            </div>
+                        </div>
+                    ) : null}
+                    {displayJob.error_message ? (
+                        <p className="mt-2 text-[12px] leading-5 text-[#B54708]">{displayJob.error_message}</p>
                     ) : null}
                 </div>
             ) : null}
