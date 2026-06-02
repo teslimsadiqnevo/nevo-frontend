@@ -93,24 +93,24 @@ export function PwaInstallPrompt() {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] px-4 pb-[calc(env(safe-area-inset-bottom)+1rem)] md:px-6">
-      <div className="pointer-events-auto mx-auto flex max-w-3xl flex-col gap-4 rounded-[28px] border border-indigo/10 bg-[#FAF9F6]/95 px-5 py-5 shadow-[0_18px_50px_rgba(43,43,47,0.14)] backdrop-blur md:flex-row md:items-center md:justify-between md:px-6">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-indigo/70">
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-[70] px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:px-4 md:px-6">
+      <div className="pointer-events-auto mx-auto flex w-full max-w-[760px] flex-col gap-4 rounded-[22px] border border-indigo/10 bg-[#FAF9F6]/95 px-4 py-4 shadow-[0_18px_50px_rgba(43,43,47,0.14)] backdrop-blur sm:rounded-[26px] sm:px-5 md:flex-row md:items-center md:justify-between md:gap-6 md:px-6">
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-indigo/70 sm:text-[12px]">
             Install Nevo
           </p>
-          <p className="mt-1 text-sm leading-6 text-graphite-70 md:text-base">
+          <p className="mt-1 max-w-[46rem] text-[13px] leading-5 text-graphite-70 sm:text-[14px] sm:leading-6">
             {showIosHint && !deferredPrompt
               ? "On iPad or iPhone, use Share and then Add to Home Screen for the full app experience."
               : "Add Nevo to your tablet home screen for faster launch, offline lessons, and a cleaner app shell."}
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="grid shrink-0 grid-cols-2 gap-2 sm:flex sm:gap-3 md:min-w-[244px]">
           {deferredPrompt ? (
             <button
               type="button"
               onClick={handleInstall}
-              className="inline-flex min-h-12 items-center justify-center rounded-2xl bg-indigo px-5 text-sm font-semibold text-parchment shadow-[0_8px_20px_rgba(59,63,110,0.18)] transition hover:-translate-y-0.5"
+              className="inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-[18px] bg-indigo px-4 text-[13px] font-semibold text-parchment shadow-[0_8px_20px_rgba(59,63,110,0.18)] transition hover:-translate-y-0.5 sm:min-w-[112px] sm:px-5"
             >
               Install app
             </button>
@@ -118,7 +118,7 @@ export function PwaInstallPrompt() {
           <button
             type="button"
             onClick={handleDismiss}
-            className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-indigo/15 bg-parchment px-5 text-sm font-semibold text-indigo transition hover:border-indigo/35"
+            className={`${deferredPrompt ? "" : "col-span-2"} inline-flex h-11 min-w-0 items-center justify-center whitespace-nowrap rounded-[18px] border border-indigo/15 bg-parchment px-4 text-[13px] font-semibold text-indigo transition hover:border-indigo/35 sm:min-w-[112px] sm:px-5`}
           >
             Maybe later
           </button>
