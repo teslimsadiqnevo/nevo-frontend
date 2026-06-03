@@ -2,9 +2,9 @@
 
 import { Icon, NevoLogo } from "@/shared/ui";
 import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
-import { getDashboardPath } from "@/shared/lib";
+import { getDashboardPath, useIdleRoutePrefetch } from "@/shared/lib";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const navItems = [
   { name: "Home", view: null },
@@ -23,6 +23,20 @@ export function StudentSidebar({ currentView = "home" }: { currentView?: string 
       ? currentView.charAt(0).toUpperCase() + currentView.slice(1)
       : "Home"
   }`;
+  const idlePrefetchRoutes = useMemo(
+    () =>
+      navItems
+        .map((item) => {
+          const view = item.view || "home";
+          return view === (currentView || "home")
+            ? null
+            : getDashboardPath("student", view);
+        })
+        .filter(Boolean),
+    [currentView],
+  );
+
+  useIdleRoutePrefetch(idlePrefetchRoutes, { delayMs: 2200 });
 
   return (
     <>
@@ -44,6 +58,7 @@ export function StudentSidebar({ currentView = "home" }: { currentView?: string 
               <Link
                 key={item.name}
                 href={getDashboardPath("student", item.view || "home")}
+                prefetch={false}
                 className={`relative flex h-[48px] items-center gap-3 px-5 transition-all text-[14px] ${
                   isActive
                     ? "bg-[#4A5080] text-[#F7F1E6] font-medium"

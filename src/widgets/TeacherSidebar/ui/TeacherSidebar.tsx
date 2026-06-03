@@ -2,9 +2,9 @@
 
 import { Icon, NevoLogo, UserAvatar } from "@/shared/ui";
 import { AskNevoDrawer } from "@/widgets/AskNevoDrawer";
-import { getDashboardPath, type TeacherDashboardView } from "@/shared/lib";
+import { getDashboardPath, useIdleRoutePrefetch, type TeacherDashboardView } from "@/shared/lib";
 import Link from "next/link";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 const navItems = [
     { name: 'Dashboard', view: null },
@@ -35,6 +35,19 @@ export function TeacherSidebar({
     }`;
 
     const buildHref = (view: TeacherDashboardView | null) => getDashboardPath('teacher', view || 'home');
+    const idlePrefetchRoutes = useMemo(
+        () =>
+            [
+                ...navItems.map((item) => {
+                    const view = item.view || 'home';
+                    return view === (currentView || 'home') ? null : buildHref(item.view);
+                }),
+                currentView === 'profile' ? null : buildHref('profile'),
+            ].filter(Boolean),
+        [currentView],
+    );
+
+    useIdleRoutePrefetch(idlePrefetchRoutes, { delayMs: 2200 });
 
     return (
         <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[220px] min-w-[220px] flex-col overflow-hidden bg-[#3B3F6E]">
@@ -50,6 +63,7 @@ export function TeacherSidebar({
                         <Link
                             key={item.name}
                             href={buildHref(item.view)}
+                            prefetch={false}
                             className={`relative flex h-12 w-[220px] items-center gap-[10px] px-0 pl-5 text-[14px] transition-all ${
                                 isActive
                                     ? 'bg-[#4A5080] text-[#F7F1E6] font-medium'
@@ -79,6 +93,7 @@ export function TeacherSidebar({
             <div className="px-5 pb-4 pt-0">
                 <Link
                     href={buildHref('profile')}
+                    prefetch={false}
                     className={`flex items-center gap-[10px] rounded-xl py-2 transition-colors cursor-pointer ${
                         isProfileActive ? 'bg-white/15' : 'hover:bg-white/8'
                     }`}

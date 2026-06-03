@@ -1,5 +1,7 @@
 export { FooterLinks } from "./links";
 export { NavLinks } from "./links";
+export { readBrowserDataCache, writeBrowserDataCache } from "./browserDataCache";
+export { useIdleRoutePrefetch } from "./useIdleRoutePrefetch";
 export { features } from "./lib";
 export { pathLinks } from "./lib";
 export { works } from "./lib";

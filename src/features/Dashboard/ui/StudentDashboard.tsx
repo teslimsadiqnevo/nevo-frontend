@@ -22,7 +22,14 @@ import {
 } from "../api/student";
 import { normalizeLearningMode, useRegistrationStore } from "@/shared/store/useRegistrationStore";
 import { signOut } from "next-auth/react";
-import { clearClientSessionState, getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import {
+  clearClientSessionState,
+  getDashboardPath,
+  readBrowserDataCache,
+  useApiTokenExpiryRedirect,
+  useAuthGuard,
+  writeBrowserDataCache,
+} from "@/shared/lib";
 import { toast } from "@/shared/ui";
 import { getLessonArtwork } from "../lib/lessonArtwork";
 import {
@@ -140,6 +147,17 @@ type StudentSettingsState = {
   cameraForLearningSignals: boolean;
   voiceGuidance: boolean;
   notifications: boolean;
+};
+
+type StudentDashboardCache = {
+  studentName: string;
+  assignedLessons: Lesson[];
+  recommendedLessons: Lesson[];
+  currentLesson: Lesson | null;
+  teacherLessons: Lesson[];
+  completedLessons: Lesson[];
+  profile: any;
+  progressData: any;
 };
 
 const defaultStudentSettings: StudentSettingsState = {
@@ -290,6 +308,7 @@ export function StudentDashboard({
   const needsLessonData = view === "home" || view === "lessons";
   const needsProfileData = view === "connect" || view === "profile";
   const needsProgressData = view === "progress";
+  const cacheKey = `nevo:student:dashboard:${String(userIdentity || "anonymous")}`;
 
   const resetStudentState = () => {
     setSelectedLesson(null);
@@ -313,8 +332,23 @@ export function StudentDashboard({
     // Clear any previous registration flow leftovers once a student session is active.
     clearRegistration();
 
+    const cached = readBrowserDataCache<StudentDashboardCache>(cacheKey, 5 * 60 * 1000);
+    if (cached) {
+      setStudentName(cached.studentName);
+      setAssignedLessons(cached.assignedLessons);
+      setRecommendedLessons(cached.recommendedLessons);
+      setCurrentLesson(cached.currentLesson);
+      setTeacherLessons(cached.teacherLessons);
+      setCompletedLessons(cached.completedLessons);
+      setProfile(cached.profile);
+      setProgressData(cached.progressData);
+      setLoading(false);
+    }
+
     async function loadData() {
-      setLoading(true);
+      if (!cached) {
+        setLoading(true);
+      }
       try {
         const requests: Promise<any>[] = [];
         const requestKeys: Array<"dashboard" | "lessons" | "profile" | "progress"> = [];
@@ -359,6 +393,16 @@ export function StudentDashboard({
 
         if (profRes?.data) {
           setProfile(profRes.data);
+          writeBrowserDataCache<StudentDashboardCache>(cacheKey, {
+            studentName,
+            assignedLessons,
+            recommendedLessons,
+            currentLesson,
+            teacherLessons,
+            completedLessons,
+            profile: profRes.data,
+            progressData,
+          });
           const backendMode =
             profRes.data?.learning_preference ||
             profRes.data?.learning_style ||
@@ -373,6 +417,16 @@ export function StudentDashboard({
 
         if (progRes?.data) {
           setProgressData(progRes.data);
+          writeBrowserDataCache<StudentDashboardCache>(cacheKey, {
+            studentName,
+            assignedLessons,
+            recommendedLessons,
+            currentLesson,
+            teacherLessons,
+            completedLessons,
+            profile,
+            progressData: progRes.data,
+          });
         }
 
         if (!needsLessonData) {
@@ -476,12 +530,23 @@ export function StudentDashboard({
           mappedCompleted,
         );
 
-        setStudentName(rawDashboard.student_name || user?.name || "Student");
+        const nextStudentName = rawDashboard.student_name || user?.name || "Student";
+        setStudentName(nextStudentName);
         setCurrentLesson(reconciledLessons.currentLesson);
         setAssignedLessons(reconciledLessons.assignedLessons);
         setTeacherLessons(reconciledLessons.assignedLessons);
         setCompletedLessons(reconciledLessons.completedLessons);
         setRecommendedLessons(mappedRecommended);
+        writeBrowserDataCache<StudentDashboardCache>(cacheKey, {
+          studentName: nextStudentName,
+          assignedLessons: reconciledLessons.assignedLessons,
+          recommendedLessons: mappedRecommended,
+          currentLesson: reconciledLessons.currentLesson,
+          teacherLessons: reconciledLessons.assignedLessons,
+          completedLessons: reconciledLessons.completedLessons,
+          profile: profRes?.data ?? profile,
+          progressData: progRes?.data ?? progressData,
+        });
       } catch (err) {
         console.error("Failed to fetch dashboard data", err);
       } finally {
@@ -495,6 +560,7 @@ export function StudentDashboard({
     clearRegistration,
     setLearningMode,
     guardAuth,
+    cacheKey,
     needsLessonData,
     needsProfileData,
     needsProgressData,

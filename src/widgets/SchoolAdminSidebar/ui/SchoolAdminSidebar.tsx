@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { getSchoolSettings } from "@/features/Dashboard/api/school";
-import { getDashboardPath, getInitials, type SchoolDashboardView } from "@/shared/lib";
+import { getDashboardPath, getInitials, useIdleRoutePrefetch, type SchoolDashboardView } from "@/shared/lib";
 import { NevoLogo } from "@/shared/ui";
 
 const navItems = [
@@ -42,8 +42,9 @@ export function SchoolAdminSidebar({
 
     useEffect(() => {
         let mounted = true;
+        let idleHandle: number | null = null;
 
-        void (async () => {
+        const refreshSchoolName = async () => {
             const res = await getSchoolSettings();
             if (!mounted) return;
 
@@ -52,18 +53,55 @@ export function SchoolAdminSidebar({
                 setSchoolName(data.school_name);
                 persistSchoolName(user, data.school_name);
             }
-        })();
+        };
+
+        const timer = window.setTimeout(() => {
+            const win = window as Window & {
+                requestIdleCallback?: (
+                    callback: () => void,
+                    options?: { timeout?: number },
+                ) => number;
+                cancelIdleCallback?: (handle: number) => void;
+            };
+
+            if (win.requestIdleCallback) {
+                idleHandle = win.requestIdleCallback(() => {
+                    void refreshSchoolName();
+                }, { timeout: 2500 });
+            } else {
+                void refreshSchoolName();
+            }
+        }, 2200);
 
         return () => {
             mounted = false;
+            window.clearTimeout(timer);
+            const win = window as Window & {
+                cancelIdleCallback?: (handle: number) => void;
+            };
+            if (idleHandle !== null && win.cancelIdleCallback) {
+                win.cancelIdleCallback(idleHandle);
+            }
         };
-    }, []);
+    }, [user]);
 
     const adminName = useMemo(() => {
         return user?.name || user?.full_name || user?.email || 'School Admin';
     }, [user]);
 
     const buildHref = (view: SchoolDashboardView | null) => getDashboardPath('school', view || 'home');
+    const idlePrefetchRoutes = useMemo(
+        () =>
+            navItems
+                .map((item) => {
+                    const view = item.view || 'home';
+                    return view === (currentView || 'home') ? null : buildHref(item.view);
+                })
+                .filter(Boolean),
+        [currentView],
+    );
+
+    useIdleRoutePrefetch(idlePrefetchRoutes, { delayMs: 2200 });
 
     return (
         <aside className="fixed inset-y-0 left-0 z-30 flex h-[100dvh] w-[240px] min-w-[240px] flex-col overflow-hidden border-r border-[#E0D9CE] bg-[#FCFCFC]">
@@ -83,6 +121,7 @@ export function SchoolAdminSidebar({
                             <Link
                                 key={item.name}
                                 href={buildHref(item.view)}
+                                prefetch={false}
                                 className={`group relative flex h-12 items-center gap-3 px-4 text-[15px] font-medium transition-colors ${
                                     isActive
                                         ? 'bg-[rgba(59,63,110,0.08)] text-[#3B3F6E]'

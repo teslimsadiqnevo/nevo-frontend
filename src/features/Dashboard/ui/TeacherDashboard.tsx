@@ -7,7 +7,13 @@ import { TeacherSidebar } from "@/widgets/TeacherSidebar";
 import { StaleSessionBanner } from "@/widgets/StaleSessionBanner";
 import { getTeacherDashboardHome, getTeacherProfile, getTeacherStudents } from "../api/teacher";
 import { normalizeTeacherProfile } from "../lib/teacherProfile";
-import { getDashboardPath, useApiTokenExpiryRedirect, useAuthGuard } from "@/shared/lib";
+import {
+    getDashboardPath,
+    readBrowserDataCache,
+    useApiTokenExpiryRedirect,
+    useAuthGuard,
+    writeBrowserDataCache,
+} from "@/shared/lib";
 import { DashboardViewSkeleton, TeacherDashboardOverviewSkeleton } from './DashboardSkeletons';
 
 const DashboardViewLoader = () => (
@@ -66,6 +72,11 @@ type TeacherRosterClass = {
 
 type UnknownRecord = Record<string, unknown>;
 type GuardableResponse = { authExpired?: boolean; error?: string } | null | undefined;
+type TeacherHomeCache = {
+    data: UnknownRecord | null;
+    students: unknown[];
+    classes: TeacherRosterClass[];
+};
 type TeacherUserLike = UnknownRecord & {
     name?: string;
     full_name?: string;
@@ -541,9 +552,19 @@ function TeacherHomeView({
     const [classes, setClasses] = useState<TeacherRosterClass[]>([]);
     const [loading, setLoading] = useState(true);
     const guardAuth = useAuthGuard('teacher');
+    const cacheKey = `nevo:teacher:home:${String(user?.id || user?.email || user?.name || 'default')}`;
 
     useEffect(() => {
         let mounted = true;
+
+        const cached = readBrowserDataCache<TeacherHomeCache>(cacheKey, 5 * 60 * 1000);
+        if (cached) {
+            setData(cached.data);
+            setStudents(cached.students);
+            setClasses(cached.classes);
+            setLoading(false);
+        }
+
         (async () => {
             if (!mounted) return;
 
@@ -566,22 +587,22 @@ function TeacherHomeView({
 
             if (guardAuth(homeRes) || guardAuth(studentsRes) || !mounted) return;
 
-            setData('data' in homeRes ? (homeRes.data as UnknownRecord | null) : null);
+            const nextData = 'data' in homeRes ? (homeRes.data as UnknownRecord | null) : null;
+            setData(nextData);
 
             const studentPayload = 'data' in studentsRes ? studentsRes.data : null;
-            setStudents(
+            const nextStudents =
                 Array.isArray(studentPayload)
                     ? studentPayload
                     : Array.isArray((studentPayload as { students?: unknown[] } | null | undefined)?.students)
                       ? ((studentPayload as { students?: unknown[] }).students ?? [])
-                      : [],
-            );
+                      : [];
+            setStudents(nextStudents);
             const rawClasses =
                 Array.isArray((classesRes as { data?: { classes?: unknown[] } }).data?.classes)
                     ? ((classesRes as { data: { classes: unknown[] } }).data.classes ?? [])
                     : [];
-            setClasses(
-                rawClasses.reduce<TeacherRosterClass[]>((acc, entry) => {
+            const nextClasses = rawClasses.reduce<TeacherRosterClass[]>((acc, entry) => {
                     const item = entry && typeof entry === 'object' ? (entry as Record<string, unknown>) : null;
                     if (!item) return acc;
 
@@ -608,14 +629,19 @@ function TeacherHomeView({
                     });
 
                     return acc;
-                }, []),
-            );
+                }, []);
+            setClasses(nextClasses);
+            writeBrowserDataCache<TeacherHomeCache>(cacheKey, {
+                data: nextData,
+                students: nextStudents,
+                classes: nextClasses,
+            });
             setLoading(false);
         })();
         return () => {
             mounted = false;
         };
-    }, [guardAuth]);
+    }, [cacheKey, guardAuth]);
 
     const firstName = user?.name || 'Teacher';
     const weekStatsSource = data?.week_stats ?? data?.weekStats ?? data ?? null;

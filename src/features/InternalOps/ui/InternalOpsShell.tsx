@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { useIdleRoutePrefetch } from "@/shared/lib";
 import { NevoLogo } from "@/shared/ui/NevoLogo";
 import { InternalAdminPlaceholderPanel } from "./InternalAdminPlaceholderPanel";
 import {
@@ -263,6 +264,16 @@ function InternalNavigation({
   activeTab: InternalOpsTab;
   variant: "mobile" | "desktop";
 }) {
+  const idlePrefetchRoutes = useMemo(
+    () =>
+      TAB_ITEMS.map((item) =>
+        item.id === activeTab ? null : `/internal/${item.id}`,
+      ).filter(Boolean),
+    [activeTab],
+  );
+
+  useIdleRoutePrefetch(idlePrefetchRoutes, { delayMs: 2400 });
+
   if (variant === "mobile") {
     return (
       <nav className="fixed bottom-0 left-1/2 z-10 flex h-16 w-full max-w-[390px] -translate-x-1/2 gap-1 overflow-x-auto border-t border-[#3b3f6e22] bg-[#f7f1e6]/95 px-2 backdrop-blur md:hidden">
@@ -274,6 +285,7 @@ function InternalNavigation({
                 isActive ? "text-[#3b3f6e]" : "text-[#3b3f6e66]"
               }`}
               href={`/internal/${item.id}`}
+              prefetch={false}
               key={item.id}
             >
               <OpsIcon className="h-5 w-5" name={item.icon} />
@@ -301,6 +313,7 @@ function InternalNavigation({
                       : "text-[#3b3f6e99] hover:bg-[#f3eadc] hover:text-[#3b3f6e]"
                   }`}
                   href={`/internal/${item.id}`}
+                  prefetch={false}
                   key={item.id}
                 >
                   <OpsIcon className="h-5 w-5" name={item.icon} />

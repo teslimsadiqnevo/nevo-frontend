@@ -2,7 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
-import { useApiTokenExpiryRedirect, useAuthGuard } from '@/shared/lib';
+import {
+    readBrowserDataCache,
+    useApiTokenExpiryRedirect,
+    useAuthGuard,
+    writeBrowserDataCache,
+} from '@/shared/lib';
 import { SchoolAdminSidebar } from "@/widgets";
 import { getSchoolDashboardOverview, getSchoolDashboardSummary, getSchoolSettings } from '../api/school';
 import { DashboardViewSkeleton, SchoolDashboardOverviewSkeleton } from './DashboardSkeletons';
@@ -103,14 +108,18 @@ export function SchoolAdminDashboard({
 
 function AdminDashboardOverview({ user }: { user?: DashboardUser }) {
     const guardAuth = useAuthGuard('school');
+    const cacheKey = `nevo:school:overview:${String(user?.schoolId || user?.school_id || user?.email || 'default')}`;
     const [state, setState] = useState<{
         loading: boolean;
         error: string | null;
         data: OverviewData;
-    }>({
-        loading: true,
-        error: null,
-        data: { summary: null, overview: null, settings: null },
+    }>(() => {
+        const cached = readBrowserDataCache<OverviewData>(cacheKey, 5 * 60 * 1000);
+        return {
+            loading: !cached,
+            error: null,
+            data: cached ?? { summary: null, overview: null, settings: null },
+        };
     });
 
     useEffect(() => {
@@ -138,17 +147,19 @@ function AdminDashboardOverview({ user }: { user?: DashboardUser }) {
                 (!summary && settingsError ? settingsError : null) ||
                 null;
 
+            const nextData = { summary, overview, settings };
+            writeBrowserDataCache<OverviewData>(cacheKey, nextData);
             setState({
                 loading: false,
                 error,
-                data: { summary, overview, settings },
+                data: nextData,
             });
         })();
 
         return () => {
             mounted = false;
         };
-    }, [guardAuth]);
+    }, [cacheKey, guardAuth]);
 
     if (state.loading) return <SchoolDashboardOverviewSkeleton />;
 
