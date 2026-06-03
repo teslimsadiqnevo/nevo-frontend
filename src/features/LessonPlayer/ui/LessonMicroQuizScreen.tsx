@@ -2,7 +2,9 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getDashboardPath } from '@/shared/lib';
 import type { LessonMicroQuizQuestion, LessonMicroQuizResultState, LessonPlayerData } from '../api/types';
+import { LeaveLessonDialog } from './LeaveLessonDialog';
 import { LessonMicroQuizPromptOverlay } from './LessonMicroQuizPromptOverlay';
 import {
     ensureLessonSession,
@@ -74,6 +76,7 @@ export function LessonMicroQuizScreen({ lessonId, data, index, returnStageKey }:
     const [activePromptIndex, setActivePromptIndex] = useState<number | null>(null);
     const [showSupportExplanation, setShowSupportExplanation] = useState(false);
     const [showHint, setShowHint] = useState(false);
+    const [showLeaveDialog, setShowLeaveDialog] = useState(false);
 
     const selectedOption = useMemo(
         () => question.options.find((option) => option.id === selectedOptionId) ?? null,
@@ -149,9 +152,9 @@ export function LessonMicroQuizScreen({ lessonId, data, index, returnStageKey }:
                 <div className="flex items-center justify-between px-4 pt-4 pb-3">
                     <button
                         type="button"
-                        onClick={() => router.back()}
+                        onClick={() => setShowLeaveDialog(true)}
                         className="flex h-5 w-5 items-center justify-center bg-transparent border-none cursor-pointer"
-                        aria-label="Back"
+                        aria-label="Leave lesson"
                     >
                         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                             <path d="M12.5 4L6.5 10L12.5 16" stroke="#3B3F6E" strokeWidth="1.875" strokeLinecap="round" strokeLinejoin="round" />
@@ -243,6 +246,15 @@ export function LessonMicroQuizScreen({ lessonId, data, index, returnStageKey }:
                     />
                 ) : null}
             </div>
+
+            <LeaveLessonDialog
+                open={showLeaveDialog}
+                onClose={() => {
+                    setShowLeaveDialog(false);
+                    router.push(getDashboardPath('student', 'lessons'));
+                }}
+                onConfirm={() => setShowLeaveDialog(false)}
+            />
         </div>
     );
 }
