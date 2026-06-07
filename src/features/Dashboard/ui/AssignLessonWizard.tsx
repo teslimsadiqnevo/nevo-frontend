@@ -1396,7 +1396,6 @@ function PackageReviewCard({
         readyCount,
     );
     const transformProgress = transformTotal > 0 ? Math.min(100, Math.round((transformDone / transformTotal) * 100)) : 12;
-    const runtime = review?.ai_debug?.runtime;
     const ttsPreload = review?.ai_debug?.tts_preload;
     const weakAreas = review?.review_summary?.weak_areas || review?.lesson_package_quality?.warnings || [];
     const previewConcept = review?.concepts?.[0] || null;
@@ -1527,12 +1526,7 @@ function PackageReviewCard({
             ) : null}
 
             {!loading ? (
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    <div className="rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
-                        <span className="font-semibold">AI:</span>{' '}
-                        {runtime?.primary_provider || 'provider'}{runtime?.fallback_provider ? ` -> ${runtime.fallback_provider}` : ''}
-                        {runtime?.active_provider_configured === false ? ' (primary key missing)' : ''}
-                    </div>
+                <div className="mt-3">
                     <div className="rounded-lg bg-white/55 px-3 py-2 text-[12px] leading-5">
                         <span className="font-semibold">TTS:</span>{' '}
                         {ttsStatus?.configured
