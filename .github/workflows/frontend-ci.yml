@@ -1,0 +1,70 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - staging
+  push:
+    branches:
+      - main
+      - staging
+      - "feature/**"
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: frontend-build
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_BASE_URL: "https://nevo-backend-staging.onrender.com"
+      API_BASE_URL: "https://nevo-backend-staging.onrender.com"
+      NEXT_PUBLIC_SUPABASE_URL: "https://dxxrhsbcjeintnhqnlvq.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "ci-placeholder"
+      NEXT_PUBLIC_APP_ENV: "ci"
+      NEXT_PUBLIC_SITE_URL: "https://staging.nevolearning.com"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+  lint-advisory:
+    name: frontend-lint-advisory
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint advisory
+        run: npm run lint
