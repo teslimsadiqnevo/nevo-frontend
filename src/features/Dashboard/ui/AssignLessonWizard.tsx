@@ -110,6 +110,22 @@ type TransformPackageTarget = {
 type AuthGuardableError = { authExpired?: boolean; error?: string };
 type ApiRecord = Record<string, unknown>;
 
+const ASSIGN_REVIEW_HIDDEN_CONCEPTS = new Set([
+    'accessibility in education',
+    'blind and low-vision students',
+    'inclusive learning environments',
+    'real-time voice explanations',
+]);
+
+function normalizeConceptTerm(value: string) {
+    return value.trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function shouldShowAssignReviewConcept(concept: { key_term?: string | null }) {
+    const keyTerm = normalizeConceptTerm(concept.key_term || '');
+    return Boolean(keyTerm) && !ASSIGN_REVIEW_HIDDEN_CONCEPTS.has(keyTerm);
+}
+
 function isRecord(value: unknown): value is ApiRecord {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -1375,11 +1391,16 @@ function PackageReviewCard({
         review?.lesson_package_quality?.repaired_concepts ??
         review?.ai_debug?.auto_repaired_count ??
         0;
+    const visibleConcepts = useMemo(
+        () => (review?.concepts || []).filter(shouldShowAssignReviewConcept),
+        [review?.concepts],
+    );
     const conceptCount =
-        review?.lesson_package_quality?.concept_count ??
-        review?.concepts.length ??
-        review?.variant_summary?.source_concepts ??
-        0;
+        review?.concepts
+            ? visibleConcepts.length
+            : review?.lesson_package_quality?.concept_count ??
+              review?.variant_summary?.source_concepts ??
+              0;
     const readyCount = review?.variant_summary?.ready ?? 0;
     const failedCount = review?.variant_summary?.failed ?? 0;
     const runningCount = review?.variant_summary?.running ?? 0;
@@ -1398,7 +1419,7 @@ function PackageReviewCard({
     const transformProgress = transformTotal > 0 ? Math.min(100, Math.round((transformDone / transformTotal) * 100)) : 12;
     const ttsPreload = review?.ai_debug?.tts_preload;
     const weakAreas = review?.review_summary?.weak_areas || review?.lesson_package_quality?.warnings || [];
-    const previewConcept = review?.concepts?.[0] || null;
+    const previewConcept = visibleConcepts[0] || null;
     const canRegenerate = Boolean(lessonId) && !loading && !regenerating;
 
     const statusLabel = loading
@@ -1546,9 +1567,9 @@ function PackageReviewCard({
                 </div>
             ) : null}
 
-            {!loading && review?.concepts?.length ? (
+            {!loading && visibleConcepts.length ? (
                 <div className="mt-4 flex flex-wrap gap-2">
-                    {review.concepts.slice(0, 4).map((concept) => (
+                    {visibleConcepts.slice(0, 4).map((concept) => (
                         <span
                             key={concept.concept_id || concept.key_term}
                             className="rounded-full bg-white/70 px-3 py-1 text-[12px] font-medium text-[#3B3F6E]"
